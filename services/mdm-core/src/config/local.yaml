@@ -1,0 +1,10 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+database:
+  url: "postgres://postgres:postgres@localhost:5433/mdm"
+
+application:
+  environment: "local"
+  service_name: "mdm-core"
