@@ -1,652 +1,402 @@
+use std::sync::Arc;
 use std::time::Instant;
 
+use anyhow::Result;
 use chrono::Utc;
-
-use serde_json::Value;
-
+use tracing::{
+    info,
+    instrument,
+};
 use uuid::Uuid;
 
-use contracts::mdm::{
+use shared_contracts::mdm::{
     common::{
         AuditMetadata,
-        ConfidenceScore,
         MetadataMap,
         VersionInfo,
     },
-    entity::{
-        CanonicalEntity,
-        EntityAttribute,
-    },
     matching::{
         BlockingDiagnostics,
-        FieldMatchResult,
         MatchCandidate,
         MatchCluster,
         MatchExecutionMetadata,
         MatchRequest,
         MatchResponse,
-        MatchStatus,
-        MatchStrategy,
+    },
+};
+
+use crate::{
+    db::repositories::matching_repository::MatchingRepository,
+    matching::{
+        candidate_generation::CandidateGenerator,
+        models::{
+            CandidateEntity,
+            MatchThresholds,
+        },
+        scoring::score_calculator::ScoreCalculator,
     },
 };
 
 //
-// ========================================
-// MATCH ENTITY
-// ========================================
+// ============================================================
+// MATCHER CONFIG
+// ============================================================
 //
 
-pub async fn match_entity(
-    request: MatchRequest,
-    candidate_entities: Vec<CanonicalEntity>,
-) -> MatchResponse {
+#[derive(Debug, Clone)]
+pub struct MatcherConfig {
+    pub auto_merge_threshold: f32,
+    pub review_threshold: f32,
+    pub max_clusters: usize,
+}
 
-    let started = Instant::now();
+impl Default for MatcherConfig {
+    fn default() -> Self {
+        Self {
+            auto_merge_threshold: 0.95,
+            review_threshold: 0.75,
+            max_clusters: 100,
+        }
+    }
+}
 
-    //
-    // ========================================
-    // BLOCKING
-    // ========================================
-    //
+//
+// ============================================================
+// MATCHER
+// ============================================================
+//
 
-    let blocked_candidates =
-        apply_blocking(
-            &request,
-            candidate_entities,
-        );
+pub struct Matcher<R>
+where
+    R: MatchingRepository,
+{
+    repository: Arc<R>,
 
-    //
-    // ========================================
-    // MATCH CANDIDATES
-    // ========================================
-    //
+    candidate_generator:
+        Arc<CandidateGenerator<R>>,
 
-    let mut matches:
-        Vec<MatchCandidate> = vec![];
+    scorer:
+        Arc<ScoreCalculator>,
 
-    for candidate in blocked_candidates.iter()
-    {
-        let result =
-            evaluate_candidate(
-                &request.entity,
-                candidate,
-                &request.strategy,
-                request.threshold
-                    .unwrap_or(0.75),
-            );
+    config:
+        MatcherConfig,
+}
 
-        if result.score
-            >= request
-                .threshold
-                .unwrap_or(0.75)
-        {
-            matches.push(result);
+impl<R> Matcher<R>
+where
+    R: MatchingRepository,
+{
+    pub fn new(
+        repository: Arc<R>,
+        candidate_generator:
+            Arc<CandidateGenerator<R>>,
+        scorer:
+            Arc<ScoreCalculator>,
+        config: MatcherConfig,
+    ) -> Self {
+        Self {
+            repository,
+            candidate_generator,
+            scorer,
+            config,
         }
     }
 
     //
-    // ========================================
-    // SORT BY SCORE
-    // ========================================
+    // ========================================================
+    // EXECUTE MATCH
+    // ========================================================
     //
 
-    matches.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap()
-    });
+    #[instrument(skip(self, request))]
+    pub async fn execute(
+        &self,
+        request: MatchRequest,
+    ) -> Result<MatchResponse> {
 
-    //
-    // ========================================
-    // CLUSTERING
-    // ========================================
-    //
+        let start =
+            Instant::now();
 
-    let clusters =
-        build_clusters(&matches);
+        let started_at =
+            Utc::now();
 
-    //
-    // ========================================
-    // EXECUTION METADATA
-    // ========================================
-    //
+        //
+        // ====================================================
+        // CANDIDATE GENERATION
+        // ====================================================
+        //
 
-    let execution_time_ms =
-        started.elapsed().as_millis()
-            as u64;
+        let blocking_result =
+            self
+                .candidate_generator
+                .generate_candidates(
+                    &request,
+                )
+                .await?;
 
-    MatchResponse {
+        //
+        // ====================================================
+        // LOAD ENTITIES
+        // ====================================================
+        //
 
-        request_id:
-            request.request_id,
+        let candidates =
+            self
+                .candidate_generator
+                .load_entities(
+                    request.tenant_id,
+                    &blocking_result
+                        .candidate_ids,
+                )
+                .await?;
 
-        matches,
+        //
+        // ====================================================
+        // SCORE
+        // ====================================================
+        //
 
-        clusters,
+        let mut scored_matches =
+            Vec::<MatchCandidate>::new();
 
-        blocking: Some(
-            BlockingDiagnostics {
+        for candidate in candidates {
 
-                applied_rules:
-                    request
-                        .blocking_rules
-                        .clone(),
+            let match_result =
+                self.score_candidate(
+                    &request,
+                    candidate,
+                )?;
 
-                generated_keys:
-                    vec![],
+            scored_matches.push(
+                match_result,
+            );
+        }
 
-                reduced_candidates:
-                    blocked_candidates
-                        .len(),
+        //
+        // ====================================================
+        // SORT
+        // ====================================================
+        //
+
+        scored_matches.sort_by(
+            |a, b| {
+                b.score
+                    .partial_cmp(
+                        &a.score,
+                    )
+                    .unwrap()
+            },
+        );
+
+        //
+        // ====================================================
+        // LIMIT
+        // ====================================================
+        //
+
+        if scored_matches.len()
+            > request.max_candidates
+        {
+            scored_matches.truncate(
+                request.max_candidates,
+            );
+        }
+
+        //
+        // ====================================================
+        // CLUSTER
+        // ====================================================
+        //
+
+        let clusters =
+            self.build_clusters(
+                &scored_matches,
+            );
+
+        //
+        // ====================================================
+        // EXECUTION METADATA
+        // ====================================================
+        //
+
+        let execution_time_ms =
+            start
+                .elapsed()
+                .as_millis()
+                as u64;
+
+        let completed_at =
+            Utc::now();
+
+        info!(
+            tenant_id=%request.tenant_id,
+            matches=scored_matches.len(),
+            duration_ms=execution_time_ms,
+            "matching execution completed"
+        );
+
+        Ok(
+            MatchResponse {
+
+                request_id:
+                    request.request_id,
+
+                matches:
+                    scored_matches,
+
+                clusters,
+
+                blocking:
+                    Some(
+                        blocking_result
+                            .diagnostics,
+                    ),
 
                 metadata:
-                    MetadataMap::new(),
-            }
-        ),
+                    MatchExecutionMetadata {
 
-        metadata:
-            MatchExecutionMetadata {
+                        started_at,
 
-                started_at:
-                    Utc::now(),
+                        completed_at,
 
-                completed_at:
-                    Utc::now(),
+                        execution_time_ms,
 
-                execution_time_ms,
+                        candidates_evaluated:
+                            blocking_result
+                                .candidate_ids
+                                .len(),
 
-                candidates_evaluated:
-                    blocked_candidates
-                        .len(),
-
-                blocking_reduction:
-                    None,
-
-                ai_assisted:
-                    request.ai_assisted,
-
-                semantic_matching:
-                    request
-                        .semantic_matching,
-
-                graph_matching:
-                    request
-                        .graph_matching,
-
-                engine_version:
-                    "2.0.0"
-                        .to_string(),
-
-                audit:
-                    AuditMetadata {
-
-                        created_at:
-                            Utc::now(),
-
-                        updated_at:
-                            Utc::now(),
-
-                        created_by: None,
-
-                        updated_by: None,
-
-                        correlation_id:
-                            request
-                                .correlation_id,
-
-                        causation_id:
+                        blocking_reduction:
                             None,
 
-                        request_id:
-                            Some(
-                                request
-                                    .request_id
-                                    .to_string()
-                            ),
-                    },
+                        ai_assisted:
+                            request
+                                .ai_assisted,
 
-                version_info:
-                    VersionInfo {
+                        semantic_matching:
+                            request
+                                .semantic_matching,
 
-                        schema_version:
-                            "2.0.0"
+                        graph_matching:
+                            request
+                                .graph_matching,
+
+                        engine_version:
+                            "matching-engine-v2"
                                 .to_string(),
 
-                        contract_version:
-                            "2.0.0"
-                                .to_string(),
+                        audit:
+                            AuditMetadata {
 
-                        entity_version:
-                            1,
+                                created_by:
+                                    None,
+
+                                created_at:
+                                    started_at,
+
+                                updated_by:
+                                    None,
+
+                                updated_at:
+                                    None,
+                            },
+
+                        version_info:
+                            VersionInfo {
+
+                                version:
+                                    1,
+
+                                schema_version:
+                                    Some(
+                                        "v2"
+                                            .to_string(),
+                                    ),
+
+                                previous_version:
+                                    None,
+                            },
+
+                        metadata:
+                            MetadataMap::new(),
                     },
 
-                metadata:
-                    MetadataMap::new(),
+                warnings:
+                    vec![],
+
+                errors:
+                    vec![],
             },
-
-        warnings: vec![],
-
-        errors: vec![],
-    }
-}
-
-//
-// ========================================
-// APPLY BLOCKING
-// ========================================
-//
-
-fn apply_blocking(
-    request: &MatchRequest,
-    candidates: Vec<CanonicalEntity>,
-) -> Vec<CanonicalEntity> {
-
-    //
-    // Future:
-    // deterministic blocking
-    // phonetic blocking
-    // semantic blocking
-    // vector blocking
-    //
-
-    candidates
-}
-
-//
-// ========================================
-// EVALUATE CANDIDATE
-// ========================================
-//
-
-fn evaluate_candidate(
-    incoming: &CanonicalEntity,
-    candidate: &CanonicalEntity,
-    strategy: &MatchStrategy,
-    threshold: f32,
-) -> MatchCandidate {
-
-    let mut total_score = 0.0;
-
-    let mut explanations =
-        vec![];
-
-    let mut field_matches =
-        vec![];
-
-    //
-    // ========================================
-    // FIELD COMPARISON
-    // ========================================
-    //
-
-    for incoming_attr
-    in incoming.attributes.iter()
-    {
-        if let Some(candidate_attr) =
-            find_matching_attribute(
-                &incoming_attr.key,
-                candidate,
-            )
-        {
-            let field_result =
-                compare_attributes(
-                    incoming_attr,
-                    candidate_attr,
-                    strategy,
-                );
-
-            total_score +=
-                field_result.score;
-
-            explanations.extend(
-                field_result
-                    .explanation
-                    .clone(),
-            );
-
-            field_matches
-                .push(field_result);
-        }
+        )
     }
 
     //
-    // ========================================
-    // NORMALIZATION
-    // ========================================
+    // ========================================================
+    // SCORE CANDIDATE
+    // ========================================================
     //
 
-    let normalized_score =
-        normalize_score(
-            total_score,
-            field_matches.len(),
-        );
+    fn score_candidate(
+        &self,
+        request:
+            &MatchRequest,
+        candidate:
+            CandidateEntity,
+    ) -> Result<MatchCandidate> {
 
-    //
-    // ========================================
-    // MATCH STATUS
-    // ========================================
-    //
-
-    let status =
-        if normalized_score >= threshold {
-
-            MatchStatus::Matched
-
-        } else if normalized_score >= 0.5 {
-
-            MatchStatus::PossibleMatch
-
-        } else {
-
-            MatchStatus::Rejected
-        };
-
-    MatchCandidate {
-
-        entity_id:
-            candidate.entity_id,
-
-        status:
-            status.clone(),
-
-        score:
-            normalized_score,
-
-        confidence:
-            normalized_score,
-
-        vector_similarity:
+        self.scorer.score_candidate(
+            &request.entity,
+            &candidate.entity,
             None,
-
-        graph_similarity:
-            None,
-
-        ai_score:
-            None,
-
-        survivorship_compatibility:
-            None,
-
-        explanations,
-
-        field_matches,
-
-        policy_decisions:
-            vec![],
-
-        recommended_for_merge:
-            matches!(
-                status,
-                MatchStatus::Matched
-            ),
-
-        requires_human_review:
-            matches!(
-                status,
-                MatchStatus::PossibleMatch
-            ),
-
-        metadata:
-            MetadataMap::new(),
-    }
-}
-
-//
-// ========================================
-// FIND ATTRIBUTE
-// ========================================
-//
-
-fn find_matching_attribute<'a>(
-    key: &str,
-    entity: &'a CanonicalEntity,
-) -> Option<&'a EntityAttribute> {
-
-    entity
-        .attributes
-        .iter()
-        .find(|a| a.key == key)
-}
-
-//
-// ========================================
-// ATTRIBUTE COMPARISON
-// ========================================
-//
-
-fn compare_attributes(
-    incoming: &EntityAttribute,
-    candidate: &EntityAttribute,
-    strategy: &MatchStrategy,
-) -> FieldMatchResult {
-
-    let mut score = 0.0;
-
-    let mut explanations =
-        vec![];
-
-    //
-    // ========================================
-    // EXACT MATCH
-    // ========================================
-    //
-
-    if incoming.value == candidate.value {
-
-        score += 1.0;
-
-        explanations.push(
-            "exact_match".to_string()
-        );
+        )
     }
 
     //
-    // ========================================
-    // STRING SIMILARITY
-    // ========================================
+    // ========================================================
+    // CLUSTERING
+    // ========================================================
     //
 
-    if let (
-        Some(source),
-        Some(target),
-    ) = (
-        incoming.value.as_str(),
-        candidate.value.as_str(),
-    ) {
+    fn build_clusters(
+        &self,
+        matches:
+            &[MatchCandidate],
+    ) -> Vec<MatchCluster> {
 
-        let similarity =
-            string_similarity(
-                source,
-                target,
-            );
+        let mut clusters =
+            Vec::new();
 
-        score += similarity;
+        for m in matches {
 
-        explanations.push(format!(
-            "string_similarity={:.4}",
-            similarity
-        ));
-    }
+            if !m.recommended_for_merge {
+                continue;
+            }
 
-    //
-    // ========================================
-    // STRATEGY BOOSTS
-    // ========================================
-    //
+            clusters.push(
+                MatchCluster {
 
-    match strategy {
+                    cluster_id:
+                        Uuid::new_v4(),
 
-        MatchStrategy::AIEnhanced => {
+                    entity_ids:
+                        vec![
+                            m.entity_id,
+                        ],
 
-            score += 0.1;
+                    confidence:
+                        m.score,
 
-            explanations.push(
-                "ai_boost_applied"
-                    .to_string()
-            );
-        }
-
-        MatchStrategy::Semantic => {
-
-            score += 0.1;
-
-            explanations.push(
-                "semantic_boost_applied"
-                    .to_string()
-            );
-        }
-
-        MatchStrategy::Hybrid => {
-
-            score += 0.2;
-
-            explanations.push(
-                "hybrid_boost_applied"
-                    .to_string()
-            );
-        }
-
-        _ => {}
-    }
-
-    FieldMatchResult {
-
-        field:
-            incoming.key.clone(),
-
-        source_value:
-            Some(
-                incoming.value.clone()
-            ),
-
-        candidate_value:
-            Some(
-                candidate.value.clone()
-            ),
-
-        score,
-
-        confidence:
-            Some(
-                ConfidenceScore {
-
-                    score,
-
-                    explanation:
+                    suggested_master:
                         Some(
-                            explanations
-                                .join(", ")
+                            m.entity_id,
                         ),
 
-                    model_version:
-                        None,
-                }
-            ),
-
-        strategy:
-            strategy.clone(),
-
-        semantic_similarity:
-            None,
-
-        explanation:
-            explanations,
-
-        metadata:
-            MetadataMap::new(),
-    }
-}
-
-//
-// ========================================
-// NORMALIZE SCORE
-// ========================================
-//
-
-fn normalize_score(
-    total: f32,
-    fields: usize,
-) -> f32 {
-
-    if fields == 0 {
-        return 0.0;
-    }
-
-    (total / fields as f32)
-        .min(1.0)
-}
-
-//
-// ========================================
-// SIMPLE STRING SIMILARITY
-// ========================================
-//
-
-fn string_similarity(
-    left: &str,
-    right: &str,
-) -> f32 {
-
-    if left.eq_ignore_ascii_case(right) {
-        return 1.0;
-    }
-
-    let left =
-        left.to_lowercase();
-
-    let right =
-        right.to_lowercase();
-
-    let common =
-        left
-            .chars()
-            .filter(|c| {
-                right.contains(*c)
-            })
-            .count();
-
-    common as f32
-        / left.len().max(1)
-            as f32
-}
-
-//
-// ========================================
-// BUILD CLUSTERS
-// ========================================
-//
-
-fn build_clusters(
-    matches: &[MatchCandidate],
-) -> Vec<MatchCluster> {
-
-    if matches.is_empty() {
-        return vec![];
-    }
-
-    vec![
-        MatchCluster {
-
-            cluster_id:
-                Uuid::new_v4(),
-
-            entity_ids:
-                matches
-                    .iter()
-                    .map(|m| m.entity_id)
-                    .collect(),
-
-            confidence:
-                matches[0].score,
-
-            suggested_master:
-                Some(
-                    matches[0]
-                        .entity_id
-                ),
-
-            metadata:
-                MetadataMap::new(),
+                    metadata:
+                        MetadataMap::new(),
+                },
+            );
         }
-    ]
+
+        clusters
+    }
 }
