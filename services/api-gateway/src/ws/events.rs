@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WsEvent {
     pub event_id: Uuid,
@@ -19,6 +20,7 @@ pub struct WsEvent {
 }
 
 impl WsEvent {
+    #[allow(dead_code)]
     pub fn new(event_type: &str) -> Self {
         Self {
             event_id: Uuid::new_v4(),

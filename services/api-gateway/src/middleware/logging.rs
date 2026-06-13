@@ -3,31 +3,22 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-
 use uuid::Uuid;
-
-//
-// ========================================
-// REQUEST LOGGING
-// ========================================
-//
 
 pub async fn logging_middleware(
     mut request: Request<axum::body::Body>,
     next: Next,
 ) -> Response {
-
     let correlation_id = Uuid::new_v4().to_string();
 
-    request.headers_mut().insert(
-        "x-correlation-id",
-        correlation_id.parse().unwrap(),
-    );
+    if let Ok(val) = correlation_id.parse() {
+        request.headers_mut().insert("x-correlation-id", val);
+    }
 
-    println!(
-        "Incoming request: {} {}",
-        request.method(),
-        request.uri(),
+    tracing::info!(
+        method = %request.method(),
+        uri    = %request.uri(),
+        "incoming request"
     );
 
     next.run(request).await

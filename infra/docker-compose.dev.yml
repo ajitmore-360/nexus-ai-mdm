@@ -1,0 +1,52 @@
+# ============================================================================
+# Nexus AI MDM — DEVELOPMENT OVERRIDE
+# Starts ONLY infrastructure (PostgreSQL, Redis, Kafka, OPA, Ollama).
+# Run Rust services locally with: cargo run -p <service-name>
+#
+# USAGE:
+#   cd infra
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# This will start infra but SKIP building/running all Rust service containers.
+# ============================================================================
+
+services:
+  # Disable all Rust services — run them locally instead
+  api-gateway:
+    profiles: ["disabled"]
+  mdm-core:
+    profiles: ["disabled"]
+  ai-service:
+    profiles: ["disabled"]
+  ingest-service:
+    profiles: ["disabled"]
+  policy-service:
+    profiles: ["disabled"]
+  search-service:
+    profiles: ["disabled"]
+  notification-service:
+    profiles: ["disabled"]
+  distribution-service:
+    profiles: ["disabled"]
+  enrichment-service:
+    profiles: ["disabled"]
+  tenant-service:
+    profiles: ["disabled"]
+  kafka-event-service:
+    profiles: ["disabled"]
+  nexus-ui:
+    profiles: ["disabled"]
+  ollama-init:
+    profiles: ["disabled"]
+
+  # Expose Ollama locally for direct llm calls from cargo run services
+  ollama:
+    ports:
+      - "11434:11434"
+    environment:
+      OLLAMA_ORIGINS: "*"
+
+  # Kafka UI on different port for dev
+  kafka-ui:
+    ports:
+      - "9000:8080"

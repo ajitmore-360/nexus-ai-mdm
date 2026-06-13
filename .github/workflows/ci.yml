@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Rust build + test
+  # ─────────────────────────────────────────────────────────────────────────
+  rust:
+    name: Rust — Build & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER:     postgres
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB:       nexus_mdm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:ci_password@localhost:5432/nexus_mdm_test
+      REDIS_URL:    redis://localhost:6379
+      AUTH_DISABLED: "true"
+      JWT_SECRET:   "ci-test-secret-minimum-32-characters!!"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry + build
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build workspace
+        run: cargo build --workspace
+
+      - name: Run unit tests
+        run: cargo test --workspace --lib
+
+      - name: Run integration tests (with database)
+        run: cargo test --workspace --test '*'
+        continue-on-error: true  # integration tests are optional in CI for now
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Flutter build + analyze
+  # ─────────────────────────────────────────────────────────────────────────
+  flutter:
+    name: Flutter — Build & Analyze
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ui/nexus_mdm_ui
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.x"
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-warnings
+
+      - name: Run unit tests
+        run: flutter test --no-pub
+        continue-on-error: true
+
+      - name: Build web (release)
+        run: flutter build web --release
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Security scan
+  # ─────────────────────────────────────────────────────────────────────────
+  security:
+    name: Security — Cargo Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit Cargo dependencies
+        run: cargo audit
+        continue-on-error: true  # advisory, not blocking

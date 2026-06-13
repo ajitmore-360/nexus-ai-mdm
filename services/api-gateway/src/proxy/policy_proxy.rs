@@ -1,6 +1,7 @@
 use reqwest::Client;
 use serde_json::Value;
 
+#[allow(dead_code)]
 pub async fn validate_policy(
     client: &Client,
     base_url: &str,

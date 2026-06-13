@@ -11,3 +11,8 @@ pub mod unit_of_work;
 pub mod outbox;
 pub mod dead_letter;
 pub mod idempotency;
+
+// Convenience re-exports for service code
+pub use pool::DbPool;
+pub use request_context::{RequestContext, RequestContextFactory};
+pub use unit_of_work::{PendingOutboxEvent, UnitOfWork};

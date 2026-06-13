@@ -77,10 +77,10 @@ pub async fn publish_outbox_event(
     // ====================================
     //
 
-    println!(
-        "Published outbox event successfully. event_id={}, topic={}",
-        event.event_id,
-        event.topic_name
+    tracing::debug!(
+        event_id = %event.event_id,
+        topic    = %event.topic_name,
+        "outbox event published to Kafka"
     );
 
     Ok(())

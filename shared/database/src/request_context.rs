@@ -6,6 +6,7 @@ use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::pool::DbPool;
+use crate::unit_of_work::UnitOfWork;
 
 /// Context propagated across the entire request lifecycle.
 ///
@@ -169,5 +170,53 @@ impl RequestContextFactory {
         .await?;
 
         Ok(TransactionContext::new(ctx, tx))
+    }
+
+    /// Begin a transaction with full RLS context AND return a `UnitOfWork`
+    /// that accumulates outbox events and flushes them atomically on commit.
+    ///
+    /// This is the **primary entry point** for all write operations in the
+    /// service layer.  It sets every PostgreSQL session variable required by
+    /// RLS policies before any query touches the data.
+    pub async fn begin_uow(
+        &self,
+        tenant_id: Uuid,
+        user_id: Option<Uuid>,
+        trace_id: String,
+    ) -> Result<UnitOfWork<'_>, sqlx::Error> {
+        let ctx = RequestContext::new(tenant_id, user_id, trace_id);
+        let mut tx = self.pool.begin().await?;
+
+        // Tenant isolation (read by RLS policies)
+        sqlx::query("SELECT set_config('app.current_tenant', $1, true)")
+            .bind(tenant_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+
+        // Distributed tracing
+        sqlx::query("SELECT set_config('app.request_id', $1, true)")
+            .bind(ctx.request_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+
+        sqlx::query("SELECT set_config('app.correlation_id', $1, true)")
+            .bind(ctx.correlation_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+
+        sqlx::query("SELECT set_config('app.trace_id', $1, true)")
+            .bind(&ctx.trace_id)
+            .execute(&mut *tx)
+            .await?;
+
+        // Audit: current user (nullable)
+        if let Some(uid) = user_id {
+            sqlx::query("SELECT set_config('app.current_user_id', $1, true)")
+                .bind(uid.to_string())
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        Ok(UnitOfWork::new(ctx, tx))
     }
 }

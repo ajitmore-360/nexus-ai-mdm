@@ -1,26 +1,7 @@
-use reqwest::Client;
+use reqwest::StatusCode;
 use serde_json::{json, Value};
 
 use crate::state::AppState;
-
-//
-// ========================================
-// 🚨 STANDARD PROXY ERROR
-// ========================================
-//
-
-fn proxy_error(
-    code: u16,
-    message: impl Into<String>,
-) -> Value {
-    json!({
-        "success": false,
-        "error": {
-            "code": code,
-            "message": message.into()
-        }
-    })
-}
 
 //
 // ========================================
@@ -35,95 +16,60 @@ pub async fn proxy_ai_request(
     user_id: Option<String>,
     role: Option<String>,
     correlation_id: Option<String>,
-) -> Result<Value, Value> {
+) -> Result<(StatusCode, Value), (StatusCode, Value)> {
 
-    // ====================================
-    // 🌐 TARGET URL
-    // ====================================
+    let url = format!("{}/mcp/query", state.settings.ai_service_url);
 
-    let url = format!(
-        "{}/mcp/query",
-        state.settings.ai_service_url
-    );
-
-    // ====================================
-    // 🧠 SHARED CLIENT
-    // ====================================
-
-    let client: &Client = &state.services.http;
-
-    // ====================================
-    // 🚀 BUILD REQUEST
-    // ====================================
-
-    let mut request = client
+    let mut request = state
+        .services
+        .http
         .post(&url)
         .timeout(std::time::Duration::from_secs(60))
         .json(&payload);
 
-    // ====================================
-    // 🔐 FORWARD HEADERS
-    // ====================================
-
     if let Some(v) = tenant_id {
         request = request.header("x-tenant-id", v);
     }
-
     if let Some(v) = user_id {
         request = request.header("x-user-id", v);
     }
-
     if let Some(v) = role {
         request = request.header("x-user-role", v);
     }
-
     if let Some(v) = correlation_id {
         request = request.header("x-correlation-id", v);
     }
 
-    // ====================================
-    // 📡 EXECUTE REQUEST
-    // ====================================
-
     let response = request.send().await.map_err(|e| {
-        proxy_error(
-            502,
-            format!("AI upstream unavailable: {}", e),
+        tracing::error!(error=%e, "AI service unreachable");
+        (
+            StatusCode::BAD_GATEWAY,
+            json!({ "success": false, "error": "AI upstream unavailable" }),
         )
     })?;
 
     let status = response.status();
 
-    // ====================================
-    // ❌ NON SUCCESS
-    // ====================================
-
     if !status.is_success() {
-
         let body = response
             .text()
             .await
             .unwrap_or_else(|_| "unknown upstream error".into());
 
-        return Err(proxy_error(
-            status.as_u16(),
-            body,
+        tracing::warn!(upstream_status=%status, "AI service returned non-success");
+        return Err((
+            status,
+            json!({ "success": false, "error": body }),
         ));
     }
 
-    // ====================================
-    // ✅ JSON RESPONSE
-    // ====================================
+    let body = response.json::<Value>().await.map_err(|e| {
+        tracing::error!(error=%e, "failed to parse AI service response");
+        (
+            StatusCode::BAD_GATEWAY,
+            json!({ "success": false, "error": "invalid response from AI service" }),
+        )
+    })?;
 
-    let json_body = response
-        .json::<Value>()
-        .await
-        .map_err(|e| {
-            proxy_error(
-                500,
-                format!("invalid AI response: {}", e),
-            )
-        })?;
-
-    Ok(json_body)
+    Ok((status, body))
 }

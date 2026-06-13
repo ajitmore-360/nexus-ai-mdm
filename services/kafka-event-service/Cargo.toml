@@ -16,10 +16,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 sqlx.workspace = true
 
-rdkafka = {
-    version = "0.36",
-    features = ["cmake-build"]
-}
+rdkafka = { version = "0.36", features = ["cmake-build"] }
 
 dotenvy = "0.15"
 

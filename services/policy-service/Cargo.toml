@@ -1,6 +1,54 @@
 [package]
 name = "policy-service"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+
+[[bin]]
+name = "policy-service"
+path = "src/main.rs"
 
 [dependencies]
+# Async runtime
+tokio.workspace = true
+
+# Web framework
+axum.workspace = true
+tower-http.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# HTTP client
+reqwest.workspace = true
+
+# UUID
+uuid.workspace = true
+
+# Date/Time
+chrono.workspace = true
+
+# Logging
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Async traits
+async-trait.workspace = true
+
+# Error handling
+anyhow.workspace = true
+thiserror.workspace = true
+
+# Database
+sqlx.workspace = true
+
+# Environment
+dotenvy.workspace = true
+
+# Futures
+futures.workspace = true
+
+# Internal workspace crates
+contracts = { path = "../../shared/contracts" }
+database = { workspace = true }
+nexus-redis = { workspace = true }

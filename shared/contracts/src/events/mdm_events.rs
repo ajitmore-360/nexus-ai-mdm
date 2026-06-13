@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use crate::mdm::{
     common::*,
+    distribution::*,
     entity::*,
     golden_record::*,
     matching::*,
@@ -550,6 +551,18 @@ pub enum MDMEventPayload {
     EntityDeleted {
         entity_id: Uuid,
     },
+
+    //
+    // HUB: MDM-authored entity published to downstream systems
+    //
+
+    EntityDistributionRequested(
+        DistributionRequest,
+    ),
+
+    EntityDistributed(
+        DistributionJobResult,
+    ),
 
     //
     // MATCHING EVENTS

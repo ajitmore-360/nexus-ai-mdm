@@ -7,7 +7,9 @@ pub type MetadataMap = HashMap<String, serde_json::Value>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditMetadata {
+    #[serde(default = "chrono::Utc::now")]
     pub created_at: DateTime<Utc>,
+    #[serde(default = "chrono::Utc::now")]
     pub updated_at: DateTime<Utc>,
 
     pub created_by: Option<Uuid>,
@@ -18,11 +20,44 @@ pub struct AuditMetadata {
     pub request_id: Option<String>,
 }
 
+impl Default for AuditMetadata {
+    fn default() -> Self {
+        let now = chrono::Utc::now();
+        Self {
+            created_at: now,
+            updated_at: now,
+            created_by: None,
+            updated_by: None,
+            correlation_id: None,
+            causation_id: None,
+            request_id: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionInfo {
+    #[serde(default = "VersionInfo::default_schema_version")]
     pub schema_version: String,
+    #[serde(default = "VersionInfo::default_contract_version")]
     pub contract_version: String,
+    #[serde(default)]
     pub entity_version: i64,
+}
+
+impl VersionInfo {
+    fn default_schema_version() -> String { "1.0".to_string() }
+    fn default_contract_version() -> String { "1.0".to_string() }
+}
+
+impl Default for VersionInfo {
+    fn default() -> Self {
+        Self {
+            schema_version: "1.0".to_string(),
+            contract_version: "1.0".to_string(),
+            entity_version: 1,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

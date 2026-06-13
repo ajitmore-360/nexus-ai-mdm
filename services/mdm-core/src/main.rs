@@ -5,6 +5,7 @@ use axum::{
         Method,
         StatusCode,
     },
+    middleware as axum_middleware,
     response::IntoResponse,
     routing::{
         get,
@@ -26,7 +27,6 @@ use sqlx::{
 use std::{
     env,
     net::SocketAddr,
-    sync::Arc,
     time::Duration,
 };
 
@@ -59,7 +59,36 @@ use crate::db::repositories::{
 mod db;
 mod handlers;
 mod matching;
+mod middleware;
+mod services;
 mod survivorship;
+
+use std::sync::Arc;
+
+use handlers::{
+    dashboard::{get_activity_feed, get_dashboard_stats},
+    entities::{create_entity, get_entity_by_id, list_entities, patch_entity},
+    matching::execute_match,
+    merge::execute_merge,
+    policy::{get_weights, update_weights},
+    users::{change_role, list_users, login, register},
+};
+use middleware::{
+    auth::auth_middleware,
+    tenant::tenant_middleware,
+};
+use services::{
+    entity_service::EntityService,
+    golden_record_service::GoldenRecordService,
+    matching_service::MatchingService,
+    merge_service::MergeService,
+    review_service::ReviewService,
+    survivorship_service::SurvivorshipService,
+};
+use matching::{
+    Matcher,
+    MatchingPolicy,
+};
 
 //
 // ========================================
@@ -96,6 +125,31 @@ pub struct AppState {
 
     pub tenant_repository:
         TenantRepository,
+
+    pub matching_service:
+        Arc<MatchingService>,
+
+    pub entity_service:
+        Arc<EntityService>,
+
+    pub merge_service:
+        Arc<MergeService>,
+
+    pub golden_record_service:
+        Arc<GoldenRecordService>,
+
+    pub survivorship_service:
+        Arc<SurvivorshipService>,
+
+    pub review_service:
+        Arc<ReviewService>,
+
+    /// Live matching policy — can be updated at runtime via PATCH /policy/weights
+    /// without restarting the service.
+    pub matching_policy: Arc<std::sync::RwLock<matching::MatchingPolicy>>,
+
+    /// Optional Redis-backed rate limiter for brute-force protection on /auth/login.
+    pub redis_rate_limiter: Option<Arc<nexus_redis::RedisRateLimiter>>,
 }
 
 //
@@ -349,63 +403,39 @@ fn build_router(
                 tower_http::cors::Any
             );
 
+    let protected = Router::new()
+        .route("/entities",     get(list_entities).post(create_entity))
+        .route("/entities/:id", get(get_entity_by_id).patch(patch_entity))
+        .route("/match", post(execute_match))
+        .route("/merge", post(execute_merge))
+        // /search is served by the dedicated search-service via api-gateway
+        .layer(axum_middleware::from_fn(tenant_middleware))
+        .layer(axum_middleware::from_fn(auth_middleware));
+
+    // Public auth routes — no tenant/auth middleware
+    let auth_routes = Router::new()
+        .route("/auth/login",    axum::routing::post(login))
+        .route("/auth/register", axum::routing::post(register));
+
+    // Protected user management + policy routes
+    let management_routes = Router::new()
+        .route("/users",                  axum::routing::get(list_users))
+        .route("/users/:id/role",         axum::routing::patch(change_role))
+        .route("/policy/weights",         axum::routing::get(get_weights).patch(update_weights))
+        .route("/dashboard/stats",        axum::routing::get(get_dashboard_stats))
+        .route("/dashboard/activity",     axum::routing::get(get_activity_feed))
+        .layer(axum_middleware::from_fn(tenant_middleware))
+        .layer(axum_middleware::from_fn(auth_middleware));
+
     Router::new()
-
-        //
-        // ====================================
-        // HEALTH APIs
-        // ====================================
-        //
-
-        .route(
-            "/health",
-            get(health)
-        )
-
-        .route(
-            "/health/live",
-            get(liveness)
-        )
-
-        .route(
-            "/health/ready",
-            get(readiness)
-        )
-
-        //
-        // ====================================
-        // ENTITY APIs
-        // ====================================
-        //
-
-        .route(
-            "/merge",
-            post(handlers::merge)
-        )
-
-        .route(
-            "/search",
-            post(handlers::search)
-        )
-
-        //
-        // ====================================
-        // OBSERVABILITY
-        // ====================================
-        //
-
-        .layer(
-            TraceLayer::new_for_http()
-        )
-
+        .route("/health",       get(health))
+        .route("/health/live",  get(liveness))
+        .route("/health/ready", get(readiness))
+        .merge(auth_routes)
+        .merge(management_routes)
+        .merge(protected)
+        .layer(TraceLayer::new_for_http())
         .layer(cors)
-
-        //
-        // ====================================
-        // APPLICATION STATE
-        // ====================================
-        //
-
         .with_state(state)
 }
 
@@ -506,6 +536,28 @@ async fn main() {
 
     //
     // ====================================
+    // RUN MIGRATIONS
+    // ====================================
+    // mdm-core is the schema owner: it runs all SQLx migrations
+    // before any repositories or services are initialised.
+    // This is idempotent — already-applied migrations are skipped.
+    //
+
+    info!("Running database migrations...");
+
+    database::migration::run_migrations(&db)
+        .await
+        .unwrap_or_else(|e| {
+            // Log but do not panic — init scripts may have already
+            // created tables, and the migration might report a
+            // conflict that is actually safe to ignore in dev.
+            tracing::warn!(error=%e, "migration step reported a warning (continuing)");
+        });
+
+    info!("Database migrations complete");
+
+    //
+    // ====================================
     // STARTUP VALIDATION
     // ====================================
     //
@@ -549,6 +601,73 @@ async fn main() {
             db.clone()
         );
 
+    let matching_repository_arc =
+        Arc::new(matching_repository.clone());
+
+    // Single live policy behind RwLock — shared by both Matcher (reads snapshots)
+    // and AppState (PATCH /policy/weights updates it at runtime).
+    // No frozen copy exists; every match execution reads the current weights.
+    let live_policy = Arc::new(std::sync::RwLock::new(MatchingPolicy::default()));
+
+    let matcher = Arc::new(Matcher::new(
+        matching_repository_arc,
+        Arc::clone(&live_policy),
+    ));
+
+    let matching_service =
+        Arc::new(MatchingService::new(matcher));
+
+    // Redis — entity cache, task queue, and login rate limiter (all optional)
+    let (entity_cache, task_queue, login_rate_limiter) = {
+        use nexus_redis::{create_pool, EntityCache, RedisConfig, RedisRateLimiter, TaskQueue};
+        let cfg = RedisConfig::from_env();
+        match create_pool(&cfg) {
+            Ok(pool) => {
+                let cache   = Arc::new(EntityCache::new(pool.clone(), &cfg.key_prefix));
+                let queue   = Arc::new(TaskQueue::new(pool.clone(), cfg.key_prefix.clone()));
+                // Login: max 10 attempts per 5-minute window per IP+email combo
+                let limiter = Arc::new(RedisRateLimiter::new(pool, cfg.key_prefix.clone(), 10, 300));
+                tracing::info!("Redis connected — entity cache, task queue, and login rate limiter enabled");
+                (Some(cache), Some(queue), Some(limiter))
+            }
+            Err(e) => {
+                tracing::warn!(error=%e, "Redis unavailable — login rate limiting disabled");
+                (None, None, None)
+            }
+        }
+    };
+    let entity_cache = entity_cache;
+    let task_queue   = task_queue;
+
+    let entity_service = Arc::new(
+        EntityService::new(
+            db.clone(),
+            Arc::new(entity_repository.clone()),
+            task_queue,
+        )
+        .with_cache_opt(entity_cache),
+    );
+
+    let merge_service = Arc::new(MergeService::new(
+        db.clone(),
+        Arc::new(entity_repository.clone()),
+        Arc::new(golden_record_repository.clone()),
+    ));
+
+    let golden_record_service = Arc::new(GoldenRecordService::new(
+        db.clone(),
+        Arc::new(golden_record_repository.clone()),
+    ));
+
+    let survivorship_service = Arc::new(SurvivorshipService::new(
+        Arc::new(survivorship_repository.clone()),
+    ));
+
+    let review_service = Arc::new(ReviewService::new(
+        db.clone(),
+        Arc::new(matching_repository.clone()),
+    ));
+
     //
     // ====================================
     // BUILD APPLICATION STATE
@@ -571,6 +690,15 @@ async fn main() {
             survivorship_repository,
 
             tenant_repository,
+
+            matching_service,
+            entity_service,
+            merge_service,
+            golden_record_service,
+            survivorship_service,
+            review_service,
+            matching_policy:    live_policy,
+            redis_rate_limiter: login_rate_limiter,
         }
     );
 

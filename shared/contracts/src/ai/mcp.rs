@@ -6,16 +6,28 @@ use serde::{Deserialize, Serialize};
 // ========================================
 //
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MCPRequest {
 
-    pub tenant_id: String,
+    /// Tenant UUID — can be supplied by caller or injected by the gateway from
+    /// the validated X-Tenant-ID header.
+    pub tenant_id: Option<String>,
 
-    pub user_id: String,
+    /// Authenticated user identity — injected by the gateway from the JWT.
+    /// Never trust a caller-supplied value; the gateway overwrites it.
+    pub user_id: Option<String>,
 
-    pub prompt: String,
+    /// Free-form user query. Also accepted as `message` from the Flutter UI.
+    #[serde(alias = "message")]
+    pub prompt: Option<String>,
 
-    pub correlation_id: String,
+    pub correlation_id: Option<String>,
+
+    /// Optional explicit tool name for structured MCP calls.
+    pub tool: Option<String>,
+
+    /// Tool arguments (for structured calls).
+    pub args: Option<serde_json::Value>,
 }
 
 //

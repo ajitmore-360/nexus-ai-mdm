@@ -17,6 +17,7 @@ use std::time::Instant;
 // =========================================
 //
 
+#[allow(dead_code)]
 pub async fn tracing_middleware(
     req: Request<axum::body::Body>,
     next: Next,

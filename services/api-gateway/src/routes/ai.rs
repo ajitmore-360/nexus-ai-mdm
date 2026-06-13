@@ -1,11 +1,12 @@
 use axum::{
     extract::State,
-    http::HeaderMap,
+    http::{HeaderMap, StatusCode},
+    response::IntoResponse,
+    Extension,
     Json,
 };
 
-use serde_json::{json, Value};
-
+use nexus_auth::Claims;
 use contracts::ai::mcp::MCPRequest;
 
 use crate::{
@@ -20,68 +21,66 @@ use crate::{
 //
 
 pub async fn copilot(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(payload): Json<MCPRequest>,
-) -> Json<Value> {
+    State(state):           State<AppState>,
+    // SECURITY: user identity comes ONLY from the validated JWT, never from
+    // caller-controlled headers (x-user-id, x-user-role are untrusted).
+    claims_opt:             Option<Extension<Claims>>,
+    headers:                HeaderMap,
+    Json(payload):          Json<MCPRequest>,
+) -> impl IntoResponse {
 
-    // ====================================
-    // 🔐 CONTEXT HEADERS
-    // ====================================
-
+    // Tenant ID from the header — already validated against JWT in tenant_middleware
     let tenant_id = headers
         .get("x-tenant-id")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        .map(str::to_owned);
 
-    let user_id = headers
-        .get("x-user-id")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
-
-    let role = headers
-        .get("x-user-role")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    // Identity from JWT claims only (never from caller-controlled headers)
+    let (user_id, role) = match claims_opt {
+        Some(Extension(ref claims)) => (
+            Some(claims.sub.clone()),
+            Some(claims.nxs_role.to_string()),
+        ),
+        None => (None, None),
+    };
 
     let correlation_id = headers
         .get("x-correlation-id")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        .map(str::to_owned);
 
-    // ====================================
-    // 🔁 PROXY
-    // ====================================
-
-    let payload_json = match serde_json::to_value(payload) {
-
+    let mut payload_json = match serde_json::to_value(payload) {
         Ok(v) => v,
-
         Err(e) => {
-            return Json(json!({
-                "success": false,
-                "error": format!(
-                    "serialization failed: {}",
-                    e
-                )
-            }));
+            tracing::error!(error=%e, "failed to serialize MCP request");
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "success": false,
+                    "error": "invalid request payload"
+                })),
+            )
+                .into_response();
         }
     };
 
-    let result = proxy_ai_request(
-        &state,
-        payload_json,
-        tenant_id,
-        user_id,
-        role,
-        correlation_id,
-    )
-    .await;
+    // Inject gateway-sourced identity into the forwarded payload.
+    // The AI service McpRequest requires tenant_id and optionally user_id;
+    // these come from the validated JWT/header rather than the caller-supplied body.
+    if let Some(map) = payload_json.as_object_mut() {
+        if let Some(ref tid) = tenant_id {
+            map.insert("tenant_id".to_string(), serde_json::Value::String(tid.clone()));
+        }
+        if let Some(ref uid) = user_id {
+            map.insert("user_id".to_string(), serde_json::Value::String(uid.clone()));
+        }
+        if let Some(ref cid) = correlation_id {
+            map.insert("correlation_id".to_string(), serde_json::Value::String(cid.clone()));
+        }
+    }
 
-    match result {
-
-        Ok(response) => Json(response),
-
-        Err(error) => Json(error),
+    match proxy_ai_request(&state, payload_json, tenant_id, user_id, role, correlation_id).await {
+        Ok((status, body)) => (status, Json(body)).into_response(),
+        Err((status, body)) => (status, Json(body)).into_response(),
     }
 }

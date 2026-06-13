@@ -1,0 +1,162 @@
+openapi: 3.1.0
+info:
+  title: Nexus AI MDM API
+  version: 0.1.0
+  description: |
+    Hub-and-spoke MDM platform. Entities can be authored in MDM (`mdm_authoritative`)
+    and distributed to downstream systems via outbox/Kafka events.
+
+servers:
+  - url: http://127.0.0.1:8080
+    description: API Gateway
+  - url: http://127.0.0.1:8081
+    description: MDM Core (direct)
+
+tags:
+  - name: health
+  - name: entities
+  - name: matching
+  - name: survivorship
+  - name: ai
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      security: []
+      summary: Gateway health
+      responses:
+        "200":
+          description: OK
+
+  /entities:
+    post:
+      tags: [entities]
+      summary: Create entity in MDM (hub authoring)
+      description: |
+        Persists a canonical entity. When `distribute` is true, emits
+        `EntityDistributionRequested` to the transactional outbox for
+        connector workers (Salesforce, SAP, webhooks, etc.).
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEntityRequest"
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+
+  /match:
+    post:
+      tags: [matching]
+      summary: Execute entity matching
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchRequest"
+      responses:
+        "200":
+          description: Match results
+
+  /merge:
+    post:
+      tags: [survivorship]
+      summary: Apply survivorship rules and produce golden record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Golden record
+
+  /copilot:
+    post:
+      tags: [ai]
+      summary: AI copilot (MCP)
+      responses:
+        "200":
+          description: MCP response
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    TenantId:
+      name: x-tenant-id
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    CreateEntityRequest:
+      type: object
+      required: [entity, record_origin]
+      properties:
+        entity:
+          type: object
+          description: Canonical entity payload
+        record_origin:
+          type: string
+          enum: [mdm_authoritative, ingested, survivorship_derived]
+        distribute:
+          type: boolean
+          default: false
+        distribution_targets:
+          type: array
+          items:
+            $ref: "#/components/schemas/DistributionTarget"
+
+    DistributionTarget:
+      type: object
+      required: [connector_id, target_system, delivery_mode]
+      properties:
+        connector_id:
+          type: string
+        target_system:
+          type: string
+        delivery_mode:
+          type: string
+          enum: [push, pull, cdc, webhook]
+
+    MatchRequest:
+      type: object
+      required: [request_id, tenant_id, entity_type, entity, strategy, max_candidates]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        entity_type:
+          type: string
+        entity:
+          type: object
+        strategy:
+          type: string
+        max_candidates:
+          type: integer
+        semantic_matching:
+          type: boolean
+        ai_assisted:
+          type: boolean

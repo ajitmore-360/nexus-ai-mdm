@@ -27,6 +27,7 @@ impl WsManager {
         self.clients.remove(session_id);
     }
 
+    #[allow(dead_code)]
     pub fn broadcast(&self, message: String) {
         for client in self.clients.iter() {
             let _ = client.send(

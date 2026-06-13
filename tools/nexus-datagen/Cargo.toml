@@ -1,0 +1,22 @@
+[package]
+name    = "nexus-datagen"
+version = "0.1.0"
+edition = "2021"
+description = "Synthetic data generator for Nexus AI MDM — generates realistic enterprise entity data and loads it via the ingest API."
+authors     = ["Nexus MDM Team"]
+
+[[bin]]
+name = "nexus-datagen"
+path = "src/main.rs"
+
+[dependencies]
+tokio       = { version = "1",    features = ["full"] }
+serde       = { version = "1",    features = ["derive"] }
+serde_json  = "1"
+uuid        = { version = "1",    features = ["v4", "serde"] }
+chrono      = { version = "0.4",  features = ["serde"] }
+anyhow      = "1"
+clap        = { version = "4",    features = ["derive"] }
+reqwest     = { version = "0.12", features = ["json"] }
+rand        = "0.8"
+csv         = "1"

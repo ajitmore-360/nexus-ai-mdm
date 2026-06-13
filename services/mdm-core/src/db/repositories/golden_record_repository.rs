@@ -627,4 +627,95 @@ impl GoldenRecordRepository {
             row.get::<i64, _>(0)
         )
     }
+
+    // ====================================
+    // LIST GOLDEN RECORDS
+    // ====================================
+
+    pub async fn list_golden_records(
+        &self,
+        tenant_id:   Uuid,
+        entity_type: Option<&str>,
+        limit:       i64,
+        offset:      i64,
+    ) -> Result<Vec<GoldenRecord>> {
+        // Minimal projection — return id + tenant + type + status + lifecycle
+        // stage. Callers that need full attributes should call fetch_golden_record.
+        let rows = if let Some(etype) = entity_type {
+            sqlx::query(
+                r#"
+                SELECT golden_record_id, tenant_id, entity_type, status,
+                       lifecycle_stage, metadata
+                FROM core_mdm.golden_records
+                WHERE tenant_id   = $1
+                  AND entity_type = $2
+                  AND valid_to    = 'infinity'
+                ORDER BY updated_at DESC
+                LIMIT $3 OFFSET $4
+                "#,
+            )
+            .bind(tenant_id)
+            .bind(etype)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query(
+                r#"
+                SELECT golden_record_id, tenant_id, entity_type, status,
+                       lifecycle_stage, metadata
+                FROM core_mdm.golden_records
+                WHERE tenant_id = $1
+                  AND valid_to  = 'infinity'
+                ORDER BY updated_at DESC
+                LIMIT $2 OFFSET $3
+                "#,
+            )
+            .bind(tenant_id)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        // For the list view we return shallow GoldenRecord stubs.
+        // fetch_golden_record provides the full record.
+        let mut results = Vec::with_capacity(rows.len());
+        for row in rows {
+            let gid: Uuid = row.try_get("golden_record_id")?;
+            if let Some(gr) = self.fetch_golden_record(tenant_id, gid).await? {
+                results.push(gr);
+            }
+        }
+        Ok(results)
+    }
+
+    // ====================================
+    // UPDATE LIFECYCLE STAGE
+    // ====================================
+
+    pub async fn update_lifecycle_stage(
+        &self,
+        tx:               &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        tenant_id:        Uuid,
+        golden_record_id: Uuid,
+        stage:            contracts::mdm::golden_record::GoldenRecordLifecycleStage,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE core_mdm.golden_records
+            SET    lifecycle_stage = $3,
+                   updated_at      = NOW()
+            WHERE  tenant_id       = $1
+            AND    golden_record_id = $2
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(golden_record_id)
+        .bind(format!("{:?}", stage))
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
 }

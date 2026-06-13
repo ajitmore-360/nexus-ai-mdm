@@ -112,11 +112,11 @@ pub async fn publish_event(
 
         Ok((partition, offset)) => {
 
-            println!(
-                "Kafka message delivered successfully. topic={}, partition={}, offset={}",
-                topic,
-                partition,
-                offset
+            tracing::debug!(
+                topic     = %topic,
+                partition = partition,
+                offset    = offset,
+                "Kafka message delivered"
             );
 
             Ok(())

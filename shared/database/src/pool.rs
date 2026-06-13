@@ -10,10 +10,7 @@ use sqlx::{
     Postgres,
     pool::PoolConnection,
 };
-use tracing::{
-    error,
-    info,
-};
+use tracing::info;
 
 pub type DbPool = Pool<Postgres>;
 

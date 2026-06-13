@@ -7,13 +7,9 @@ use reqwest::{
         CONTENT_TYPE,
     },
     Client,
-    StatusCode,
 };
 
-use serde_json::{
-    json,
-    Value,
-};
+use serde_json::Value;
 
 use std::{
     collections::HashMap,
@@ -28,6 +24,7 @@ use uuid::Uuid;
 // =========================================
 //
 
+#[allow(dead_code)]
 fn http_client() -> Client {
 
     Client::builder()
@@ -61,6 +58,7 @@ fn http_client() -> Client {
 // =========================================
 //
 
+#[allow(dead_code)]
 #[derive(Default, Clone)]
 pub struct ProxyHeaders {
 
@@ -79,6 +77,7 @@ pub struct ProxyHeaders {
 
 impl ProxyHeaders {
 
+    #[allow(dead_code)]
     pub fn to_headers(&self) -> HeaderMap {
 
         let mut headers = HeaderMap::new();
@@ -160,6 +159,7 @@ impl ProxyHeaders {
 // =========================================
 //
 
+#[allow(dead_code)]
 fn insert_header(
     headers: &mut HeaderMap,
     key: &str,
@@ -185,6 +185,7 @@ fn insert_header(
 // =========================================
 //
 
+#[allow(dead_code)]
 pub async fn forward_post(
     url: &str,
     body: Value,
@@ -260,6 +261,7 @@ pub async fn forward_post(
 // =========================================
 //
 
+#[allow(dead_code)]
 pub async fn forward_get(
     url: &str,
     proxy_headers: Option<ProxyHeaders>,

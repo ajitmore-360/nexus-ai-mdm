@@ -10,25 +10,22 @@ use client::handle_client;
 use manager::WsManager;
 
 pub async fn start_ws_server() -> anyhow::Result<()> {
-
-    let listener = TcpListener::bind("127.0.0.1:4000")
+    let listener = TcpListener::bind("0.0.0.0:4000")
         .await
         .expect("WS bind failed");
 
     let manager = WsManager::new();
 
-    println!("✅ Gateway WS running on ws://127.0.0.1:4000");
+    tracing::info!("Gateway WS server listening on ws://0.0.0.0:4000");
 
     while let Ok((stream, _)) = listener.accept().await {
-
         let manager_clone = manager.clone();
 
         tokio::spawn(async move {
-
             let ws = match accept_async(stream).await {
                 Ok(ws) => ws,
                 Err(e) => {
-                    eprintln!("❌ WS handshake failed: {:?}", e);
+                    tracing::warn!(error=%e, "WS handshake failed");
                     return;
                 }
             };

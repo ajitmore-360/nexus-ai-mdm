@@ -1,50 +1,21 @@
-use axum::{
-    extract::WebSocketUpgrade,
-    response::Response,
-};
+use axum::{extract::WebSocketUpgrade, response::Response};
 
-//
-// ========================================
-// WS HANDLER
-// ========================================
-//
-
-pub async fn websocket_handler(
-    ws: WebSocketUpgrade,
-) -> Response {
-
+pub async fn websocket_handler(ws: WebSocketUpgrade) -> Response {
     ws.on_upgrade(handle_socket)
 }
 
-//
-// ========================================
-// SOCKET SESSION
-// ========================================
-//
-
-async fn handle_socket(
-    mut socket: axum::extract::ws::WebSocket,
-) {
-
-    println!("✅ WebSocket connected");
+async fn handle_socket(mut socket: axum::extract::ws::WebSocket) {
+    tracing::debug!("WebSocket session started");
 
     while let Some(message) = socket.recv().await {
-
         match message {
-
-            Ok(msg) => {
-
-                println!("Received WS message: {:?}", msg);
-            }
-
+            Ok(_msg) => { /* messages handled by notification-service */ }
             Err(err) => {
-
-                println!("WS error: {:?}", err);
-
+                tracing::warn!(error=%err, "WebSocket error");
                 break;
             }
         }
     }
 
-    println!("❌ WebSocket disconnected");
+    tracing::debug!("WebSocket session ended");
 }

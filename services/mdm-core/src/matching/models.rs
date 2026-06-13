@@ -1,16 +1,20 @@
 // ============================================================
-// File: mdm-core/src/matching/models.rs
-// Purpose:
-// Internal matching-engine execution models
-// Not exposed through APIs.
+// Internal matching-engine execution models.
+// Many structs here represent the full matching domain model;
+// not all are instantiated in the current pipeline but are part
+// of the planned architecture.
 // ============================================================
+#![allow(dead_code)]
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use shared_contracts::mdm::{
+pub const MATCH_ENGINE_VERSION: &str =
+    "nexus-match-engine-v2";
+
+use contracts::mdm::{
     entity::CanonicalEntity,
     matching::{
         BlockingDiagnostics,
@@ -40,9 +44,15 @@ pub struct BlockingResult {
 #[derive(Debug, Clone)]
 pub struct CandidateEntity {
     pub entity: CanonicalEntity,
-    pub blocking_score: f32,
-}
 
+    pub blocking_score: f32,
+
+    pub candidate_source: CandidateSource,
+
+    pub vector_similarity: Option<f32>,
+
+    pub graph_similarity: Option<f32>,
+}
 //
 // ============================================================
 // ATTRIBUTE PAIR
@@ -115,12 +125,13 @@ pub struct MatchScoreBreakdown {
     pub confidence: f32,
 
     pub exact_score: f32,
+    pub weighted_score: f32,
     pub fuzzy_score: f32,
     pub phonetic_score: f32,
     pub semantic_score: f32,
     pub vector_score: f32,
     pub graph_score: f32,
-
+    pub feature_importance: Vec<FeatureImportance>,
     pub field_scores: Vec<FieldScore>,
 }
 
@@ -216,6 +227,8 @@ pub struct MatchEvaluationResult {
     pub breakdown: MatchScoreBreakdown,
 
     pub field_results: Vec<FieldMatchResult>,
+
+    pub metrics: CandidateEvaluationMetrics,
 }
 
 //
@@ -283,6 +296,7 @@ pub struct ClusterNode {
 pub struct MatchClusterGraph {
     pub nodes: Vec<ClusterNode>,
     pub edges: Vec<(Uuid, Uuid, f32)>,
+    pub confidence: ClusterConfidence,
 }
 
 //
@@ -296,6 +310,7 @@ pub struct BlockingStatistics {
     pub total_records: usize,
     pub candidate_records: usize,
     pub reduction_percentage: f32,
+    pub rule_metrics: Vec<BlockingRuleMetrics>,
 }
 
 //
@@ -307,21 +322,20 @@ pub struct BlockingStatistics {
 #[derive(Debug, Clone)]
 pub struct MatchingEngineMetrics {
     pub execution_id: Uuid,
-
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
-
     pub blocking_time_ms: u64,
     pub scoring_time_ms: u64,
     pub clustering_time_ms: u64,
-
     pub candidates_generated: usize,
     pub candidates_scored: usize,
-
     pub matches_found: usize,
+    pub review_cases_created: usize,
+    pub clusters_created: usize,
+    pub average_score: f32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MatchDecision {
     AutoMerge,
     HumanReview,
@@ -344,5 +358,78 @@ pub struct ReviewCase {
     pub score: f64,
     pub priority: ReviewPriority,
     pub reason: String,
+    pub review_reason: ReviewReason,
+    pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone)]
+pub enum CandidateSource {
+    Blocking,
+    VectorSearch,
+    GraphSearch,
+    ExternalReference,
+    HumanSuggested,
+}
+
+#[derive(Debug, Clone)]
+pub struct FeatureImportance {
+    pub feature_name: String,
+    pub contribution: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct CandidateEvaluationMetrics {
+
+    pub fields_compared: usize,
+
+    pub fields_matched: usize,
+
+    pub fields_missing: usize,
+
+    pub exact_matches: usize,
+
+    pub fuzzy_matches: usize,
+}
+
+#[derive(Debug, Clone)]
+pub enum ReviewReason {
+    ScoreInGreyZone,
+    ConflictingAttributes,
+    MultipleHighConfidenceMatches,
+    PolicyViolation,
+    AIRecommendation,
+}
+
+#[derive(Debug, Clone)]
+pub struct ClusterConfidence {
+
+    pub average_score: f32,
+
+    pub minimum_score: f32,
+
+    pub maximum_score: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct BlockingRuleMetrics {
+   pub rule_name: String,
+    pub candidates_generated: usize,
+    pub reduction_percentage: f32,
+}
+
+//
+// ============================================================
+// MATCH RESULT (pairwise edge for clustering)
+// ============================================================
+//
+
+#[derive(Debug, Clone)]
+pub struct MatchResult {
+    pub source_entity_id: Uuid,
+    pub candidate_entity_id: Uuid,
+    pub score: f64,
+    pub confidence: f64,
+}
+
+
 

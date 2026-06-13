@@ -1,0 +1,16 @@
+[package]
+name = "nexus-auth"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde.workspace       = true
+serde_json.workspace  = true
+chrono.workspace      = true
+uuid.workspace        = true
+anyhow.workspace      = true
+thiserror.workspace   = true
+tracing.workspace     = true
+
+jsonwebtoken = { workspace = true }
+bcrypt       = { workspace = true }

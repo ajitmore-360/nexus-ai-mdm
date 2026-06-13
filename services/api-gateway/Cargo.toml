@@ -19,7 +19,7 @@ tokio = { version = "1", features = ["full"] }
 # HTTP
 # =========================
 tower = "0.4"
-tower-http = { version = "0.5", features = ["cors"] }
+tower-http = { version = "0.5", features = ["cors", "limit"] }
 
 # =========================
 # SERIALIZATION
@@ -42,10 +42,7 @@ dotenvy = "0.15"
 # =========================
 tracing = "0.1"
 
-tracing-subscriber = {
-    version = "0.3",
-    features = ["fmt", "env-filter"]
-}
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 
 # =========================
 # UUID
@@ -55,7 +52,11 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # =========================
 # INTERNAL SERVICES
 # =========================
-contracts = { path = "../../shared/contracts" }
+contracts   = { path = "../../shared/contracts" }
+nexus-redis      = { workspace = true }
+nexus-auth       = { workspace = true }
+nexus-telemetry  = { workspace = true }
+prometheus       = { workspace = true }
 
 # =========================
 # WEBSOCKET

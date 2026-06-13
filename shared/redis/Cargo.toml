@@ -1,0 +1,21 @@
+[package]
+name = "nexus-redis"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio.workspace    = true
+serde.workspace    = true
+serde_json.workspace = true
+tracing.workspace  = true
+anyhow.workspace   = true
+thiserror.workspace = true
+uuid.workspace     = true
+chrono.workspace   = true
+async-trait.workspace = true
+
+deadpool-redis = { version = "0.14", features = ["rt_tokio_1"] }
+redis          = { version = "0.24", features = ["aio", "tokio-comp", "streams"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }

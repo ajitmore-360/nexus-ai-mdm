@@ -811,6 +811,80 @@ impl SurvivorshipRepository {
             row.get::<i64, _>(0)
         )
     }
+
+    // ====================================
+    // FETCH ACTIVE RULES FOR ENTITY TYPE
+    // ====================================
+
+    /// Return all active survivorship rules for the given tenant and entity type.
+    /// Used by `SurvivorshipService::apply_with_persisted_rules`.
+    pub async fn fetch_rules_for_entity_type(
+        &self,
+        tenant_id:   Uuid,
+        entity_type: &str,
+    ) -> Result<Vec<SurvivorshipRule>, sqlx::Error> {
+        let rows = sqlx::query(
+            r#"
+            SELECT rule_id, tenant_id, rule_name, entity_type,
+                   attribute_key, strategy, source_priority,
+                   min_confidence, ai_assisted, allow_manual_override,
+                   priority, effective_from, effective_to, metadata
+            FROM core_mdm.survivorship_rules
+            WHERE tenant_id   = $1
+              AND entity_type = $2
+              AND status      = 'Active'
+            ORDER BY priority ASC
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(entity_type)
+        .fetch_all(&self.pool)
+        .await?;
+
+        use contracts::mdm::survivorship::{SurvivorshipScope, SurvivorshipStatus};
+        use contracts::mdm::common::AuditMetadata;
+
+        let mut rules = Vec::with_capacity(rows.len());
+        for row in rows {
+            let strategy_str: String = row.try_get("strategy").unwrap_or_default();
+            rules.push(SurvivorshipRule {
+                rule_id:               row.try_get("rule_id").unwrap_or_else(|_| Uuid::new_v4()),
+                rule_name:             row.try_get("rule_name").unwrap_or_default(),
+                description:           None,
+                attribute:             row.try_get("attribute_key").unwrap_or_default(),
+                strategy:              parse_strategy(&strategy_str),
+                scope:                 SurvivorshipScope::Tenant,
+                source_priority:       row
+                    .try_get::<sqlx::types::Json<Vec<String>>, _>("source_priority")
+                    .map(|v| v.0)
+                    .unwrap_or_default(),
+                source_weights:        Default::default(),
+                minimum_confidence:    row.try_get("min_confidence").unwrap_or(None),
+                ai_assisted:           row.try_get("ai_assisted").unwrap_or(false),
+                explainability_enabled: false,
+                allow_manual_override: row.try_get("allow_manual_override").unwrap_or(true),
+                status:                SurvivorshipStatus::Active,
+                priority:              row.try_get("priority").unwrap_or(0),
+                effective_from:        row.try_get("effective_from").ok().flatten(),
+                effective_to:          row.try_get("effective_to").ok().flatten(),
+                created_by:            None,
+                audit:                 AuditMetadata {
+                    created_at:     chrono::Utc::now(),
+                    updated_at:     chrono::Utc::now(),
+                    created_by:     None,
+                    updated_by:     None,
+                    correlation_id: None,
+                    causation_id:   None,
+                    request_id:     None,
+                },
+                metadata:              row
+                    .try_get::<sqlx::types::Json<contracts::mdm::common::MetadataMap>, _>("metadata")
+                    .map(|v| v.0)
+                    .unwrap_or_default(),
+            });
+        }
+        Ok(rules)
+    }
 }
 
 //

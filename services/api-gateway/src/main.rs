@@ -6,181 +6,244 @@ mod services;
 mod state;
 mod ws;
 
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use axum::{
+    http::{HeaderValue, HeaderName, Method, header::{AUTHORIZATION, CONTENT_TYPE}},
     middleware as axum_middleware,
     routing::{get, post},
     Router,
 };
 
-use std::net::SocketAddr;
-
-use tower_http::cors::{
-    Any,
-    CorsLayer,
-};
+use tower_http::cors::CorsLayer;
 
 use config::settings::Settings;
 
 use middleware::{
     auth::auth_middleware,
+    logging::logging_middleware,
+    rate_limit::{rate_limit_middleware, InMemoryRateLimiter},
+    request_id::request_id_middleware,
     tenant::tenant_middleware,
 };
 
+use nexus_redis::{create_pool as create_redis_pool, RedisConfig, RedisRateLimiter, SessionStore};
+
 use routes::{
     ai::copilot,
-    health::health,
+    auth::{login, me, refresh},
+    health::{health, prometheus_metrics},
+    mdm::{create_entity, execute_match},
+    service_proxy::{
+        autocomplete, create_policy_rule, dashboard_activity, dashboard_stats,
+        enqueue_distribution, evaluate_policy, gdpr_access, gdpr_erasure,
+        get_entity_by_id, patch_entity, ingest_batch, ingest_csv, ingest_entities,
+        list_entities, list_policy_rules, recommend_weights, scan_anomalies, search,
+    },
 };
 
 use services::ServiceClients;
 use state::AppState;
 
-//
-// =========================================
-// 🚀 MAIN
-// =========================================
-//
-
 #[tokio::main]
 async fn main() {
 
-    // =====================================
-    // ENV
-    // =====================================
     dotenvy::dotenv().ok();
 
-    // =====================================
-    // CONFIG
-    // =====================================
+    // ---- Tracing -----------------------------------------------------------
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive("api_gateway=info".parse().unwrap()),
+        )
+        .init();
+
+    // ---- Config ------------------------------------------------------------
     let settings = Settings::from_env();
 
-    println!("✅ Configuration loaded");
+    // ── Production safety guard ──────────────────────────────────────────────
+    // Refuse to start with insecure configuration in non-development environments.
+    let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+    let auth_disabled = std::env::var("AUTH_DISABLED")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
 
-    // =====================================
-    // SERVICE CLIENTS
-    // =====================================
+    if auth_disabled && matches!(app_env.as_str(), "production" | "staging" | "prod" | "stage") {
+        panic!(
+            "SECURITY: AUTH_DISABLED=true is not permitted in APP_ENV={}. \
+             Set AUTH_DISABLED=false and configure JWT_SECRET.",
+            app_env
+        );
+    }
+
+    if auth_disabled {
+        tracing::warn!(
+            "⚠️  AUTH_DISABLED=true — all authentication checks are bypassed. \
+             This MUST NOT be used in production."
+        );
+    }
+
+    tracing::info!("API Gateway starting on port {}", settings.gateway_port);
+
+    // ---- Redis (optional) --------------------------------------------------
+    let redis_cfg = RedisConfig::from_env();
+    let (redis_rate_limiter, session_store) =
+        match create_redis_pool(&redis_cfg) {
+            Ok(pool) => {
+                tracing::info!("Redis connected at {}", redis_cfg.url);
+                let limiter = Arc::new(RedisRateLimiter::new(
+                    pool.clone(),
+                    redis_cfg.key_prefix.clone(),
+                    100,
+                    60,
+                ));
+                let sessions = Arc::new(SessionStore::new(
+                    pool,
+                    redis_cfg.key_prefix.clone(),
+                ));
+                (Some(limiter), Some(sessions))
+            }
+            Err(e) => {
+                tracing::warn!(error=%e, "Redis unavailable; using in-memory fallbacks");
+                (None, None)
+            }
+        };
+
+    // ---- Service clients ---------------------------------------------------
     let services = ServiceClients::new();
 
-    println!("✅ Service clients initialized");
-
-    // =====================================
-    // APP STATE
-    // =====================================
+    // ---- App state ---------------------------------------------------------
     let state = AppState {
-        settings: settings.clone(),
+        settings:           settings.clone(),
         services,
+        rate_limiter:       InMemoryRateLimiter::new(),
+        redis_rate_limiter,
+        session_store,
     };
 
-    // =====================================
-    // CORS
-    // =====================================
+    // ---- CORS --------------------------------------------------------------
+    let allowed_origin: HeaderValue = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string())
+        .parse()
+        .expect("invalid ALLOWED_ORIGINS value");
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(allowed_origin)
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            CONTENT_TYPE,
+            AUTHORIZATION,
+            HeaderName::from_static("x-tenant-id"),
+            HeaderName::from_static("x-request-id"),
+        ])
+        .allow_credentials(true);
 
-    // =====================================
-    // PROTECTED ROUTES
-    // =====================================
+    // ---- Routes ------------------------------------------------------------
+    // Middleware order (outermost applied last → executes first):
+    //   request_id → logging → rate_limit → tenant → auth → handler
     let protected_routes = Router::new()
+        // ── MDM Core ──────────────────────────────────────────────────
+        .route("/entities",              get(list_entities).post(create_entity))
+        .route("/entities/:id",          get(get_entity_by_id).patch(patch_entity))
+        .route("/match",                 post(execute_match))
+        // ── AI Copilot ────────────────────────────────────────────────
+        .route("/copilot",               post(copilot))
+        .route("/weights/recommend",     get(recommend_weights))
+        .route("/anomalies",             get(scan_anomalies))
+        // ── Dashboard ─────────────────────────────────────────────────
+        .route("/dashboard/stats",       get(dashboard_stats))
+        .route("/dashboard/activity",    get(dashboard_activity))
+        // ── Search ────────────────────────────────────────────────────
+        .route("/search",                get(search))
+        .route("/search/autocomplete",   get(autocomplete))
+        // ── Policy ────────────────────────────────────────────────────
+        .route("/policy/evaluate",       post(evaluate_policy))
+        .route("/policy/rules",          get(list_policy_rules).post(create_policy_rule))
+        .route("/policy/gdpr/erasure",   post(gdpr_erasure))
+        .route("/policy/gdpr/access",    post(gdpr_access))
+        // ── Ingest ────────────────────────────────────────────────────
+        .route("/ingest/batch",          post(ingest_batch))
+        .route("/ingest/entities",       post(ingest_entities))
+        .route("/ingest/csv",            post(ingest_csv))
+        // ── Distribution ─────────────────────────────────────────────
+        .route("/distribution/jobs",     post(enqueue_distribution))
+        .layer(axum_middleware::from_fn_with_state(state.clone(), auth_middleware))
+        .layer(axum_middleware::from_fn_with_state(state.clone(), tenant_middleware))
+        .layer(axum_middleware::from_fn_with_state(state.clone(), rate_limit_middleware))
+        .layer(axum_middleware::from_fn(logging_middleware))
+        .layer(axum_middleware::from_fn(request_id_middleware));
 
-        // =================================
-        // AI COPILOT
-        // =================================
-        .route("/copilot", post(copilot))
+    // Initialise metrics for Prometheus scraping
+    nexus_telemetry::metrics::init_metrics("api-gateway");
 
-        // =================================
-        // FUTURE ROUTES
-        // =================================
-        // .route("/search", post(search))
-        // .route("/merge", post(merge))
-        // .route("/survivorship", post(survivorship))
+    // Public routes — no auth required
+    let public_routes = Router::new()
+        .route("/health",       get(health))
+        .route("/metrics",      get(prometheus_metrics))
+        .route("/auth/login",   axum::routing::post(login))
+        .route("/auth/refresh", axum::routing::post(refresh));
 
-        // =================================
-        // MIDDLEWARE ORDER
-        // auth -> tenant -> handlers
-        // =================================
-        .layer(axum_middleware::from_fn_with_state(
-            state.clone(),
-            auth_middleware,
-        ))
-        .layer(axum_middleware::from_fn_with_state(
-            state.clone(),
-            tenant_middleware,
-        ));
+    // All business routes under /v1 — public ones at root for backward compat
+    // Request body size limits — prevent DoS via oversized payloads
+    // Normal MDM entities: typically < 64 KB
+    // Batch ingest: handled separately with its own limit in ingest-service
+    let body_limit = tower_http::limit::RequestBodyLimitLayer::new(
+        10 * 1024 * 1024, // 10 MB hard limit on the gateway
+    );
 
-    // =====================================
-    // APPLICATION ROUTER
-    // =====================================
     let app = Router::new()
-
-        // =================================
-        // PUBLIC ROUTES
-        // =================================
-        .route("/health", get(health))
-
-        // =================================
-        // PROTECTED ROUTES
-        // =================================
+        .merge(public_routes)
+        // v1 API — all versioned routes live here
+        // Security headers applied to every response
+        .nest("/v1", Router::new()
+            .route("/auth/me",         get(me))
+            .route("/auth/login",      axum::routing::post(login))
+            .route("/auth/refresh",    axum::routing::post(refresh))
+            .merge(protected_routes.clone())
+        )
+        // Legacy unversioned routes (no /v1 prefix) — kept for backward compat
+        .route("/auth/me",  get(me))
         .nest("/", protected_routes)
-
-        // =================================
-        // STATE
-        // =================================
         .with_state(state.clone())
-
-        // =================================
-        // CORS
-        // =================================
+        .layer(axum::middleware::from_fn(
+            nexus_telemetry::security_headers::security_headers_middleware
+        ))
+        .layer(body_limit)
         .layer(cors);
 
-    // =====================================
-    // WS SERVER
-    // =====================================
+    // ---- WebSocket ---------------------------------------------------------
     tokio::spawn(async move {
-
         if let Err(err) = ws::start_ws_server().await {
-            eprintln!("❌ WS server failed: {:?}", err);
+            tracing::error!("WS server failed: {:?}", err);
         }
-
     });
 
-    println!("✅ WebSocket server started");
+    // ---- Bind --------------------------------------------------------------
+    let addr = SocketAddr::from(([0, 0, 0, 0], settings.gateway_port));
+    tracing::info!("API Gateway listening on http://{}", addr);
 
-    // =====================================
-    // BIND ADDRESS
-    // =====================================
-    let addr = SocketAddr::from((
-        [127, 0, 0, 1],
-        settings.gateway_port,
-    ));
-
-    println!("🚀 API Gateway running on http://{}", addr);
-
-    // =====================================
-    // START SERVER
-    // =====================================
     let listener = tokio::net::TcpListener::bind(addr)
         .await
-        .expect("❌ Failed to bind API Gateway");
+        .expect("failed to bind API Gateway");
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .expect("❌ API Gateway crashed");
+        .expect("API Gateway crashed");
 }
 
-//
-// =========================================
-// 🛑 SHUTDOWN
-// =========================================
-//
-
 async fn shutdown_signal() {
-
     use tokio::signal;
 
     let ctrl_c = async {
-
         signal::ctrl_c()
             .await
             .expect("failed to install Ctrl+C handler");
@@ -188,13 +251,10 @@ async fn shutdown_signal() {
 
     #[cfg(unix)]
     let terminate = async {
-
-        signal::unix::signal(
-            signal::unix::SignalKind::terminate()
-        )
-        .expect("failed to install signal handler")
-        .recv()
-        .await;
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
     };
 
     #[cfg(not(unix))]
@@ -205,5 +265,5 @@ async fn shutdown_signal() {
         _ = terminate => {},
     }
 
-    println!("🛑 Shutdown signal received");
+    tracing::info!("shutdown signal received");
 }

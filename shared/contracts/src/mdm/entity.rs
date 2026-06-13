@@ -14,6 +14,10 @@ use uuid::Uuid;
 
 use crate::mdm::common::*;
 
+fn _new_uuid() -> Uuid { Uuid::new_v4() }
+fn _bool_true() -> bool { true }
+fn _default_attr_version() -> u64 { 1 }
+
 //
 // ========================================
 // ENTITY TYPE
@@ -166,30 +170,34 @@ pub struct AttributeChange {
 // ========================================
 //
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EntityAttribute {
 
     //
     // Attribute ID
     //
+    #[serde(default = "_new_uuid")]
     pub attribute_id:
         Uuid,
 
     //
     // Key
     //
+    #[serde(default)]
     pub key:
         String,
 
     //
     // Value
     //
+    #[serde(default)]
     pub value:
         serde_json::Value,
 
     //
     // Data type
     //
+    #[serde(default)]
     pub data_type:
         String,
 
@@ -208,6 +216,7 @@ pub struct EntityAttribute {
     //
     // Policy tags
     //
+    #[serde(default)]
     pub policy_tags:
         Vec<PolicyTag>,
 
@@ -220,6 +229,7 @@ pub struct EntityAttribute {
     //
     // Search aliases
     //
+    #[serde(default)]
     pub aliases:
         Vec<String>,
 
@@ -232,30 +242,35 @@ pub struct EntityAttribute {
     //
     // AI annotations
     //
+    #[serde(default)]
     pub ai_annotations:
         Vec<AIAnnotation>,
 
     //
     // Searchable
     //
+    #[serde(default = "_bool_true")]
     pub searchable:
         bool,
 
     //
     // Indexed
     //
+    #[serde(default = "_bool_true")]
     pub indexed:
         bool,
 
     //
     // Encrypted
     //
+    #[serde(default)]
     pub encrypted:
         bool,
 
     //
     // Survivorship eligible
     //
+    #[serde(default = "_bool_true")]
     pub survivorship_eligible:
         bool,
 
@@ -268,12 +283,14 @@ pub struct EntityAttribute {
     //
     // Attribute version
     //
+    #[serde(default = "_default_attr_version")]
     pub attribute_version:
         u64,
 
     //
     // Metadata
     //
+    #[serde(default)]
     pub metadata:
         MetadataMap,
 }
@@ -421,6 +438,7 @@ pub struct CanonicalEntity {
     //
     // External IDs
     //
+    #[serde(default)]
     pub external_ids:
         HashMap<String, String>,
 
@@ -433,36 +451,42 @@ pub struct CanonicalEntity {
     //
     // Attributes
     //
+    #[serde(default)]
     pub attributes:
         Vec<EntityAttribute>,
 
     //
     // Relationships
     //
+    #[serde(default)]
     pub relationships:
         Vec<EntityRelationship>,
 
     //
     // Source snapshots
     //
+    #[serde(default)]
     pub source_snapshots:
         Vec<EntitySourceSnapshot>,
 
     //
     // Versioning
     //
+    #[serde(default)]
     pub version_info:
         VersionInfo,
 
     //
     // Audit
     //
+    #[serde(default)]
     pub audit:
         AuditMetadata,
 
     //
     // Entity tags
     //
+    #[serde(default)]
     pub tags:
         Vec<String>,
 
@@ -475,12 +499,14 @@ pub struct CanonicalEntity {
     //
     // Metadata
     //
+    #[serde(default)]
     pub metadata:
         MetadataMap,
 
     //
     // Embeddings
     //
+    #[serde(default)]
     pub embedding_refs:
         Vec<EmbeddingReference>,
 
@@ -499,36 +525,42 @@ pub struct CanonicalEntity {
     //
     // Lineage references
     //
+    #[serde(default)]
     pub lineage_refs:
         Vec<Uuid>,
 
     //
     // Merge references
     //
+    #[serde(default)]
     pub merge_refs:
         Vec<Uuid>,
 
     //
     // Survivorship references
     //
+    #[serde(default)]
     pub survivorship_refs:
         Vec<Uuid>,
 
     //
     // Workflow references
     //
+    #[serde(default)]
     pub workflow_refs:
         Vec<Uuid>,
 
     //
     // Policy evaluation references
     //
+    #[serde(default)]
     pub policy_refs:
         Vec<Uuid>,
 
     //
     // Change history
     //
+    #[serde(default)]
     pub changes:
         Vec<AttributeChange>,
 

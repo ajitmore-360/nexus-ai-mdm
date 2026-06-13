@@ -1,5 +1,6 @@
 use uuid::Uuid;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ClientSession {
     pub session_id: Uuid,

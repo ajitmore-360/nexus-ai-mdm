@@ -1,2 +1,51 @@
-target
+# Rust build artifacts
+target/
 /target
+
+# ── SECURITY: Never commit secrets to source control ─────────────────────────
+# Local development credentials — use .env.template as the committed template
+.env
+infra/.env
+*.env.local
+*.env.production
+*.env.staging
+secrets/
+**/secrets/
+
+# JWT / API keys
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+*.secret
+
+# Cloud credentials
+.aws/credentials
+.gcp-credentials.json
+kubeconfig
+*.kubeconfig
+
+# ── Build / IDE ────────────────────────────────────────────────────────────────
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Flutter
+ui/nexus_mdm_ui/.dart_tool/
+ui/nexus_mdm_ui/build/
+ui/nexus_mdm_ui/.flutter-plugins
+ui/nexus_mdm_ui/.flutter-plugins-dependencies
+ui/nexus_mdm_ui/pubspec.lock
+
+# Docker volumes / runtime data
+infra/postgres/data/
+infra/redis/data/
+
+# Logs
+*.log
+logs/

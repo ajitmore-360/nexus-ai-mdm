@@ -71,6 +71,7 @@ impl EventRepository {
     // ====================================
     //
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn insert_outbox_event(
         &self,
         tx: &mut Transaction<'_, Postgres>,

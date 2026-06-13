@@ -1,5 +1,6 @@
 use std::env;
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Settings {
 
@@ -12,10 +13,13 @@ pub struct Settings {
     // =========================================
     // SERVICES
     // =========================================
-    pub ai_service_url: String,
-    pub mdm_core_url: String,
-    pub ingest_service_url: String,
-    pub policy_service_url: String,
+    pub ai_service_url:           String,
+    pub mdm_core_url:             String,
+    pub ingest_service_url:       String,
+    pub policy_service_url:       String,
+    pub search_service_url:       String,
+    pub notification_service_url: String,
+    pub distribution_service_url: String,
 
     // =========================================
     // WEBSOCKET
@@ -65,12 +69,12 @@ impl Settings {
             // =====================================
             ai_service_url: env::var("AI_SERVICE_URL")
                 .unwrap_or_else(|_| {
-                    "http://127.0.0.1:8081".into()
+                    "http://127.0.0.1:8082".into()
                 }),
 
             mdm_core_url: env::var("MDM_CORE_URL")
                 .unwrap_or_else(|_| {
-                    "http://127.0.0.1:8082".into()
+                    "http://127.0.0.1:8081".into()
                 }),
 
             ingest_service_url: env::var("INGEST_SERVICE_URL")
@@ -79,9 +83,16 @@ impl Settings {
                 }),
 
             policy_service_url: env::var("POLICY_SERVICE_URL")
-                .unwrap_or_else(|_| {
-                    "http://127.0.0.1:8084".into()
-                }),
+                .unwrap_or_else(|_| "http://127.0.0.1:8084".into()),
+
+            search_service_url: env::var("SEARCH_SERVICE_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:8085".into()),
+
+            notification_service_url: env::var("NOTIFICATION_SERVICE_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:8086".into()),
+
+            distribution_service_url: env::var("DISTRIBUTION_SERVICE_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:8089".into()),
 
             // =====================================
             // WEBSOCKET
@@ -133,6 +144,7 @@ impl Settings {
     // =========================================
     // FULL GATEWAY ADDRESS
     // =========================================
+    #[allow(dead_code)]
     pub fn gateway_address(&self) -> String {
         format!("{}:{}", self.gateway_host, self.gateway_port)
     }

@@ -6,11 +6,33 @@ members = [
     "services/api-gateway",
     "services/mdm-core",
     "services/ai-service",
-    "services/ingest-service", 
+    "services/ingest-service",
     "services/policy-service",
     "services/kafka-event-service",
+    "services/notification-service",
+    "services/search-service",
+    "services/distribution-service",
     "shared/contracts",
+    "shared/database",
+    "shared/redis",
+    "shared/auth",
+    "shared/telemetry",
+    "services/enrichment-service",
+    "services/tenant-service",
+    "tools/nexus-datagen",
 ]
+
+[workspace.dependencies.database]
+path = "shared/database"
+
+[workspace.dependencies.nexus-redis]
+path = "shared/redis"
+
+[workspace.dependencies.nexus-auth]
+path = "shared/auth"
+
+[workspace.dependencies.nexus-telemetry]
+path = "shared/telemetry"
 
 #
 # Shared workspace dependencies
@@ -84,11 +106,23 @@ validator = { version = "0.18", features = [
 
 dotenvy = "0.15"
 
-rdkafka = {
-    version = "0.36",
-    features = ["cmake-build"]
-}
+rdkafka = { version = "0.36", features = ["cmake-build"] }
 
 futures = "0.3"
 
 config = "0.14"
+
+# Redis
+deadpool-redis = { version = "0.14", features = ["rt_tokio_1"] }
+redis          = { version = "0.24", features = ["aio", "tokio-comp", "streams"] }
+
+# Auth
+jsonwebtoken = "9"
+bcrypt       = "0.15"
+sha2         = "0.10"
+hex          = "0.4"
+hmac         = "0.12"
+
+# Observability
+prometheus    = { version = "0.13", features = ["process"] }
+opentelemetry = { version = "0.21", features = ["trace"] }
