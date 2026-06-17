@@ -6,13 +6,19 @@ import '../network/websocket_client.dart';
 final GetIt sl = GetIt.instance;
 
 Future<void> setupServiceLocator() async {
-  // External
-  final sharedPreferences = await SharedPreferences.getInstance();
-  sl.registerSingleton<SharedPreferences>(sharedPreferences);
+  // External — idempotent so hot-restart doesn't crash with duplicate registration
+  if (!sl.isRegistered<SharedPreferences>()) {
+    final sharedPreferences = await SharedPreferences.getInstance();
+    sl.registerSingleton<SharedPreferences>(sharedPreferences);
+  }
 
   // Network
-  sl.registerLazySingleton<ApiClient>(() => ApiClient());
-  sl.registerLazySingleton<WebSocketClient>(() => WebSocketClient());
+  if (!sl.isRegistered<ApiClient>()) {
+    sl.registerLazySingleton<ApiClient>(() => ApiClient());
+  }
+  if (!sl.isRegistered<WebSocketClient>()) {
+    sl.registerLazySingleton<WebSocketClient>(() => WebSocketClient());
+  }
 
   // Services would be registered here when implemented
   // sl.registerLazySingleton<AuthService>(() => AuthService(sl<ApiClient>()));

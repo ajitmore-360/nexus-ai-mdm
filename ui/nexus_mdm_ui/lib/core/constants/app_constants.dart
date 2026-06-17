@@ -82,18 +82,26 @@ class AppConstants {
   static const int maxPageSize = 100;
   static const int defaultPage = 1;
 
-  // Entity Types
-  static const String entityTypePerson = 'Person';
+  // Entity Types — must match the backend EntityType enum in shared/contracts
+  static const String entityTypeCustomer     = 'Customer';
+  static const String entityTypeVendor       = 'Vendor';
+  static const String entityTypeMaterial     = 'Material';
+  static const String entityTypeProduct      = 'Product';
+  static const String entityTypeAccount      = 'Account';
+  static const String entityTypeEmployee     = 'Employee';
+  static const String entityTypeLocation     = 'Location';
   static const String entityTypeOrganization = 'Organization';
-  static const String entityTypeProduct = 'Product';
-  static const String entityTypeLocation = 'Location';
-  static const String entityTypeAsset = 'Asset';
+  static const String entityTypeAsset        = 'Asset';
 
   static const List<String> entityTypes = [
-    entityTypePerson,
-    entityTypeOrganization,
+    entityTypeCustomer,
+    entityTypeVendor,
+    entityTypeMaterial,
     entityTypeProduct,
+    entityTypeAccount,
+    entityTypeEmployee,
     entityTypeLocation,
+    entityTypeOrganization,
     entityTypeAsset,
   ];
 

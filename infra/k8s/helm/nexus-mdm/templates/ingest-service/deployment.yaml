@@ -1,0 +1,134 @@
+{{/*
+=============================================================================
+Ingest Service — Deployment
+Port: 8083
+Owns: batch ingestion, CSV processing, entity normalization pipeline
+Requires: PostgreSQL, Kafka
+=============================================================================
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nexus-mdm.fullname" . }}-{{ .Values.ingestService.name }}
+  namespace: {{ include "nexus-mdm.namespace" . }}
+  labels:
+    {{- include "nexus-mdm.serviceLabels" (dict "root" . "service" .Values.ingestService.name) | nindent 4 }}
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: {{ .Values.ingestService.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nexus-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.ingestService.name) | nindent 6 }}
+  strategy:
+    type: {{ .Values.ingestService.strategy.type }}
+    {{- if eq .Values.ingestService.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ .Values.ingestService.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.ingestService.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "nexus-mdm.serviceLabels" (dict "root" . "service" .Values.ingestService.name) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: ingest-service
+          image: "{{ tpl .Values.ingestService.image.repository . }}:{{ .Values.ingestService.image.tag }}"
+          imagePullPolicy: {{ .Values.ingestService.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ingestService.port }}
+              protocol: TCP
+          env:
+            - name: INGEST_HOST
+              value: "0.0.0.0"
+            - name: INGEST_PORT
+              value: {{ .Values.ingestService.port | toString | quote }}
+            - name: RUST_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: RUST_LOG
+            - name: KAFKA_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: KAFKA_BROKERS
+            - name: KAFKA_TOPIC_ENTITY_EVENTS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: KAFKA_TOPIC_ENTITY_EVENTS
+            - name: BATCH_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: BATCH_SIZE
+            - name: MAX_CONCURRENT_INGESTS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: MAX_CONCURRENT_INGESTS
+            # ---- Secrets -----------------------------------------------------
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.existingSecret }}
+                  key: {{ .Values.postgresql.databaseUrlKey }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.jwtSecretKey }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.ingestService.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.ingestService.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.ingestService.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.ingestService.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.ingestService.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.ingestService.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.ingestService.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.ingestService.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.ingestService.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.ingestService.probes.readiness.failureThreshold }}
+          resources:
+            {{- include "nexus-mdm.resources" .Values.ingestService.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "nexus-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.ingestService.name) | nindent 20 }}
+                topologyKey: kubernetes.io/hostname

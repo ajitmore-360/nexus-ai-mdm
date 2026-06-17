@@ -1,0 +1,42 @@
+{{- if .Values.mdmCore.hpa.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "nexus-mdm.fullname" . }}-{{ .Values.mdmCore.name }}
+  namespace: {{ include "nexus-mdm.namespace" . }}
+  labels:
+    {{- include "nexus-mdm.serviceLabels" (dict "root" . "service" .Values.mdmCore.name) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "nexus-mdm.fullname" . }}-{{ .Values.mdmCore.name }}
+  minReplicas: {{ .Values.mdmCore.hpa.minReplicas }}
+  maxReplicas: {{ .Values.mdmCore.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.mdmCore.hpa.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.mdmCore.hpa.targetMemoryUtilizationPercentage }}
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+{{- end }}

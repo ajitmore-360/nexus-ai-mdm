@@ -11,7 +11,6 @@ import '../../../../shared/models/api_responses.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../data/entity_repository.dart';
 import '../../../../shared/widgets/nexus_dialog.dart';
-
 // ──────────────────────────────────────────────
 // Domain enums / models
 // ──────────────────────────────────────────────
@@ -227,11 +226,18 @@ class _AttributeRow {
   String key;
   String value;
   String type;
+  // Predefined attributes from defaultAttributes have isCustom=false;
+  // rows added by the user via "Add Field" have isCustom=true.
+  final bool isCustom;
   final TextEditingController keyController;
   final TextEditingController valueController;
 
-  _AttributeRow({required this.key, required this.value, required this.type})
-      : keyController = TextEditingController(text: key),
+  _AttributeRow({
+    required this.key,
+    required this.value,
+    required this.type,
+    this.isCustom = false,
+  })  : keyController = TextEditingController(text: key),
         valueController = TextEditingController(text: value);
 
   void dispose() {
@@ -332,7 +338,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
 
   void _addAttribute(String key, String type) {
     setState(() {
-      _attributes.add(_AttributeRow(key: key, value: '', type: type));
+      _attributes.add(_AttributeRow(key: key, value: '', type: type, isCustom: true));
     });
   }
 
@@ -351,11 +357,11 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     await Future.delayed(const Duration(seconds: 2));
     if (generation != _dupCheckGeneration || !mounted) return;
     // Simulate response — show duplicate only if "name" field is non-empty
-    final nameAttr = _attributes.firstWhere(
-      (a) => a.key.toLowerCase().contains('name'),
-      orElse: () => _AttributeRow(key: '', value: '', type: 'string'),
-    );
-    final hasDup = nameAttr.valueController.text.trim().isNotEmpty;
+    final nameAttr = _attributes
+        .where((a) => a.key.toLowerCase().contains('name'))
+        .firstOrNull;
+
+    final hasDup = nameAttr?.valueController.text.trim().isNotEmpty ?? false;
     setState(() {
       _isDupChecking = false;
       _dupCheckDone = true;
@@ -379,79 +385,104 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
   }
 
   Future<void> _publish() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isPublishing = true);
 
-    final tenantId = await AuthManager.getTenantId()
-        ?? '00000000-0000-0000-0000-000000000001';
+    try {
+      final tenantId = (await AuthManager.getTenantId()) ?? 
+      '00000000-0000-0000-0000-000000000001';
 
-    final attributes = _attributes
-        .where((a) => a.keyController.text.trim().isNotEmpty)
-        .map((a) => {
-              'key': a.keyController.text.trim(),
-              'value': a.valueController.text.trim(),
-              'data_type': a.type,
-              'source_system': _selectedSource.label,
-            })
-        .toList();
+      final attributes = _attributes
+          .where((a) => a.keyController.text.trim().isNotEmpty)
+          .map((a) => {
+                'key': a.keyController.text.trim(),
+                'value': a.valueController.text.trim(),
+                'data_type': a.type,
+              })
+          .toList();
 
-    final recordOrigin = _selectedOrigin == _Origin.mdmAuthoritative
-        ? 'mdm_authoritative'
-        : 'ingested';
+      final recordOrigin = _selectedOrigin == _Origin.mdmAuthoritative
+          ? 'mdm_authoritative'
+          : 'ingested';
 
-    final payload = {
-      'entity': {
-        'entity_id': _generateUuid(),
-        'tenant_id': tenantId,
-        'entity_type': _selectedType.label,
-        'status': 'Active',
-        'attributes': attributes,
-      },
-      'record_origin': recordOrigin,
-      'distribute': _distribute,
-      'distribution_targets': <Map<String, dynamic>>[],
-    };
+      final payload = {
+        'entity': {
+          'entity_id': _generateUuid(),
+          'tenant_id': tenantId,
+          'entity_type': _selectedType.label,
+          'status': 'Active',
+          'attributes': attributes,
+        },
+        'record_origin': recordOrigin,
+        'distribute': _distribute,
+        'distribution_targets': <Map<String, dynamic>>[],
+      };
 
-    final result = await _repository.createEntity(payload);
-    if (!mounted) return;
-    setState(() => _isPublishing = false);
+      final result = await _repository.createEntity(payload);
+      if (!mounted) return;
+      setState(() => _isPublishing = false);
 
-    switch (result) {
-      case Success<CreateEntityResponse>():
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded,
-                    color: AppColors.primary, size: 18),
-                const SizedBox(width: 10),
-                Text('Entity published successfully.',
-                    style: AppTextStyles.bodyMedium),
-              ],
+      switch (result) {
+        case Success<CreateEntityResponse>():
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded,
+                      color: Colors.white, size: 18),
+                  const SizedBox(width: 10),
+                  Text('Entity published successfully.',
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: Colors.white)),
+                ],
+              ),
+              backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
             ),
-            backgroundColor: AppColors.cardSurface,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        context.pop();
-      case Failure<CreateEntityResponse>(:final exception):
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline_rounded,
-                    color: AppColors.error, size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text('Failed to create entity: ${exception.message}',
-                      style: AppTextStyles.bodyMedium),
-                ),
-              ],
+          );
+          context.pop(true);
+        case Failure<CreateEntityResponse>(:final exception):
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded,
+                      color: Colors.white, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                        'Failed to create entity: ${exception.message}',
+                        style: AppTextStyles.bodyMedium
+                            .copyWith(color: Colors.white)),
+                  ),
+                ],
+              ),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
             ),
-            backgroundColor: AppColors.cardSurface,
-            behavior: SnackBarBehavior.floating,
+          );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isPublishing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded,
+                  color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Error: $e',
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: Colors.white)),
+              ),
+            ],
           ),
-        );
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -462,8 +493,9 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     setState(() => _isSavingDraft = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Draft saved.', style: AppTextStyles.bodyMedium),
-        backgroundColor: AppColors.cardSurface,
+        content: Text('Draft saved.',
+            style: AppTextStyles.bodyMedium.copyWith(color: Colors.white)),
+        backgroundColor: AppColors.primary,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -618,13 +650,31 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     return _SectionCard(
       title: 'Attributes',
       icon: Icons.table_rows_rounded,
-      action: TextButton.icon(
-        onPressed: _showAddAttributeDialog,
-        icon: const Icon(Icons.add_rounded, size: 16, color: AppColors.primary),
-        label: Text('Add Field', style: AppTextStyles.buttonSmall.copyWith(color: AppColors.primary)),
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        ),
+      action: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '${_attributes.length} fields',
+              style: AppTextStyles.labelSmall.copyWith(color: AppColors.primary),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: _showAddAttributeDialog,
+            icon: const Icon(Icons.add_rounded, size: 16, color: AppColors.primary),
+            label: Text('Add Field',
+                style: AppTextStyles.buttonSmall.copyWith(color: AppColors.primary)),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            ),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -633,9 +683,9 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
               children: [
-                Expanded(flex: 2, child: Text('FIELD KEY', style: AppTextStyles.tableHeader)),
+                Expanded(flex: 2, child: Text('FIELD', style: AppTextStyles.tableHeader)),
                 Expanded(flex: 3, child: Text('VALUE', style: AppTextStyles.tableHeader)),
-                SizedBox(width: 80, child: Text('TYPE', style: AppTextStyles.tableHeader)),
+                SizedBox(width: 72, child: Text('TYPE', style: AppTextStyles.tableHeader)),
                 const SizedBox(width: 40),
               ],
             ),
@@ -652,20 +702,40 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     ).animate(delay: 100.ms).fadeIn(duration: 350.ms).slideY(begin: 0.03, end: 0);
   }
 
+  /// Converts a snake_case key to a human-readable label.
+  static String _labelFor(String key) {
+    return key
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+  }
+
   Widget _buildAttributeInputRow(_AttributeRow attr, int index) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // Key — read-only label for predefined, editable field for custom
           Expanded(
             flex: 2,
-            child: TextFormField(
-              controller: attr.keyController,
-              onChanged: (v) => attr.key = v,
-              decoration: _inputDecoration(hintText: 'field_key'),
-              style: AppTextStyles.inputText.copyWith(fontFamily: 'monospace', fontSize: 13),
-            ),
+            child: attr.isCustom
+                ? TextFormField(
+                    controller: attr.keyController,
+                    onChanged: (v) => attr.key = v,
+                    decoration: _inputDecoration(hintText: 'field_key'),
+                    style: AppTextStyles.inputText
+                        .copyWith(fontFamily: 'monospace', fontSize: 13),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      _labelFor(attr.key),
+                      style: AppTextStyles.labelMedium,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -674,11 +744,9 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
               controller: attr.valueController,
               onChanged: (v) {
                 attr.value = v;
-                if (v.length >= 2) {
-                  _triggerDupCheck();
-                }
+                if (v.length >= 2) _triggerDupCheck();
               },
-              validator: attr.key == 'email' || attr.key == 'work_email' || attr.key == 'contact_email'
+              validator: attr.type == 'email'
                   ? (v) {
                       if (v != null && v.isNotEmpty && !v.contains('@')) {
                         return 'Invalid email';
@@ -686,13 +754,13 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
                       return null;
                     }
                   : null,
-              decoration: _inputDecoration(hintText: 'Enter value...'),
+              decoration: _inputDecoration(hintText: 'Enter value…'),
               style: AppTextStyles.inputText,
             ),
           ),
           const SizedBox(width: 10),
           SizedBox(
-            width: 80,
+            width: 72,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
@@ -712,17 +780,20 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
             ),
           ),
           const SizedBox(width: 8),
+          // Custom attributes can be removed; predefined ones cannot
           SizedBox(
             width: 32,
-            child: IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, size: 16),
-              onPressed: () => _removeAttribute(index),
-              color: AppColors.mutedText,
-              hoverColor: AppColors.error.withValues(alpha: 0.1),
-              tooltip: 'Remove field',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            ),
+            child: attr.isCustom
+                ? IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                    onPressed: () => _removeAttribute(index),
+                    color: AppColors.mutedText,
+                    hoverColor: AppColors.error.withValues(alpha: 0.1),
+                    tooltip: 'Remove field',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),

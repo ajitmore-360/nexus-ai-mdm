@@ -202,13 +202,20 @@ class AppRouter {
 
   static Future<String?> _guard(
       BuildContext context, GoRouterState state) async {
-    final isSplash = state.matchedLocation == '/splash';
-    final isLogin = state.matchedLocation == '/login';
+    final loc = state.matchedLocation;
+
+    // On Flutter Web, visiting the root URL '/' falls through here.
+    // Redirect to splash so the normal boot sequence plays.
+    if (loc == '/' || loc.isEmpty) return '/splash';
+
+    final isSplash = loc == '/splash';
+    final isLogin = loc == '/login';
 
     if (isSplash || isLogin) return null;
 
     try {
-      final loggedIn = await AuthManager.isLoggedIn();
+      final loggedIn = await AuthManager.isLoggedIn()
+          .timeout(const Duration(seconds: 5), onTimeout: () => false);
       if (!loggedIn) return '/login';
       return null;
     } catch (e) {

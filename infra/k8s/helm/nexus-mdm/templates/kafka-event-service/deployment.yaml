@@ -1,0 +1,130 @@
+{{/*
+=============================================================================
+Kafka Event Service — Deployment
+No HTTP port — pure background worker
+Owns: transactional outbox polling, Kafka produce loop
+Requires: PostgreSQL (outbox table), Kafka brokers
+=============================================================================
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nexus-mdm.fullname" . }}-{{ .Values.kafkaEventService.name }}
+  namespace: {{ include "nexus-mdm.namespace" . }}
+  labels:
+    {{- include "nexus-mdm.serviceLabels" (dict "root" . "service" .Values.kafkaEventService.name) | nindent 4 }}
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: {{ .Values.kafkaEventService.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nexus-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.kafkaEventService.name) | nindent 6 }}
+  strategy:
+    type: {{ .Values.kafkaEventService.strategy.type }}
+    {{- if eq .Values.kafkaEventService.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ .Values.kafkaEventService.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.kafkaEventService.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "nexus-mdm.serviceLabels" (dict "root" . "service" .Values.kafkaEventService.name) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      # Allow in-flight outbox messages to drain before shutdown
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: kafka-event-service
+          image: "{{ tpl .Values.kafkaEventService.image.repository . }}:{{ .Values.kafkaEventService.image.tag }}"
+          imagePullPolicy: {{ .Values.kafkaEventService.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          # No ports — this is a pure background worker
+          env:
+            - name: RUST_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: RUST_LOG
+            - name: KAFKA_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: KAFKA_BROKERS
+            - name: KAFKA_TOPIC_ENTITY_EVENTS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: KAFKA_TOPIC_ENTITY_EVENTS
+            - name: KAFKA_TOPIC_MATCH_EVENTS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: KAFKA_TOPIC_MATCH_EVENTS
+            - name: KAFKA_TOPIC_AUDIT_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: KAFKA_TOPIC_AUDIT_LOG
+            - name: OUTBOX_POLL_INTERVAL_MS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: OUTBOX_POLL_INTERVAL_MS
+            - name: OUTBOX_BATCH_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: OUTBOX_BATCH_SIZE
+            # ---- Secrets -----------------------------------------------------
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.existingSecret }}
+                  key: {{ .Values.postgresql.databaseUrlKey }}
+          # No liveness/readiness HTTP probes — worker healthcheck via process exit code
+          # Kubernetes will restart if the process exits non-zero.
+          # Optional: add a custom exec probe if the binary exposes a health signal file.
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "kill -0 1"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- include "nexus-mdm.resources" .Values.kafkaEventService.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "nexus-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.kafkaEventService.name) | nindent 20 }}
+                topologyKey: kubernetes.io/hostname

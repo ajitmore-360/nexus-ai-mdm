@@ -1,0 +1,20 @@
+apiVersion: v2
+name: nexus-mdm
+description: Nexus AI MDM Platform — enterprise master data management with AI-powered matching, deduplication, and governance
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+kubeVersion: ">=1.27.0-0"
+
+keywords:
+  - mdm
+  - master-data-management
+  - ai
+  - data-governance
+
+maintainers:
+  - name: Nexus MDM Platform Team
+    email: platform@nexus-mdm.io
+
+annotations:
+  category: Enterprise Data Management

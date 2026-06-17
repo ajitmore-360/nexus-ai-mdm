@@ -1,0 +1,119 @@
+{{/*
+=============================================================================
+Search Service — Deployment
+Port: 8085
+Owns: full-text entity search, autocomplete, ranked results
+Requires: PostgreSQL (pgvector + tsvector full-text index)
+=============================================================================
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nexus-mdm.fullname" . }}-{{ .Values.searchService.name }}
+  namespace: {{ include "nexus-mdm.namespace" . }}
+  labels:
+    {{- include "nexus-mdm.serviceLabels" (dict "root" . "service" .Values.searchService.name) | nindent 4 }}
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: {{ .Values.searchService.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nexus-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.searchService.name) | nindent 6 }}
+  strategy:
+    type: {{ .Values.searchService.strategy.type }}
+    {{- if eq .Values.searchService.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ .Values.searchService.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.searchService.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "nexus-mdm.serviceLabels" (dict "root" . "service" .Values.searchService.name) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: search-service
+          image: "{{ tpl .Values.searchService.image.repository . }}:{{ .Values.searchService.image.tag }}"
+          imagePullPolicy: {{ .Values.searchService.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.searchService.port }}
+              protocol: TCP
+          env:
+            - name: SEARCH_HOST
+              value: "0.0.0.0"
+            - name: SEARCH_PORT
+              value: {{ .Values.searchService.port | toString | quote }}
+            - name: RUST_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: RUST_LOG
+            - name: SEARCH_RESULT_LIMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "nexus-mdm.fullname" . }}-config
+                  key: SEARCH_RESULT_LIMIT
+            # ---- Secrets -----------------------------------------------------
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.existingSecret }}
+                  key: {{ .Values.postgresql.databaseUrlKey }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.jwtSecretKey }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.searchService.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.searchService.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.searchService.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.searchService.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.searchService.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.searchService.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.searchService.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.searchService.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.searchService.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.searchService.probes.readiness.failureThreshold }}
+          resources:
+            {{- include "nexus-mdm.resources" .Values.searchService.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "nexus-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.searchService.name) | nindent 20 }}
+                topologyKey: kubernetes.io/hostname

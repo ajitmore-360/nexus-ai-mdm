@@ -595,73 +595,10 @@ class _LoginPageState extends State<LoginPage> {
                     .animate(delay: const Duration(milliseconds: 480))
                     .fadeIn(duration: const Duration(milliseconds: 400)),
 
-                const SizedBox(height: 24),
-
-                // Credential hint
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha:0.06),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: AppColors.primary.withValues(alpha:0.2)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.info_outline,
-                              color: AppColors.primary, size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Sample credentials',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      _buildCredentialRow('admin@nexus.ai', 'Admin@123456'),
-                      const SizedBox(height: 4),
-                      _buildCredentialRow('steward@nexus.ai', 'Steward@123'),
-                      const SizedBox(height: 4),
-                      _buildCredentialRow('analyst@nexus.ai', 'Analyst@123'),
-                    ],
-                  ),
-                )
-                    .animate(delay: const Duration(milliseconds: 520))
-                    .fadeIn(duration: const Duration(milliseconds: 400)),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildCredentialRow(String email, String password) {
-    return GestureDetector(
-      onTap: () {
-        _emailController.text = email;
-        _passwordController.text = password;
-      },
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              '$email  •  $password',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.secondaryText,
-                fontFamily: 'monospace',
-              ),
-            ),
-          ),
-          const Icon(Icons.arrow_forward_ios_rounded,
-              size: 10, color: AppColors.mutedText),
-        ],
       ),
     );
   }

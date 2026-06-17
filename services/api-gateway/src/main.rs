@@ -123,13 +123,16 @@ async fn main() {
     };
 
     // ---- CORS --------------------------------------------------------------
-    let allowed_origin: HeaderValue = std::env::var("ALLOWED_ORIGINS")
+    // ALLOWED_ORIGINS accepts a comma-separated list of origins, e.g.
+    // "http://localhost:3000,http://localhost:4000"
+    let allowed_origins: Vec<HeaderValue> = std::env::var("ALLOWED_ORIGINS")
         .unwrap_or_else(|_| "http://localhost:3000".to_string())
-        .parse()
-        .expect("invalid ALLOWED_ORIGINS value");
+        .split(',')
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
 
     let cors = CorsLayer::new()
-        .allow_origin(allowed_origin)
+        .allow_origin(allowed_origins)
         .allow_methods([
             Method::GET,
             Method::POST,
@@ -144,7 +147,15 @@ async fn main() {
             HeaderName::from_static("x-tenant-id"),
             HeaderName::from_static("x-request-id"),
         ])
-        .allow_credentials(true);
+        .allow_credentials(true)
+        // Do not cache preflight in dev so origin list changes take effect immediately.
+        // For production set this to a longer value (e.g. 600) via the env.
+        .max_age(std::time::Duration::from_secs(
+            std::env::var("CORS_MAX_AGE")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0),
+        ));
 
     // ---- Routes ------------------------------------------------------------
     // Middleware order (outermost applied last → executes first):

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(DATABASE_URL=postgres://postgres:nexus_dev_2024@localhost:5433/nexus_mdm cargo run -p mdm-core)",
+      "Bash(kill %1)",
+      "Bash(DATABASE_URL=\"postgres://postgres:nexus_dev_2024@localhost:5433/nexus_mdm\" REDIS_URL=\"redis://localhost:9999\" AUTH_DISABLED=true JWT_SECRET=\"nexus-local-dev-jwt-secret-min-32-chars!!\" timeout 90 cargo run -p mdm-core)",
+      "Bash(Get-Content \"c:/Users/AjitMore/myCode/POCs/neoMDM/nexus-ai-mdm/infra/postgres/seeds/001_sample_data.sql\" -Raw)",
+      "Bash(grep -n \"= {$\" \"c:/Users/AjitMore/myCode/POCs/neoMDM/nexus-ai-mdm/services/api-gateway/Cargo.toml\")",
+      "Bash(grep -rn \"= {$\" \"c:/Users/AjitMore/myCode/POCs/neoMDM/nexus-ai-mdm/services/\" \"c:/Users/AjitMore/myCode/POCs/neoMDM/nexus-ai-mdm/shared/\")",
+      "Bash(flutter --version)",
+      "Bash(flutter create *)"
+    ]
+  }
+}

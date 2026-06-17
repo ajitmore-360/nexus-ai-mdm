@@ -115,7 +115,7 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
     return Scaffold(
       backgroundColor: AppColors.navyBackground,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showCreateEntityDialog,
+        onPressed: _navigateToCreateEntity,
         icon: const Icon(Icons.add),
         label: const Text('New Entity'),
       ).animate(delay: 400.ms).fadeIn().scaleXY(begin: 0.8, end: 1.0),
@@ -297,7 +297,7 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
             ? 'No entities match your search. Try different keywords.'
             : 'No entities yet. Create your first entity to get started.',
         actionLabel: 'Create Entity',
-        onAction: _showCreateEntityDialog,
+        onAction: _navigateToCreateEntity,
       );
     }
 
@@ -673,50 +673,11 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
     }
   }
 
-  void _showCreateEntityDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Create New Entity'),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400, minWidth: 320),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Entity Type'),
-                items: AppConstants.entityTypes
-                    .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                    .toList(),
-                onChanged: (_) {},
-              ),
-              const SizedBox(height: 16),
-              const TextField(
-                decoration: InputDecoration(labelText: 'Display Name'),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Source System'),
-                items: AppConstants.dataSources
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                    .toList(),
-                onChanged: (_) {},
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _navigateToCreateEntity() async {
+    final created = await context.push<bool>('/dashboard/entities/create');
+    if (created == true && mounted) {
+      _loadEntities();
+    }
   }
 
   String _formatRelativeTime(DateTime dt) {

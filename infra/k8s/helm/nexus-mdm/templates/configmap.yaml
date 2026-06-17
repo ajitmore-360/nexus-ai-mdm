@@ -1,0 +1,108 @@
+{{/*
+=============================================================================
+Nexus AI MDM Platform — Platform-Wide ConfigMap
+Non-secret environment variables shared across all services.
+=============================================================================
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nexus-mdm.fullname" . }}-config
+  namespace: {{ include "nexus-mdm.namespace" . }}
+  labels:
+    {{- include "nexus-mdm.labels" . | nindent 4 }}
+data:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL (non-secret connection parameters)
+  # ---------------------------------------------------------------------------
+  POSTGRES_HOST: {{ .Values.postgresql.host | quote }}
+  POSTGRES_PORT: {{ .Values.postgresql.port | toString | quote }}
+  POSTGRES_DB: {{ .Values.postgresql.database | quote }}
+  POSTGRES_MAX_CONNECTIONS: {{ .Values.postgresql.maxConnections | toString | quote }}
+  POSTGRES_MIN_CONNECTIONS: {{ .Values.postgresql.minConnections | toString | quote }}
+  POSTGRES_ACQUIRE_TIMEOUT_SECS: {{ .Values.postgresql.acquireTimeoutSecs | toString | quote }}
+  POSTGRES_IDLE_TIMEOUT_SECS: {{ .Values.postgresql.idleTimeoutSecs | toString | quote }}
+  POSTGRES_MAX_LIFETIME_SECS: {{ .Values.postgresql.maxLifetimeSecs | toString | quote }}
+
+  # ---------------------------------------------------------------------------
+  # Redis (non-secret)
+  # ---------------------------------------------------------------------------
+  REDIS_HOST: {{ .Values.redis.host | quote }}
+  REDIS_PORT: {{ .Values.redis.port | toString | quote }}
+  REDIS_KEY_PREFIX: {{ .Values.redis.keyPrefix | quote }}
+  REDIS_RATE_LIMIT_REQUESTS: {{ .Values.redis.rateLimitRequests | toString | quote }}
+  REDIS_RATE_LIMIT_WINDOW_SECS: {{ .Values.redis.rateLimitWindowSecs | toString | quote }}
+
+  # ---------------------------------------------------------------------------
+  # Kafka
+  # ---------------------------------------------------------------------------
+  KAFKA_BROKERS: {{ .Values.kafka.brokers | quote }}
+  KAFKA_TOPIC_ENTITY_EVENTS: {{ .Values.kafka.topics.entityEvents | quote }}
+  KAFKA_TOPIC_MATCH_EVENTS: {{ .Values.kafka.topics.matchEvents | quote }}
+  KAFKA_TOPIC_AUDIT_LOG: {{ .Values.kafka.topics.auditLog | quote }}
+  KAFKA_TOPIC_NOTIFICATIONS: {{ .Values.kafka.topics.notifications | quote }}
+  KAFKA_GROUP_ID_PREFIX: {{ .Values.kafka.groupIdPrefix | quote }}
+
+  # ---------------------------------------------------------------------------
+  # OPA
+  # ---------------------------------------------------------------------------
+  OPA_URL: {{ .Values.opa.url | quote }}
+  OPA_TIMEOUT_SECS: {{ .Values.opa.timeoutSecs | toString | quote }}
+
+  # ---------------------------------------------------------------------------
+  # Internal service-to-service URLs (ClusterIP DNS)
+  # ---------------------------------------------------------------------------
+  MDM_CORE_URL: {{ printf "http://%s-%s:%d" (include "nexus-mdm.fullname" .) .Values.mdmCore.name (.Values.mdmCore.port | int) | quote }}
+  AI_SERVICE_URL: {{ printf "http://%s-%s:%d" (include "nexus-mdm.fullname" .) .Values.aiService.name (.Values.aiService.port | int) | quote }}
+  INGEST_SERVICE_URL: {{ printf "http://%s-%s:%d" (include "nexus-mdm.fullname" .) .Values.ingestService.name (.Values.ingestService.port | int) | quote }}
+  POLICY_SERVICE_URL: {{ printf "http://%s-%s:%d" (include "nexus-mdm.fullname" .) .Values.policyService.name (.Values.policyService.port | int) | quote }}
+  SEARCH_SERVICE_URL: {{ printf "http://%s-%s:%d" (include "nexus-mdm.fullname" .) .Values.searchService.name (.Values.searchService.port | int) | quote }}
+  NOTIFICATION_SERVICE_URL: {{ printf "http://%s-%s:%d" (include "nexus-mdm.fullname" .) .Values.notificationService.name (.Values.notificationService.port | int) | quote }}
+  DISTRIBUTION_SERVICE_URL: {{ printf "http://%s-%s:%d" (include "nexus-mdm.fullname" .) .Values.distributionService.name (.Values.distributionService.port | int) | quote }}
+
+  # ---------------------------------------------------------------------------
+  # Observability
+  # ---------------------------------------------------------------------------
+  LOG_LEVEL: {{ .Values.observability.logLevel | quote }}
+  RUST_LOG: {{ .Values.observability.logLevel | quote }}
+  ENABLE_TRACING: {{ .Values.observability.enableTracing | toString | quote }}
+  {{- if .Values.observability.otlpEndpoint }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.observability.otlpEndpoint | quote }}
+  {{- end }}
+
+  # ---------------------------------------------------------------------------
+  # API Gateway — specific env
+  # ---------------------------------------------------------------------------
+  GATEWAY_HOST: {{ .Values.apiGateway.env.GATEWAY_HOST | quote }}
+  GATEWAY_PORT: {{ .Values.apiGateway.env.GATEWAY_PORT | quote }}
+  REQUEST_TIMEOUT_SECONDS: {{ .Values.apiGateway.env.REQUEST_TIMEOUT_SECONDS | quote }}
+  MAX_RETRIES: {{ .Values.apiGateway.env.MAX_RETRIES | quote }}
+  ALLOWED_ORIGINS: {{ .Values.apiGateway.env.ALLOWED_ORIGINS | quote }}
+
+  # ---------------------------------------------------------------------------
+  # AI Service — specific env
+  # ---------------------------------------------------------------------------
+  OLLAMA_URL: {{ .Values.aiService.env.OLLAMA_URL | quote }}
+  LLM_MODEL: {{ .Values.aiService.env.LLM_MODEL | quote }}
+  EMBED_MODEL: {{ .Values.aiService.env.EMBED_MODEL | quote }}
+  LLM_TEMPERATURE: {{ .Values.aiService.env.LLM_TEMPERATURE | quote }}
+  LLM_MAX_TOKENS: {{ .Values.aiService.env.LLM_MAX_TOKENS | quote }}
+  LLM_TIMEOUT_SECS: {{ .Values.aiService.env.LLM_TIMEOUT_SECS | quote }}
+
+  # ---------------------------------------------------------------------------
+  # Ingest Service — specific env
+  # ---------------------------------------------------------------------------
+  BATCH_SIZE: {{ .Values.ingestService.env.BATCH_SIZE | quote }}
+  MAX_CONCURRENT_INGESTS: {{ .Values.ingestService.env.MAX_CONCURRENT_INGESTS | quote }}
+
+  # ---------------------------------------------------------------------------
+  # Distribution Service — specific env
+  # ---------------------------------------------------------------------------
+  WORKER_POLL_INTERVAL_SECS: {{ .Values.distributionService.env.WORKER_POLL_INTERVAL_SECS | quote }}
+  WORKER_BATCH_SIZE: {{ .Values.distributionService.env.WORKER_BATCH_SIZE | quote }}
+
+  # ---------------------------------------------------------------------------
+  # Kafka Event Service — specific env
+  # ---------------------------------------------------------------------------
+  OUTBOX_POLL_INTERVAL_MS: {{ .Values.kafkaEventService.env.OUTBOX_POLL_INTERVAL_MS | quote }}
+  OUTBOX_BATCH_SIZE: {{ .Values.kafkaEventService.env.OUTBOX_BATCH_SIZE | quote }}

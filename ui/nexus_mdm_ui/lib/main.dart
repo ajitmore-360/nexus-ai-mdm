@@ -15,6 +15,7 @@ void main() {
 
 Future<void> _main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  debugPrint('NEXUS: binding ready');
 
   FlutterError.onError = (details) {
     debugPrint('NEXUS FLUTTER ERROR: ${details.exceptionAsString()}');
@@ -39,12 +40,22 @@ Future<void> _main() async {
   }
 
   // Initialize service locator
-  await setupServiceLocator();
+  debugPrint('NEXUS: starting service locator');
+  try {
+    await setupServiceLocator()
+        .timeout(const Duration(seconds: 10), onTimeout: () {
+      debugPrint('NEXUS WARNING: setupServiceLocator timed out after 10s');
+    });
+  } catch (e) {
+    debugPrint('NEXUS ERROR: setupServiceLocator failed: $e');
+  }
+  debugPrint('NEXUS: service locator ready, calling runApp');
 
   // Enable hot-reload restart of animations during development
   Animate.restartOnHotReload = true;
 
   runApp(const NexusMdmApp());
+  debugPrint('NEXUS: runApp complete');
 }
 
 class NexusMdmApp extends StatelessWidget {

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nexus-mdm.fullname" . }}-{{ .Values.ingestService.name }}
+  namespace: {{ include "nexus-mdm.namespace" . }}
+  labels:
+    {{- include "nexus-mdm.serviceLabels" (dict "root" . "service" .Values.ingestService.name) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "nexus-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.ingestService.name) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.ingestService.port }}
+      targetPort: http
+      protocol: TCP

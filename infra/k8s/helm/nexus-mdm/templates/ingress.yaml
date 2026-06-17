@@ -1,0 +1,92 @@
+{{/*
+=============================================================================
+Nexus AI MDM Platform — Nginx Ingress
+Routes external traffic to the API Gateway.
+Supports: TLS termination, rate limiting, WebSocket upgrade, CORS headers.
+=============================================================================
+*/}}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "nexus-mdm.fullname" . }}
+  namespace: {{ include "nexus-mdm.namespace" . }}
+  labels:
+    {{- include "nexus-mdm.labels" . | nindent 4 }}
+  annotations:
+    # ── Ingress class ────────────────────────────────────────────────────────
+    kubernetes.io/ingress.class: {{ .Values.ingress.className | quote }}
+
+    # ── TLS / Certificate Manager ────────────────────────────────────────────
+    {{- if .Values.ingress.tls.enabled }}
+    cert-manager.io/cluster-issuer: {{ index .Values.ingress.annotations "cert-manager.io/cluster-issuer" | default "letsencrypt-prod" | quote }}
+    {{- end }}
+
+    # ── Rate limiting ─────────────────────────────────────────────────────────
+    # 100 requests per minute per client IP at the ingress layer.
+    # Additional per-tenant rate limiting is enforced inside the API Gateway
+    # using Redis sliding-window counters.
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-rpm: {{ index .Values.ingress.annotations "nginx.ingress.kubernetes.io/rate-limit" | default "100" | quote }}
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+
+    # ── Proxy timeouts ────────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ index .Values.ingress.annotations "nginx.ingress.kubernetes.io/proxy-read-timeout" | default "300" | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ index .Values.ingress.annotations "nginx.ingress.kubernetes.io/proxy-send-timeout" | default "300" | quote }}
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: {{ index .Values.ingress.annotations "nginx.ingress.kubernetes.io/proxy-connect-timeout" | default "60" | quote }}
+
+    # ── WebSocket support ─────────────────────────────────────────────────────
+    # Required for the /ws endpoint served by the notification-service
+    # via the API Gateway WebSocket proxy.
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+
+    # ── Body size ─────────────────────────────────────────────────────────────
+    # Allow up to 50 MB for CSV/batch ingest payloads routed via the gateway.
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+
+    # ── Security headers ──────────────────────────────────────────────────────
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-Frame-Options "DENY" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          # ── Health check (unauthenticated) ─────────────────────────────────
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "nexus-mdm.fullname" . }}-{{ .Values.apiGateway.name }}
+                port:
+                  name: http
+
+          # ── API endpoints (auth-protected inside the gateway) ──────────────
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "nexus-mdm.fullname" . }}-{{ .Values.apiGateway.name }}
+                port:
+                  name: http
+{{- end }}
