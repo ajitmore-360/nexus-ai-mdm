@@ -7,9 +7,13 @@ mod state;
 
 use std::{net::SocketAddr, sync::Arc};
 
-use axum::{routing::{delete, get, post}, Router, Json};
+use axum::{
+    http::{HeaderName, HeaderValue, Method, header::{AUTHORIZATION, CONTENT_TYPE}},
+    routing::{delete, get, post},
+    Router, Json,
+};
 use database::{config::DatabaseConfig, connection::create_pool};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 use config::settings::PolicySettings;
@@ -31,6 +35,9 @@ async fn main() {
                 .add_directive("policy_service=info".parse().unwrap()),
         )
         .init();
+
+    let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+    tracing::info!(app_env = %app_env, "Policy Service environment loaded");
 
     let settings = PolicySettings::from_env();
     tracing::info!("Policy Service starting on port {}", settings.port);
@@ -61,10 +68,27 @@ async fn main() {
     });
 
     // ── Router ────────────────────────────────────────────────────────────────
+    let allowed_origins_raw = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:3000,http://localhost:4000".to_string());
+    if matches!(app_env.as_str(), "production" | "prod" | "staging" | "stage") {
+        if allowed_origins_raw.contains("localhost") {
+            panic!(
+                "SECURITY: ALLOWED_ORIGINS contains 'localhost' in APP_ENV={}. Set to your production domain.",
+                app_env
+            );
+        }
+    }
+
+    let allowed_origins: Vec<HeaderValue> = allowed_origins_raw
+        .split(',')
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(allowed_origins)
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+        .allow_headers([CONTENT_TYPE, AUTHORIZATION, HeaderName::from_static("x-tenant-id"), HeaderName::from_static("x-request-id")])
+        .allow_credentials(true);
 
     let app = Router::new()
         .route("/health",                  get(health))

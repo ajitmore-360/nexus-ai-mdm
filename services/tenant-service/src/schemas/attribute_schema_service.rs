@@ -157,7 +157,7 @@ pub async fn add_custom_attribute(
     .bind(&req.data_type)
     .bind(req.is_required.unwrap_or(false))
     .bind(req.is_pii.unwrap_or(false))
-    .bind(req.enum_values.map(|v| serde_json::to_value(v).unwrap()))
+    .bind(req.enum_values.and_then(|v| serde_json::to_value(v).ok()))
     .bind(req.validation)
     .bind(req.display_order.unwrap_or(500))
     .bind(req.placeholder.as_deref())

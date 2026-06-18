@@ -37,7 +37,7 @@ pub struct WeightResponse {
 
 /// GET /policy/weights — return current matching policy weights.
 pub async fn get_weights(State(state): State<Arc<AppState>>) -> Response {
-    let policy = state.matching_policy.read().unwrap();
+    let policy = state.matching_policy.read().unwrap_or_else(|e| e.into_inner());
     (StatusCode::OK, Json(json!({
         "success": true,
         "data": WeightResponse {

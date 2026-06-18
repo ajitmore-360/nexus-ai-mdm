@@ -17,6 +17,7 @@ members = [
     "shared/redis",
     "shared/auth",
     "shared/telemetry",
+    "shared/security",
     "services/enrichment-service",
     "services/tenant-service",
     "tools/nexus-datagen",
@@ -33,6 +34,9 @@ path = "shared/auth"
 
 [workspace.dependencies.nexus-telemetry]
 path = "shared/telemetry"
+
+[workspace.dependencies.nexus-security]
+path = "shared/security"
 
 #
 # Shared workspace dependencies

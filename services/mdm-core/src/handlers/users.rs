@@ -171,9 +171,19 @@ pub async fn login(
             .into_response();
     }
 
-    let row = real_user.unwrap();
-    let user_id:      Uuid   = row.try_get("user_id").unwrap();
-    let tenant_id:    Uuid   = row.try_get("tenant_id").unwrap();
+    // Safety: is_none() check above already returned early — row is guaranteed Some here.
+    let row = match real_user {
+        Some(r) => r,
+        None => return (StatusCode::UNAUTHORIZED, Json(json!({ "success": false, "error": "invalid credentials" }))).into_response(),
+    };
+    let user_id: Uuid = match row.try_get("user_id") {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "success": false, "error": format!("db column error: {e}") }))).into_response(),
+    };
+    let tenant_id: Uuid = match row.try_get("tenant_id") {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "success": false, "error": format!("db column error: {e}") }))).into_response(),
+    };
     let display_name: String = row.try_get("display_name").unwrap_or_default();
     let role_str:     String = row.try_get("role").unwrap_or_else(|_| "steward".to_string());
 

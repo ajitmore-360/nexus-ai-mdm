@@ -84,7 +84,19 @@ async fn main() {
         );
     }
 
+    tracing::info!(app_env = %app_env, "API Gateway environment loaded");
     tracing::info!("API Gateway starting on port {}", settings.gateway_port);
+
+    let allowed_origins_raw_gw = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    if matches!(app_env.as_str(), "production" | "prod" | "staging" | "stage") {
+        if allowed_origins_raw_gw.contains("localhost") {
+            panic!(
+                "SECURITY: ALLOWED_ORIGINS contains 'localhost' in APP_ENV={}. Set to your production domain.",
+                app_env
+            );
+        }
+    }
 
     // ---- Redis (optional) --------------------------------------------------
     let redis_cfg = RedisConfig::from_env();
@@ -125,8 +137,7 @@ async fn main() {
     // ---- CORS --------------------------------------------------------------
     // ALLOWED_ORIGINS accepts a comma-separated list of origins, e.g.
     // "http://localhost:3000,http://localhost:4000"
-    let allowed_origins: Vec<HeaderValue> = std::env::var("ALLOWED_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost:3000".to_string())
+    let allowed_origins: Vec<HeaderValue> = allowed_origins_raw_gw
         .split(',')
         .filter_map(|s| s.trim().parse().ok())
         .collect();

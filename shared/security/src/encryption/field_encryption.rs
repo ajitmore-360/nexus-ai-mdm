@@ -64,7 +64,8 @@ impl FieldEncryptionService {
                 .encrypt(
                     nonce,
                     plaintext.as_bytes()
-                )?;
+                )
+                .map_err(|_| anyhow::anyhow!("AES-GCM encryption failed"))?;
 
         let mut combined =
             nonce_bytes.to_vec();
@@ -100,7 +101,8 @@ impl FieldEncryptionService {
                 .decrypt(
                     nonce,
                     cipher_bytes
-                )?;
+                )
+                .map_err(|_| anyhow::anyhow!("AES-GCM decryption failed (wrong key or corrupted ciphertext)"))?;
 
         Ok(
             String::from_utf8(

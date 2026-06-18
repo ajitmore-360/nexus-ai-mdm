@@ -22,6 +22,7 @@ async-trait.workspace = true
 validator.workspace = true
 dotenvy.workspace = true
 strsim      = "0.11"
+hex         = "0.4"
 futures.workspace = true
 reqwest.workspace = true
 contracts        = { path = "../../shared/contracts" }
@@ -29,4 +30,5 @@ database         = { workspace = true }
 nexus-redis      = { workspace = true }
 nexus-auth       = { workspace = true }
 nexus-telemetry  = { workspace = true }
+nexus-security   = { workspace = true }
 prometheus       = { workspace = true }

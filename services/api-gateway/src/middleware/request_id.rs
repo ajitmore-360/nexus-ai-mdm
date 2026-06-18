@@ -37,11 +37,9 @@ pub async fn request_id_middleware(
     req.extensions_mut()
         .insert(request_id.clone());
 
-    req.headers_mut().insert(
-        REQUEST_ID_HEADER,
-        HeaderValue::from_str(&request_id)
-            .unwrap(),
-    );
+    if let Ok(hv) = HeaderValue::from_str(&request_id) {
+        req.headers_mut().insert(REQUEST_ID_HEADER, hv);
+    }
 
     // =====================================
     // CONTINUE
@@ -53,11 +51,9 @@ pub async fn request_id_middleware(
     // RETURN HEADER
     // =====================================
 
-    response.headers_mut().insert(
-        REQUEST_ID_HEADER,
-        HeaderValue::from_str(&request_id)
-            .unwrap(),
-    );
+    if let Ok(hv) = HeaderValue::from_str(&request_id) {
+        response.headers_mut().insert(REQUEST_ID_HEADER, hv);
+    }
 
     response
 }

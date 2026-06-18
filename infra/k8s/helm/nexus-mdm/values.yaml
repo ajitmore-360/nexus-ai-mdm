@@ -38,6 +38,19 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
 
 # -----------------------------------------------------------------------------
+# CERT-MANAGER (TLS via Let's Encrypt)
+# -----------------------------------------------------------------------------
+certManager:
+  # Set to true once cert-manager is installed in the cluster.
+  # Install: helm install cert-manager jetstack/cert-manager --set installCRDs=true
+  enabled: true
+  issuerName: letsencrypt-prod
+  # Use https://acme-staging-v02.api.letsencrypt.org/directory for testing
+  acmeServer: "https://acme-v02.api.letsencrypt.org/directory"
+  # Replace with the ops team email — used for Let's Encrypt expiry notifications
+  acmeEmail: "ops@nexus-mdm.example.com"
+
+# -----------------------------------------------------------------------------
 # AUTHENTICATION
 # -----------------------------------------------------------------------------
 auth:

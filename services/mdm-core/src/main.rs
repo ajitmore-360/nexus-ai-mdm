@@ -1,9 +1,11 @@
 use axum::{
     extract::State,
     http::{
+        HeaderName,
         HeaderValue,
         Method,
         StatusCode,
+        header::{AUTHORIZATION, CONTENT_TYPE},
     },
     middleware as axum_middleware,
     response::IntoResponse,
@@ -38,6 +40,7 @@ use tower_http::{
 use tracing::{
     error,
     info,
+    warn,
 };
 
 use tracing_subscriber::{
@@ -150,6 +153,10 @@ pub struct AppState {
 
     /// Optional Redis-backed rate limiter for brute-force protection on /auth/login.
     pub redis_rate_limiter: Option<Arc<nexus_redis::RedisRateLimiter>>,
+
+    /// AES-256-GCM field-level encryption for PII attributes (email, phone, tax_id, etc.).
+    /// None when FIELD_ENCRYPTION_KEY is not set — PII stored plaintext (dev mode only).
+    pub field_encryption: Option<Arc<nexus_security::encryption::field_encryption::FieldEncryptionService>>,
 }
 
 //
@@ -382,26 +389,33 @@ fn build_router(
 ) -> Router {
 
     //
-    // CORS
+    // CORS — env-driven, no wildcard in production
     //
+
+    let allowed_origins: Vec<HeaderValue> = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:3000,http://localhost:4000".to_string())
+        .split(',')
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
 
     let cors =
         CorsLayer::new()
-
-            .allow_origin(
-                HeaderValue::from_static("*")
-            )
-
+            .allow_origin(allowed_origins)
             .allow_methods([
                 Method::GET,
                 Method::POST,
                 Method::PUT,
+                Method::PATCH,
                 Method::DELETE,
+                Method::OPTIONS,
             ])
-
-            .allow_headers(
-                tower_http::cors::Any
-            );
+            .allow_headers([
+                CONTENT_TYPE,
+                AUTHORIZATION,
+                HeaderName::from_static("x-tenant-id"),
+                HeaderName::from_static("x-request-id"),
+            ])
+            .allow_credentials(true);
 
     let protected = Router::new()
         .route("/entities",     get(list_entities).post(create_entity))
@@ -505,6 +519,32 @@ async fn main() {
     info!(
         "Starting Nexus AI MDM Core"
     );
+
+    //
+    // ====================================
+    // PRODUCTION SAFETY GUARD
+    // ====================================
+    //
+
+    let app_env = env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+    info!(app_env = %app_env, "MDM Core environment loaded");
+
+    let allowed_origins_raw = env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:3000,http://localhost:4000".to_string());
+    if matches!(app_env.as_str(), "production" | "prod" | "staging" | "stage") {
+        if allowed_origins_raw.contains("localhost") {
+            panic!(
+                "SECURITY: ALLOWED_ORIGINS contains 'localhost' in APP_ENV={}. Set to your production domain.",
+                app_env
+            );
+        }
+        if env::var("FIELD_ENCRYPTION_KEY").is_err() {
+            warn!(
+                "SECURITY: FIELD_ENCRYPTION_KEY is not set in APP_ENV={}. PII data will be stored unencrypted.",
+                app_env
+            );
+        }
+    }
 
     //
     // ====================================
@@ -674,6 +714,33 @@ async fn main() {
     // ====================================
     //
 
+    // ── Field-level encryption ─────────────────────────────────────────────────
+    // FIELD_ENCRYPTION_KEY must be exactly 32 bytes (256-bit), hex-encoded (64 chars).
+    // If absent, PII attributes are stored plaintext — acceptable only in development.
+    let field_encryption = match env::var("FIELD_ENCRYPTION_KEY") {
+        Ok(hex_key) => {
+            match hex::decode(&hex_key) {
+                Ok(key_bytes) if key_bytes.len() == 32 => {
+                    let key: [u8; 32] = key_bytes.try_into().expect("key is 32 bytes");
+                    info!("Field-level encryption enabled (AES-256-GCM)");
+                    Some(Arc::new(nexus_security::encryption::field_encryption::FieldEncryptionService::new(&key)))
+                }
+                Ok(_) => {
+                    warn!("FIELD_ENCRYPTION_KEY must be 64 hex chars (32 bytes) — encryption disabled");
+                    None
+                }
+                Err(e) => {
+                    warn!(error=%e, "FIELD_ENCRYPTION_KEY is not valid hex — encryption disabled");
+                    None
+                }
+            }
+        }
+        Err(_) => {
+            warn!("FIELD_ENCRYPTION_KEY not set — PII attributes stored plaintext. Set in production.");
+            None
+        }
+    };
+
     let state = Arc::new(
         AppState {
 
@@ -699,6 +766,7 @@ async fn main() {
             review_service,
             matching_policy:    live_policy,
             redis_rate_limiter: login_rate_limiter,
+            field_encryption,
         }
     );
 

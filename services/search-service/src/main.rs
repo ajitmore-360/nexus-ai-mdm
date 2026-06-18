@@ -4,11 +4,12 @@ use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
     extract::{Query, State},
+    http::{HeaderName, HeaderValue, Method, header::{AUTHORIZATION, CONTENT_TYPE}},
     routing::get,
     Json, Router,
 };
 use serde::Deserialize;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
@@ -63,12 +64,26 @@ async fn main() {
         )
         .init();
 
+    let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+    tracing::info!(app_env = %app_env, "Search Service environment loaded");
+
     let port = std::env::var("SEARCH_SERVICE_PORT")
         .ok()
         .and_then(|v| v.parse::<u16>().ok())
         .unwrap_or(8085);
 
     tracing::info!("Search Service starting on port {}", port);
+
+    let allowed_origins_raw = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:3000,http://localhost:4000".to_string());
+    if matches!(app_env.as_str(), "production" | "prod" | "staging" | "stage") {
+        if allowed_origins_raw.contains("localhost") {
+            panic!(
+                "SECURITY: ALLOWED_ORIGINS contains 'localhost' in APP_ENV={}. Set to your production domain.",
+                app_env
+            );
+        }
+    }
 
     let db_config = DatabaseConfig::from_env();
     let pool = create_pool(&db_config)
@@ -79,10 +94,16 @@ async fn main() {
         engine: Arc::new(SearchEngine::new(pool)),
     };
 
+    let allowed_origins: Vec<HeaderValue> = allowed_origins_raw
+        .split(',')
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(allowed_origins)
+        .allow_methods([Method::GET, Method::OPTIONS])
+        .allow_headers([CONTENT_TYPE, AUTHORIZATION, HeaderName::from_static("x-tenant-id"), HeaderName::from_static("x-request-id")])
+        .allow_credentials(true);
 
     let app = Router::new()
         .route("/health",             get(health))
