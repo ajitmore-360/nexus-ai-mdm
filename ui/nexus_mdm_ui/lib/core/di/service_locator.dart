@@ -7,6 +7,9 @@ import '../../features/match_queue/data/match_repository.dart';
 import '../../features/golden_records/data/golden_records_repository.dart';
 import '../../features/distribution/data/distribution_repository.dart';
 import '../../features/dashboard/data/dashboard_repository.dart';
+import '../../features/admin/data/admin_repository.dart';
+import '../../features/admin/data/entity_type_repository.dart';
+import '../../features/admin/data/source_systems_repository.dart';
 
 final GetIt sl = GetIt.instance;
 
@@ -43,5 +46,17 @@ Future<void> setupServiceLocator() async {
   if (!sl.isRegistered<DashboardRepository>()) {
     sl.registerLazySingleton<DashboardRepository>(
         () => DashboardRepository(sl<ApiClient>()));
+  }
+  if (!sl.isRegistered<AdminRepository>()) {
+    sl.registerLazySingleton<AdminRepository>(
+        () => AdminRepository(sl<ApiClient>()));
+  }
+  if (!sl.isRegistered<EntityTypeRepository>()) {
+    sl.registerLazySingleton<EntityTypeRepository>(
+        () => EntityTypeRepository(sl<ApiClient>()));
+  }
+  if (!sl.isRegistered<SourceSystemsRepository>()) {
+    sl.registerLazySingleton<SourceSystemsRepository>(
+        () => SourceSystemsRepository(sl<ApiClient>()));
   }
 }

@@ -2,6 +2,7 @@ mod config;
 mod models;
 mod pipeline;
 mod processor;
+mod source_systems;
 mod sources;
 mod state;
 
@@ -9,13 +10,18 @@ use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
     http::{HeaderName, HeaderValue, Method, header::{AUTHORIZATION, CONTENT_TYPE}},
-    routing::{get, post},
+    routing::{get, post, put},
     Router, Json,
 };
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 use config::settings::IngestSettings;
+use database::{config::DatabaseConfig, connection::create_pool};
+use source_systems::{
+    create_source_system, delete_source_system, list_source_systems,
+    test_connection, update_source_system,
+};
 use sources::rest::{ingest_batch, ingest_csv, ingest_entities};
 use state::AppState;
 
@@ -53,8 +59,14 @@ async fn main() {
         }
     }
 
-    let port  = settings.port;
-    let state = Arc::new(AppState::new(settings));
+    let port = settings.port;
+
+    let db_config = DatabaseConfig { database_url: settings.database_url.clone() };
+    let pool = create_pool(&db_config)
+        .await
+        .expect("failed to connect to PostgreSQL");
+
+    let state = Arc::new(AppState::new(settings, pool));
 
     let allowed_origins: Vec<HeaderValue> = allowed_origins_raw
         .split(',')
@@ -68,11 +80,15 @@ async fn main() {
         .allow_credentials(true);
 
     let app = Router::new()
-        .route("/health",          get(health))
-        .route("/metrics",         get(metrics_handler))
-        .route("/ingest/batch",    post(ingest_batch))
-        .route("/ingest/entities", post(ingest_entities))
-        .route("/ingest/csv",      post(ingest_csv))
+        .route("/health",                    get(health))
+        .route("/metrics",                   get(metrics_handler))
+        .route("/ingest/batch",              post(ingest_batch))
+        .route("/ingest/entities",           post(ingest_entities))
+        .route("/ingest/csv",                post(ingest_csv))
+        // ── Source system registry routes ────────────────────────────────────
+        .route("/source-systems",            get(list_source_systems).post(create_source_system))
+        .route("/source-systems/:id",        put(update_source_system).delete(delete_source_system))
+        .route("/source-systems/:id/test",   post(test_connection))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state);

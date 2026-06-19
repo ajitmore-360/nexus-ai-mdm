@@ -540,3 +540,265 @@ pub async fn scan_anomalies(
     let path = format!("/anomalies?{}", qs);
     forward_get(&state.services.http, &state.settings.ai_service_url, &path, &headers).await
 }
+
+// ── Admin: Tenant Management (→ tenant-service) ───────────────────────────────
+
+pub async fn admin_list_tenants(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> Response {
+    forward_get(&state.services.http, &state.settings.tenant_service_url, "/admin/tenants", &headers).await
+}
+
+pub async fn admin_create_tenant(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> Response {
+    forward_post(&state.services.http, &state.settings.tenant_service_url, "/admin/tenants", &headers, body).await
+}
+
+pub async fn admin_create_admin_user(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path(tenant_id): axum::extract::Path<String>,
+    Json(body):   Json<Value>,
+) -> Response {
+    let path = format!("/admin/tenants/{}/admin-user", tenant_id);
+    forward_post(&state.services.http, &state.settings.tenant_service_url, &path, &headers, body).await
+}
+
+pub async fn admin_list_users(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Query(params): Query<Value>,
+) -> Response {
+    let qs = params.as_object()
+        .map(|m| m.iter().filter_map(|(k, v)| v.as_str().map(|s| format!("{}={}", k, s))).collect::<Vec<_>>().join("&"))
+        .unwrap_or_default();
+    let path = format!("/admin/users?{}", qs);
+    forward_get(&state.services.http, &state.settings.tenant_service_url, &path, &headers).await
+}
+
+pub async fn admin_invite_user(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> Response {
+    forward_post(&state.services.http, &state.settings.tenant_service_url, "/admin/users/invite", &headers, body).await
+}
+
+pub async fn admin_update_user_role(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path(user_id): axum::extract::Path<String>,
+    Json(body):   Json<Value>,
+) -> Response {
+    let path = format!("/admin/users/{}/role", user_id);
+    forward_put(&state.services.http, &state.settings.tenant_service_url, &path, &headers, body).await
+}
+
+// ── Admin: Entity Types & Attributes (→ mdm-core) ────────────────────────────
+
+pub async fn list_entity_types(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Query(params): Query<Value>,
+) -> Response {
+    let qs = params.as_object()
+        .map(|m| m.iter().filter_map(|(k, v)| v.as_str().map(|s| format!("{}={}", k, s))).collect::<Vec<_>>().join("&"))
+        .unwrap_or_default();
+    let path = format!("/entity-types?{}", qs);
+    forward_get(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn create_entity_type(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> Response {
+    forward_post(&state.services.http, &state.settings.mdm_core_url, "/entity-types", &headers, body).await
+}
+
+pub async fn update_entity_type(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Json(body):   Json<Value>,
+) -> Response {
+    let path = format!("/entity-types/{}", id);
+    forward_patch(&state.services.http, &state.settings.mdm_core_url, &path, &headers, body).await
+}
+
+pub async fn delete_entity_type(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let path = format!("/entity-types/{}", id);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn list_attributes(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path(code): axum::extract::Path<String>,
+    Query(params): Query<Value>,
+) -> Response {
+    let qs = params.as_object()
+        .map(|m| m.iter().filter_map(|(k, v)| v.as_str().map(|s| format!("{}={}", k, s))).collect::<Vec<_>>().join("&"))
+        .unwrap_or_default();
+    let path = format!("/entity-types/{}/attributes?{}", code, qs);
+    forward_get(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn create_attribute(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path(code): axum::extract::Path<String>,
+    Json(body):   Json<Value>,
+) -> Response {
+    let path = format!("/entity-types/{}/attributes", code);
+    forward_post(&state.services.http, &state.settings.mdm_core_url, &path, &headers, body).await
+}
+
+pub async fn delete_attribute(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path((code, attr_id)): axum::extract::Path<(String, String)>,
+) -> Response {
+    let path = format!("/entity-types/{}/attributes/{}", code, attr_id);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn reorder_attributes(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path(code): axum::extract::Path<String>,
+    Json(body):   Json<Value>,
+) -> Response {
+    let path = format!("/entity-types/{}/attributes/order", code);
+    forward_put(&state.services.http, &state.settings.mdm_core_url, &path, &headers, body).await
+}
+
+pub async fn next_sequence(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path(code): axum::extract::Path<String>,
+    Query(params): Query<Value>,
+) -> Response {
+    let qs = params.as_object()
+        .map(|m| m.iter().filter_map(|(k, v)| v.as_str().map(|s| format!("{}={}", k, s))).collect::<Vec<_>>().join("&"))
+        .unwrap_or_default();
+    let path = format!("/entity-types/{}/next-sequence?{}", code, qs);
+    forward_get(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+// ── Admin: Source Systems (→ ingest-service) ──────────────────────────────────
+
+pub async fn list_source_systems(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Query(params): Query<Value>,
+) -> Response {
+    let qs = params.as_object()
+        .map(|m| m.iter().filter_map(|(k, v)| v.as_str().map(|s| format!("{}={}", k, s))).collect::<Vec<_>>().join("&"))
+        .unwrap_or_default();
+    let path = format!("/source-systems?{}", qs);
+    forward_get(&state.services.http, &state.settings.ingest_service_url, &path, &headers).await
+}
+
+pub async fn create_source_system(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> Response {
+    forward_post(&state.services.http, &state.settings.ingest_service_url, "/source-systems", &headers, body).await
+}
+
+pub async fn update_source_system(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Json(body):   Json<Value>,
+) -> Response {
+    let path = format!("/source-systems/{}", id);
+    forward_put(&state.services.http, &state.settings.ingest_service_url, &path, &headers, body).await
+}
+
+pub async fn delete_source_system(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let path = format!("/source-systems/{}", id);
+    forward_delete(&state.services.http, &state.settings.ingest_service_url, &path, &headers).await
+}
+
+pub async fn test_source_system(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let path = format!("/source-systems/{}/test", id);
+    forward_post(&state.services.http, &state.settings.ingest_service_url, &path, &headers, serde_json::json!({})).await
+}
+
+// ── PUT / DELETE forwarding helpers ──────────────────────────────────────────
+
+async fn forward_put(
+    http:     &reqwest::Client,
+    base_url: &str,
+    path:     &str,
+    headers:  &HeaderMap,
+    body:     Value,
+) -> Response {
+    let url = format!("{}{}", base_url.trim_end_matches('/'), path);
+    let svc_auth = crate::proxy::mdm_proxy::mdm_service_auth();
+    let mut req = http.put(&url).json(&body).header("authorization", svc_auth.as_str());
+    for (name, value) in headers.iter() {
+        let key = name.as_str();
+        if matches!(key, "x-tenant-id" | "x-user-id" | "x-user-role" | "x-correlation-id") {
+            if let Ok(v) = value.to_str() { req = req.header(key, v); }
+        }
+    }
+    match req.send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            (status, Json(body)).into_response()
+        }
+        Err(e) => {
+            tracing::error!(error=%e, url=%url, "upstream PUT failed");
+            (StatusCode::BAD_GATEWAY, Json(serde_json::json!({ "success": false, "error": "upstream unavailable" }))).into_response()
+        }
+    }
+}
+
+async fn forward_delete(
+    http:     &reqwest::Client,
+    base_url: &str,
+    path:     &str,
+    headers:  &HeaderMap,
+) -> Response {
+    let url = format!("{}{}", base_url.trim_end_matches('/'), path);
+    let svc_auth = crate::proxy::mdm_proxy::mdm_service_auth();
+    let mut req = http.delete(&url).header("authorization", svc_auth.as_str());
+    for (name, value) in headers.iter() {
+        let key = name.as_str();
+        if matches!(key, "x-tenant-id" | "x-user-id" | "x-user-role" | "x-correlation-id") {
+            if let Ok(v) = value.to_str() { req = req.header(key, v); }
+        }
+    }
+    match req.send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            (status, Json(body)).into_response()
+        }
+        Err(e) => {
+            tracing::error!(error=%e, url=%url, "upstream DELETE failed");
+            (StatusCode::BAD_GATEWAY, Json(serde_json::json!({ "success": false, "error": "upstream unavailable" }))).into_response()
+        }
+    }
+}

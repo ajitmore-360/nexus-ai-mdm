@@ -21,6 +21,11 @@ import '../../features/data_quality/presentation/pages/data_quality_page.dart';
 import '../../features/golden_records/presentation/pages/golden_records_page.dart';
 import '../../features/distribution/presentation/pages/distribution_monitor_page.dart';
 import '../../shared/models/entity.dart';
+import '../../features/admin/presentation/pages/tenants_page.dart';
+import '../../features/admin/presentation/pages/users_page.dart';
+import '../../features/admin/presentation/pages/entity_types_page.dart';
+import '../../features/admin/presentation/pages/attribute_schema_page.dart';
+import '../../features/admin/presentation/pages/source_systems_page.dart';
 
 class AppRouter {
   AppRouter._();
@@ -199,6 +204,51 @@ class AppRouter {
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
               child: const SettingsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/admin/tenants',
+            name: 'admin-tenants',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const TenantsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/admin/tenants/create',
+            name: 'admin-tenants-create',
+            redirect: (_, __) => '/dashboard/admin/tenants',
+          ),
+          GoRoute(
+            path: '/dashboard/org/users',
+            name: 'org-users',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const UsersPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/org/entity-types',
+            name: 'org-entity-types',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const EntityTypesPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/org/attributes',
+            name: 'org-attributes',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const AttributeSchemaPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/org/sources',
+            name: 'org-sources',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const SourceSystemsPage(),
             ),
           ),
         ],

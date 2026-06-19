@@ -10,8 +10,11 @@ use axum::{
     middleware as axum_middleware,
     response::IntoResponse,
     routing::{
+        delete,
         get,
+        patch,
         post,
+        put,
     },
     Json,
     Router,
@@ -67,6 +70,11 @@ use std::sync::Arc;
 use handlers::{
     dashboard::{get_activity_feed, get_dashboard_stats},
     entities::{create_entity, get_entity_by_id, list_entities, patch_entity},
+    entity_types::{
+        create_attribute, create_entity_type, delete_attribute, delete_entity_type,
+        list_attributes, list_entity_types, next_sequence, reorder_attributes,
+        update_entity_type,
+    },
     lineage::{get_entity_lineage, record_lineage},
     matching::execute_match,
     merge::execute_merge,
@@ -425,6 +433,21 @@ fn build_router(
         .route("/policy/weights",         axum::routing::get(get_weights).patch(update_weights))
         .route("/dashboard/stats",        axum::routing::get(get_dashboard_stats))
         .route("/dashboard/activity",     axum::routing::get(get_activity_feed))
+        // ── Entity type config admin routes ──────────────────────────────────
+        .route("/entity-types",
+            get(list_entity_types).post(create_entity_type))
+        .route("/entity-types/:id",
+            patch(update_entity_type).delete(delete_entity_type))
+        // Attribute order route must come before the :attr_id route to avoid
+        // Axum treating "order" as a UUID path segment.
+        .route("/entity-types/:code/attributes/order",
+            put(reorder_attributes))
+        .route("/entity-types/:code/attributes",
+            get(list_attributes).post(create_attribute))
+        .route("/entity-types/:code/attributes/:attr_id",
+            delete(delete_attribute))
+        .route("/entity-types/:code/next-sequence",
+            get(next_sequence))
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
 

@@ -31,6 +31,43 @@ User _userFromAuth({
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Data models for grouped nav
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _NavItem {
+  final String emoji;
+  final String label;
+  final String route;
+  final String? badge;
+  final bool isAi;
+
+  const _NavItem({
+    required this.emoji,
+    required this.label,
+    required this.route,
+    this.badge,
+    this.isAi = false,
+  });
+}
+
+class _NavGroup {
+  final String label;
+  final List<_NavItem> items;
+  /// If non-null, the group is only shown for these roles.
+  final List<UserRole>? visibleTo;
+
+  const _NavGroup({
+    required this.label,
+    required this.items,
+    this.visibleTo,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shell page
+// ─────────────────────────────────────────────────────────────────────────────
+
 class ShellPage extends StatefulWidget {
   final Widget child;
 
@@ -45,6 +82,64 @@ class _ShellPageState extends State<ShellPage> {
   int _notificationCount = 5;
   User _currentUser = User.demo;
   bool _paletteOpen = false;
+
+  // ── Grouped nav definition ────────────────────────────────────────────────
+
+  static const _navGroups = [
+    _NavGroup(
+      label: 'OVERVIEW',
+      items: [
+        _NavItem(emoji: '🏠', label: 'Dashboard', route: '/dashboard'),
+      ],
+    ),
+    _NavGroup(
+      label: 'PLATFORM',
+      // Visible only to admin (maps to superAdmin concept in this codebase)
+      visibleTo: [UserRole.admin],
+      items: [
+        _NavItem(emoji: '👑', label: 'Tenants', route: '/dashboard/admin/tenants'),
+        _NavItem(emoji: '🔧', label: 'System', route: '/dashboard/settings'),
+      ],
+    ),
+    _NavGroup(
+      label: 'ORG SETUP',
+      visibleTo: [UserRole.admin, UserRole.steward],
+      items: [
+        _NavItem(emoji: '👥', label: 'Users & Roles', route: '/dashboard/org/users'),
+        _NavItem(emoji: '#️⃣', label: 'Entity Types', route: '/dashboard/org/entity-types'),
+        _NavItem(emoji: '🗂', label: 'Attributes', route: '/dashboard/org/attributes'),
+        _NavItem(emoji: '🔌', label: 'Source Systems', route: '/dashboard/org/sources'),
+      ],
+    ),
+    _NavGroup(
+      label: 'ENTITIES',
+      items: [
+        _NavItem(emoji: '🔍', label: 'Browse & Search', route: '/dashboard/entities'),
+        _NavItem(emoji: '✨', label: 'Create Entity', route: '/dashboard/entities/create'),
+        _NavItem(emoji: '📥', label: 'Ingest Data', route: '/dashboard/entities/ingest'),
+      ],
+    ),
+    _NavGroup(
+      label: 'MDM WORKFLOW',
+      items: [
+        _NavItem(emoji: '🎯', label: 'Match Queue', route: '/dashboard/match-queue', badge: '12'),
+        _NavItem(emoji: '🔀', label: 'Merge Studio', route: '/dashboard/merge/select/select'),
+        _NavItem(emoji: '⭐', label: 'Golden Records', route: '/dashboard/golden-records'),
+        _NavItem(emoji: '📡', label: 'Distribution', route: '/dashboard/distribution'),
+        _NavItem(emoji: '🔔', label: 'Notifications', route: '/dashboard/notifications', badge: '5'),
+      ],
+    ),
+  ];
+
+  static const _bottomNavItems = [
+    _NavItem(emoji: '🏠', label: 'Dashboard', route: '/dashboard'),
+    _NavItem(emoji: '🔍', label: 'Explorer', route: '/dashboard/entities'),
+    _NavItem(emoji: '🎯', label: 'Queue', route: '/dashboard/match-queue'),
+    _NavItem(emoji: '✨', label: 'AI', route: '/dashboard/ai-copilot', isAi: true),
+    _NavItem(emoji: '⚙️', label: 'Settings', route: '/dashboard/settings'),
+  ];
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -69,112 +164,6 @@ class _ShellPageState extends State<ShellPage> {
     });
   }
 
-  static const _navItems = [
-    _NavItem(
-      icon: Icons.dashboard_outlined,
-      activeIcon: Icons.dashboard_rounded,
-      label: 'Dashboard',
-      route: '/dashboard',
-    ),
-    _NavItem(
-      icon: Icons.hub_outlined,
-      activeIcon: Icons.hub_rounded,
-      label: 'Explorer',
-      route: '/dashboard/entities',
-    ),
-    _NavItem(
-      icon: Icons.pending_actions_outlined,
-      activeIcon: Icons.pending_actions_rounded,
-      label: 'Match Queue',
-      route: '/dashboard/match-queue',
-      badge: '12',
-    ),
-    _NavItem(
-      icon: Icons.merge_outlined,
-      activeIcon: Icons.merge_rounded,
-      label: 'Merge',
-      route: '/dashboard/merge/select/select',
-    ),
-    _NavItem(
-      icon: Icons.stars_outlined,
-      activeIcon: Icons.stars_rounded,
-      label: 'Golden Records',
-      route: '/dashboard/golden-records',
-    ),
-    _NavItem(
-      icon: Icons.auto_awesome_outlined,
-      activeIcon: Icons.auto_awesome_rounded,
-      label: 'AI Copilot',
-      route: '/dashboard/ai-copilot',
-      isAi: true,
-    ),
-    _NavItem(
-      icon: Icons.health_and_safety_outlined,
-      activeIcon: Icons.health_and_safety_rounded,
-      label: 'Data Quality',
-      route: '/dashboard/data-quality',
-    ),
-    _NavItem(
-      icon: Icons.account_tree_outlined,
-      activeIcon: Icons.account_tree_rounded,
-      label: 'Lineage',
-      route: '/dashboard/lineage',
-    ),
-    _NavItem(
-      icon: Icons.policy_outlined,
-      activeIcon: Icons.policy_rounded,
-      label: 'Governance',
-      route: '/dashboard/governance',
-    ),
-    _NavItem(
-      icon: Icons.analytics_outlined,
-      activeIcon: Icons.analytics_rounded,
-      label: 'Analytics',
-      route: '/dashboard/analytics',
-    ),
-    _NavItem(
-      icon: Icons.send_outlined,
-      activeIcon: Icons.send_rounded,
-      label: 'Distribution',
-      route: '/dashboard/distribution',
-    ),
-  ];
-
-  static const _bottomNavItems = [
-    _NavItem(
-      icon: Icons.dashboard_outlined,
-      activeIcon: Icons.dashboard_rounded,
-      label: 'Dashboard',
-      route: '/dashboard',
-    ),
-    _NavItem(
-      icon: Icons.hub_outlined,
-      activeIcon: Icons.hub_rounded,
-      label: 'Explorer',
-      route: '/dashboard/entities',
-    ),
-    _NavItem(
-      icon: Icons.pending_actions_outlined,
-      activeIcon: Icons.pending_actions_rounded,
-      label: 'Queue',
-      route: '/dashboard/match-queue',
-    ),
-    _NavItem(
-      icon: Icons.auto_awesome_outlined,
-      activeIcon: Icons.auto_awesome_rounded,
-      label: 'AI',
-      route: '/dashboard/ai-copilot',
-    ),
-    _NavItem(
-      icon: Icons.settings_outlined,
-      activeIcon: Icons.settings_rounded,
-      label: 'Settings',
-      route: '/dashboard/settings',
-    ),
-  ];
-
-  // ── Global cmd/ctrl+K shortcut ────────────────────────────────────────────
-
   bool _onHardwareKey(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
     final ctrl = HardwareKeyboard.instance.isControlPressed;
@@ -186,7 +175,7 @@ class _ShellPageState extends State<ShellPage> {
           if (mounted) setState(() => _paletteOpen = false);
         });
       }
-      return true; // consumed — don't propagate
+      return true;
     }
     return false;
   }
@@ -196,6 +185,8 @@ class _ShellPageState extends State<ShellPage> {
     HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     super.dispose();
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -212,7 +203,6 @@ class _ShellPageState extends State<ShellPage> {
       backgroundColor: AppColors.navyBackground,
       body: Row(
         children: [
-          // Sidebar
           AnimatedContainer(
             duration: AppConstants.animNormal,
             curve: Curves.easeInOut,
@@ -221,8 +211,6 @@ class _ShellPageState extends State<ShellPage> {
                 : AppConstants.sidebarCollapsedWidth,
             child: _buildSidebar(context),
           ),
-
-          // Main content
           Expanded(
             child: Column(
               children: [
@@ -260,6 +248,8 @@ class _ShellPageState extends State<ShellPage> {
       ],
     );
   }
+
+  // ── Sidebar ───────────────────────────────────────────────────────────────
 
   Widget _buildSidebar(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
@@ -307,34 +297,15 @@ class _ShellPageState extends State<ShellPage> {
             ),
           ),
 
-          // Nav items
+          // Nav groups
           Expanded(
-            child: ListView.separated(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-              itemCount: _navItems.length,
-              separatorBuilder: (_, i) => i == 4
-                  ? const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 6),
-                      child: Divider(
-                        color: AppColors.divider,
-                        height: 1,
-                        indent: 8,
-                        endIndent: 8,
-                      ),
-                    )
-                  : const SizedBox(height: 2),
-              itemBuilder: (context, i) {
-                final item = _navItems[i];
-                final isActive = location.startsWith(item.route) ||
-                    (item.route == '/dashboard' &&
-                        location == '/dashboard');
-                return _buildNavItem(context, item, isActive);
-              },
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: _buildNavGroups(context, location),
             ),
           ),
 
-          // Bottom section — settings + user
+          // Bottom section
           Container(
             padding: const EdgeInsets.all(8),
             decoration: const BoxDecoration(
@@ -344,15 +315,14 @@ class _ShellPageState extends State<ShellPage> {
             ),
             child: Column(
               children: [
-                _buildNavItem(
+                _buildNavItemWidget(
                   context,
                   const _NavItem(
-                    icon: Icons.settings_outlined,
-                    activeIcon: Icons.settings_rounded,
+                    emoji: '⚙️',
                     label: 'Settings',
                     route: '/dashboard/settings',
                   ),
-                  location == '/dashboard/settings',
+                  location.startsWith('/dashboard/settings'),
                 ),
                 const SizedBox(height: 8),
                 _buildUserTile(),
@@ -364,7 +334,59 @@ class _ShellPageState extends State<ShellPage> {
     );
   }
 
-  Widget _buildNavItem(
+  List<Widget> _buildNavGroups(BuildContext context, String location) {
+    final widgets = <Widget>[];
+    for (final group in _navGroups) {
+      // Role-based visibility check
+      if (group.visibleTo != null &&
+          !group.visibleTo!.contains(_currentUser.role)) {
+        continue;
+      }
+
+      widgets.add(_buildGroupHeader(group.label));
+
+      for (final item in group.items) {
+        final isActive = _isRouteActive(location, item.route);
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+            child: _buildNavItemWidget(context, item, isActive),
+          ),
+        );
+      }
+
+      widgets.add(const SizedBox(height: 4));
+    }
+    return widgets;
+  }
+
+  Widget _buildGroupHeader(String label) {
+    if (!_isSidebarExpanded) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 4),
+        child: Divider(color: AppColors.divider, height: 1),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(
+        label,
+        style: AppTextStyles.labelSmall.copyWith(
+          fontSize: 10,
+          color: AppColors.mutedText,
+          letterSpacing: 1.2,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  bool _isRouteActive(String location, String route) {
+    if (route == '/dashboard') return location == '/dashboard';
+    return location.startsWith(route);
+  }
+
+  Widget _buildNavItemWidget(
       BuildContext context, _NavItem item, bool isActive) {
     return Tooltip(
       message: _isSidebarExpanded ? '' : item.label,
@@ -373,70 +395,79 @@ class _ShellPageState extends State<ShellPage> {
         onTap: () => context.go(item.route),
         borderRadius: BorderRadius.circular(8),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
             color: isActive
                 ? AppColors.primary.withValues(alpha: 0.12)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
-            border: isActive
-                ? Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.25),
-                    width: 1)
-                : null,
+            border: Border(
+              left: BorderSide(
+                color: isActive
+                    ? AppColors.primary
+                    : Colors.transparent,
+                width: 3,
+              ),
+            ),
           ),
           child: Row(
             children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Icon(
-                    isActive ? item.activeIcon : item.icon,
-                    color: isActive
-                        ? AppColors.primary
-                        : AppColors.secondaryText,
-                    size: 20,
-                  ),
-                  if (item.badge != null)
-                    Positioned(
-                      right: -6,
-                      top: -6,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        constraints: const BoxConstraints(
-                            minWidth: 16, minHeight: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.error,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          item.badge!,
-                          style: AppTextStyles.badgeLabel.copyWith(
-                            color: Colors.white,
-                            fontSize: 9,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
+              // Emoji icon
+              SizedBox(
+                width: 20,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Text(
+                      item.emoji,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isActive
+                            ? null
+                            : null, // emoji is self-colored
                       ),
                     ),
-                  if (item.isAi)
-                    const Positioned(
-                      right: -4,
-                      bottom: -4,
-                      child: _AiPulseDot(),
-                    ),
-                ],
+                    if (item.badge != null && !_isSidebarExpanded)
+                      Positioned(
+                        right: -6,
+                        top: -6,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          constraints: const BoxConstraints(
+                              minWidth: 14, minHeight: 14),
+                          decoration: BoxDecoration(
+                            color: AppColors.error,
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: Text(
+                            item.badge!,
+                            style: AppTextStyles.badgeLabel.copyWith(
+                              color: Colors.white,
+                              fontSize: 8,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    if (item.isAi && !_isSidebarExpanded)
+                      const Positioned(
+                        right: -4,
+                        bottom: -4,
+                        child: _AiPulseDot(),
+                      ),
+                  ],
+                ),
               ),
+
               if (_isSidebarExpanded) ...[
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     item.label,
                     style: AppTextStyles.sidebarItem.copyWith(
                       color: isActive
-                          ? AppColors.primary
+                          ? AppColors.primaryText
                           : AppColors.secondaryText,
                       fontWeight: isActive
                           ? FontWeight.w600
@@ -445,10 +476,11 @@ class _ShellPageState extends State<ShellPage> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                if (item.isAi) const _AiPulseDot(),
                 if (item.badge != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.error.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
@@ -540,6 +572,8 @@ class _ShellPageState extends State<ShellPage> {
     );
   }
 
+  // ── Top bar ───────────────────────────────────────────────────────────────
+
   Widget _buildTopBar(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     final title = _getPageTitle(location);
@@ -558,7 +592,7 @@ class _ShellPageState extends State<ShellPage> {
           Text(title, style: AppTextStyles.titleMedium),
           const SizedBox(width: 24),
 
-          // Global search — opens the command palette
+          // Global search
           Expanded(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
@@ -747,11 +781,13 @@ class _ShellPageState extends State<ShellPage> {
     );
   }
 
+  // ── Mobile bottom nav ─────────────────────────────────────────────────────
+
   Widget _buildBottomNav(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     int currentIndex = 0;
     for (int i = 0; i < _bottomNavItems.length; i++) {
-      if (location.startsWith(_bottomNavItems[i].route)) {
+      if (_isRouteActive(location, _bottomNavItems[i].route)) {
         currentIndex = i;
         break;
       }
@@ -765,10 +801,13 @@ class _ShellPageState extends State<ShellPage> {
       child: BottomNavigationBar(
         currentIndex: currentIndex,
         onTap: (i) => context.go(_bottomNavItems[i].route),
+        backgroundColor: Colors.transparent,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.secondaryText,
+        type: BottomNavigationBarType.fixed,
         items: _bottomNavItems
             .map((item) => BottomNavigationBarItem(
-                  icon: Icon(item.icon),
-                  activeIcon: Icon(item.activeIcon),
+                  icon: Text(item.emoji, style: const TextStyle(fontSize: 20)),
                   label: item.label,
                 ))
             .toList(),
@@ -776,24 +815,32 @@ class _ShellPageState extends State<ShellPage> {
     );
   }
 
+  // ── Page title map ────────────────────────────────────────────────────────
+
   String _getPageTitle(String location) {
     if (location == '/dashboard') return 'Dashboard';
+    if (location.startsWith('/dashboard/admin/tenants')) return 'Tenants';
+    if (location.startsWith('/dashboard/org/users')) return 'Users & Roles';
+    if (location.startsWith('/dashboard/org/entity-types')) return 'Entity Types';
+    if (location.startsWith('/dashboard/org/attributes')) return 'Attribute Schema';
+    if (location.startsWith('/dashboard/org/sources')) return 'Source Systems';
+    if (location.startsWith('/dashboard/entities/create')) return 'Create Entity';
+    if (location.startsWith('/dashboard/entities/ingest')) return 'Ingest Data';
     if (location.startsWith('/dashboard/entities')) return 'Entity Explorer';
     if (location.startsWith('/dashboard/match-queue')) return 'Match Queue';
-    if (location.startsWith('/dashboard/golden-records')) {
-      return 'Golden Records';
-    }
+    if (location.startsWith('/dashboard/merge')) return 'Merge Studio';
+    if (location.startsWith('/dashboard/golden-records')) return 'Golden Records';
     if (location.startsWith('/dashboard/ai-copilot')) return 'AI Copilot';
     if (location.startsWith('/dashboard/data-quality')) return 'Data Quality';
     if (location.startsWith('/dashboard/lineage')) return 'Data Lineage';
     if (location.startsWith('/dashboard/governance')) return 'Governance';
     if (location.startsWith('/dashboard/analytics')) return 'Analytics';
     if (location.startsWith('/dashboard/distribution')) return 'Distribution Monitor';
+    if (location.startsWith('/dashboard/notifications')) return 'Notifications';
     if (location.startsWith('/dashboard/settings')) return 'Settings';
     return 'Nexus AI MDM';
   }
 
-  /// Opens the full NotificationCenter as a right-side slide-over overlay.
   void _showNotificationsPanel() {
     showNotificationCenter(
       context,
@@ -802,33 +849,14 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   Future<void> _handleLogout() async {
-    // Clears ALL auth tokens from Keychain/Keystore (not just SharedPreferences)
     await AuthManager.logout();
     if (mounted) context.go('/login');
   }
 }
 
-// ──────────────────────────────────────────────
-// Private helpers
-// ──────────────────────────────────────────────
-
-class _NavItem {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final String route;
-  final String? badge;
-  final bool isAi;
-
-  const _NavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.route,
-    this.badge,
-    this.isAi = false,
-  });
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Private helper widgets
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _KeyboardShortcutHint extends StatelessWidget {
   final String text;
@@ -853,7 +881,6 @@ class _KeyboardShortcutHint extends StatelessWidget {
   }
 }
 
-/// Pulsing purple dot shown on the AI Copilot nav item.
 class _AiPulseDot extends StatefulWidget {
   const _AiPulseDot();
 
@@ -897,7 +924,6 @@ class _AiPulseDotState extends State<_AiPulseDot>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Ripple ring
           AnimatedBuilder(
             animation: _ctrl,
             builder: (_, __) => Opacity(
@@ -915,7 +941,6 @@ class _AiPulseDotState extends State<_AiPulseDot>
               ),
             ),
           ),
-          // Solid core
           Container(
             width: 7,
             height: 7,

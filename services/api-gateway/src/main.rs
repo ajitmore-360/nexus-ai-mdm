@@ -12,7 +12,7 @@ use std::sync::Arc;
 use axum::{
     http::{HeaderValue, HeaderName, Method, header::{AUTHORIZATION, CONTENT_TYPE}},
     middleware as axum_middleware,
-    routing::{get, post},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 
@@ -36,6 +36,7 @@ use routes::{
     health::{health, prometheus_metrics},
     mdm::{create_entity, execute_match},
     service_proxy::{
+        // existing
         approve_match_candidate, autocomplete, create_policy_rule,
         dashboard_activity, dashboard_stats,
         enqueue_distribution, evaluate_policy, execute_merge, gdpr_access, gdpr_erasure,
@@ -46,6 +47,15 @@ use routes::{
         patch_entity, record_consent, recommend_weights,
         reject_match_candidate, scan_anomalies, search,
         update_policy_weights, withdraw_consent,
+        // admin — tenant management
+        admin_list_tenants, admin_create_tenant, admin_create_admin_user,
+        admin_list_users, admin_invite_user, admin_update_user_role,
+        // admin — entity types & attributes
+        list_entity_types, create_entity_type, update_entity_type, delete_entity_type,
+        list_attributes, create_attribute, delete_attribute, reorder_attributes, next_sequence,
+        // admin — source systems
+        list_source_systems, create_source_system, update_source_system,
+        delete_source_system, test_source_system,
     },
 };
 
@@ -209,6 +219,23 @@ async fn main() {
         .route("/policy/consent/:id/withdraw",   post(withdraw_consent))
         // ── Lineage ───────────────────────────────────────────────────
         .route("/entities/:id/lineage",          get(get_entity_lineage))
+        // ── Admin: Tenant Management ──────────────────────────────────
+        .route("/admin/tenants",                 get(admin_list_tenants).post(admin_create_tenant))
+        .route("/admin/tenants/:id/admin-user",  post(admin_create_admin_user))
+        .route("/admin/users",                   get(admin_list_users))
+        .route("/admin/users/invite",            post(admin_invite_user))
+        .route("/admin/users/:id/role",          put(admin_update_user_role))
+        // ── Admin: Entity Types & Attributes ──────────────────────────
+        .route("/entity-types",                          get(list_entity_types).post(create_entity_type))
+        .route("/entity-types/:id",                      patch(update_entity_type).delete(delete_entity_type))
+        .route("/entity-types/:code/attributes",         get(list_attributes).post(create_attribute))
+        .route("/entity-types/:code/attributes/order",   put(reorder_attributes))
+        .route("/entity-types/:code/attributes/:id",     delete(delete_attribute))
+        .route("/entity-types/:code/next-sequence",      get(next_sequence))
+        // ── Admin: Source Systems ─────────────────────────────────────
+        .route("/source-systems",        get(list_source_systems).post(create_source_system))
+        .route("/source-systems/:id",    put(update_source_system).delete(delete_source_system))
+        .route("/source-systems/:id/test", post(test_source_system))
         .layer(axum_middleware::from_fn_with_state(state.clone(), auth_middleware))
         .layer(axum_middleware::from_fn_with_state(state.clone(), tenant_middleware))
         .layer(axum_middleware::from_fn_with_state(state.clone(), rate_limit_middleware))

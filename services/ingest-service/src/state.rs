@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use reqwest::Client;
+use sqlx::PgPool;
 
 use crate::config::settings::IngestSettings;
 use crate::processor::IngestProcessor;
@@ -9,12 +10,13 @@ use crate::processor::IngestProcessor;
 pub struct AppState {
     pub settings:  Arc<IngestSettings>,
     pub processor: Arc<IngestProcessor>,
+    pub pool:      PgPool,
     #[allow(dead_code)]
     pub http:      Client,
 }
 
 impl AppState {
-    pub fn new(settings: IngestSettings) -> Self {
+    pub fn new(settings: IngestSettings, pool: PgPool) -> Self {
         let timeout = std::time::Duration::from_secs(settings.ingest_timeout_secs);
         let http = Client::builder()
             .timeout(timeout)
@@ -30,6 +32,7 @@ impl AppState {
         Self {
             settings:  Arc::new(settings),
             processor,
+            pool,
             http,
         }
     }

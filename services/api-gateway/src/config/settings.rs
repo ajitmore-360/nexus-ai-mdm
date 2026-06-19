@@ -20,6 +20,7 @@ pub struct Settings {
     pub search_service_url:       String,
     pub notification_service_url: String,
     pub distribution_service_url: String,
+    pub tenant_service_url:       String,
 
     // =========================================
     // WEBSOCKET
@@ -93,6 +94,9 @@ impl Settings {
 
             distribution_service_url: env::var("DISTRIBUTION_SERVICE_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:8089".into()),
+
+            tenant_service_url: env::var("TENANT_SERVICE_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:8090".into()),
 
             // =====================================
             // WEBSOCKET

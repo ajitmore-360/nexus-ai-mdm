@@ -3,121 +3,130 @@ import 'package:flutter/material.dart' show BoxShadow, Color, Colors, LinearGrad
 class AppColors {
   AppColors._();
 
-  // Primary Green System
-  static const Color primary = Color(0xFF00C896);
-  static const Color darkGreen = Color(0xFF007A5E);
-  static const Color lightGreen = Color(0xFF00E6AB);
-  static const Color mintAccent = Color(0xFFB5F5E0);
+  // Primary Violet System (Gen-Z dark aesthetic)
+  static const Color primary = Color(0xFF7C3AED);        // violet — replaces green
+  static const Color violetLight = Color(0xFFA855F7);
+  static const Color violetDark = Color(0xFF5B21B6);
+
+  // Legacy aliases kept so existing code compiles unchanged
+  static const Color darkGreen = Color(0xFF5B21B6);      // remapped → violetDark
+  static const Color lightGreen = Color(0xFFA855F7);     // remapped → violetLight
+  static const Color mintAccent = Color(0xFFA855F7);     // remapped → violetLight
+
+  // Accent / data colors
+  static const Color cyan = Color(0xFF00D9FF);
+  static const Color cyanDark = Color(0xFF0099BB);
 
   // Background System
-  static const Color navyBackground = Color(0xFF0A1628);
-  static const Color cardSurface = Color(0xFF0F2035);
-  static const Color elevatedCard = Color(0xFF1A3050);
-  static const Color divider = Color(0xFF1E3A5F);
-  static const Color inputFill = Color(0xFF0D1F35);
+  static const Color navyBackground = Color(0xFF08080F);   // deep dark
+  static const Color surface = Color(0xFF0E0E1A);
+  static const Color cardSurface = Color(0xFF14142A);
+  static const Color elevatedCard = Color(0xFF1A1A2E);
+  static const Color sidebarBackground = Color(0xFF0A0A16);
+  static const Color sidebarSelected = Color(0x147C3AED);  // rgba(124,58,237,0.08)
+  static const Color sidebarHover = Color(0x0C7C3AED);
+
+  // Divider / input fill
+  static const Color divider = Color(0x14FFFFFF);          // rgba(255,255,255,0.08)
+  static const Color inputFill = Color(0x4D000000);        // rgba(0,0,0,0.3)
 
   // Text System
-  static const Color primaryText = Color(0xFFE8F5F0);
-  static const Color secondaryText = Color(0xFF8BA8B8);
-  static const Color mutedText = Color(0xFF4A6580);
-  static const Color hintText = Color(0xFF3A5570);
+  static const Color primaryText = Color(0xFFF0F0FF);
+  static const Color secondaryText = Color(0xFF8888AA);
+  static const Color mutedText = Color(0xFF44445A);
+  static const Color hintText = Color(0xFF44445A);         // alias for mutedText
 
   // Semantic Colors
-  static const Color warning = Color(0xFFFF8C42);
-  static const Color warningLight = Color(0xFFFFF0E6);
-  static const Color error = Color(0xFFFF4D6D);
-  static const Color errorLight = Color(0xFFFFE5EB);
-  static const Color success = Color(0xFF00C896);
-  static const Color successLight = Color(0xFFE0FFF5);
-  static const Color info = Color(0xFF3B82F6);
-  static const Color infoLight = Color(0xFFEFF6FF);
+  static const Color error = Color(0xFFFF3366);            // coral
+  static const Color errorLight = Color(0x1AFF3366);       // rgba(255,51,102,0.1)
+  static const Color success = Color(0xFF10F090);          // green
+  static const Color successLight = Color(0x1A10F090);     // rgba(16,240,144,0.1)
+  static const Color warning = Color(0xFFFFB800);          // amber
+  static const Color warningLight = Color(0x1AFFB800);     // rgba(255,184,0,0.1)
+  static const Color info = Color(0xFF00D9FF);             // remapped → cyan
+  static const Color infoLight = Color(0x1A00D9FF);
 
-  // AI Purple
-  static const Color aiPurple = Color(0xFF8B5CF6);
-  static const Color aiPurpleLight = Color(0xFFEDE9FE);
-  static const Color aiPurpleDark = Color(0xFF6D28D9);
+  // AI Purple (kept for AI features)
+  static const Color aiPurple = Color(0xFFA855F7);
+  static const Color aiPurpleLight = Color(0xFF7C3AED);
+  static const Color aiPurpleDark = Color(0xFF5B21B6);
 
   // Status Colors
-  static const Color statusActive = Color(0xFF00C896);
-  static const Color statusGolden = Color(0xFFFFD700);
-  static const Color statusReview = Color(0xFFFF8C42);
-  static const Color statusMerged = Color(0xFF8B5CF6);
-  static const Color statusInactive = Color(0xFF4A6580);
+  static const Color statusActive = Color(0xFF10F090);     // green
+  static const Color statusGolden = Color(0xFFFFB800);     // amber
+  static const Color statusReview = Color(0xFFFFB800);     // amber
+  static const Color statusMerged = Color(0xFFA855F7);     // violet light
+  static const Color statusInactive = Color(0xFF44445A);   // mutedText
 
   // Chart Colors
   static const List<Color> chartPalette = [
-    Color(0xFF00C896),
-    Color(0xFF8B5CF6),
-    Color(0xFF3B82F6),
-    Color(0xFFFF8C42),
-    Color(0xFFFF4D6D),
-    Color(0xFF06B6D4),
-    Color(0xFFFFD700),
-    Color(0xFF10B981),
+    Color(0xFF7C3AED),  // violet
+    Color(0xFF00D9FF),  // cyan
+    Color(0xFFA855F7),  // violet light
+    Color(0xFFFFB800),  // amber
+    Color(0xFFFF3366),  // coral
+    Color(0xFF10F090),  // green
+    Color(0xFF5B21B6),  // violet dark
+    Color(0xFF0099BB),  // cyan dark
   ];
 
   // Gradient Definitions
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF00C896), Color(0xFF007A5E)],
+    colors: [Color(0xFF7C3AED), Color(0xFFA855F7)],
   );
 
   static const LinearGradient navyGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF0F2035), Color(0xFF0A1628)],
+    colors: [Color(0xFF14142A), Color(0xFF08080F)],
   );
 
   static const LinearGradient purpleGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+    colors: [Color(0xFF7C3AED), Color(0xFFA855F7)],
   );
 
   static const LinearGradient warningGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFFF8C42), Color(0xFFE55A00)],
+    colors: [Color(0xFFFFB800), Color(0xFFCC8800)],
   );
 
   static const LinearGradient errorGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFFF4D6D), Color(0xFFCC0030)],
+    colors: [Color(0xFFFF3366), Color(0xFFCC0033)],
   );
 
   static const LinearGradient blueGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+    colors: [Color(0xFF00D9FF), Color(0xFF0099BB)],
   );
-
-  // Sidebar
-  static const Color sidebarBackground = Color(0xFF071220);
-  static const Color sidebarSelected = Color(0xFF0F2035);
-  static const Color sidebarHover = Color(0xFF0D1A2E);
 
   // Overlay
   static const Color overlay = Color(0x80000000);
-  static const Color modalBackground = Color(0xFF0F2035);
+  static const Color modalBackground = Color(0xFF14142A);
 
   // Glass / Blur surfaces  (use with BackdropFilter)
-  static const Color glassSurface = Color(0xED0F2035); // ~93% opaque navy
-  static const Color glassBorder  = Color(0x401E3A5F); // subtle divider at 25%
+  static const Color glassSurface = Color(0xED14142A);    // ~93% opaque cardSurface
+  static const Color glassBorder  = Color(0x40FFFFFF);    // subtle at 25%
 
-  // Aurora accent colors — used for the command palette and AI header glow
-  static const Color auroraBlue   = Color(0xFF3B82F6);
-  static const Color auroraGreen  = Color(0xFF00C896);
-  static const Color auroraPurple = Color(0xFF8B5CF6);
+  // Aurora accent colors
+  static const Color auroraBlue   = Color(0xFF00D9FF);    // cyan
+  static const Color auroraGreen  = Color(0xFF10F090);    // green
+  static const Color auroraPurple = Color(0xFFA855F7);    // violet light
 
   static const LinearGradient auroraGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [
-      Color(0xFF8B5CF6),
-      Color(0xFF3B82F6),
-      Color(0xFF00C896),
+      Color(0xFFA855F7),  // violet light
+      Color(0xFF7C3AED),  // violet
+      Color(0xFF00D9FF),  // cyan
     ],
     stops: [0.0, 0.5, 1.0],
   );

@@ -1,3 +1,4 @@
+mod admin;
 mod config;
 mod license;
 mod onboarding;
@@ -8,7 +9,7 @@ use std::net::SocketAddr;
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderName, HeaderValue, Method, header::{AUTHORIZATION, CONTENT_TYPE}},
-    routing::{get, post},
+    routing::{get, post, put},
     Router, Json,
 };
 use serde::Deserialize;
@@ -24,8 +25,8 @@ use onboarding::{onboard_organization, OnboardOrganizationRequest};
 use schemas::{add_custom_attribute, available_entity_types, get_schema, CreateAttributeRequest};
 
 #[derive(Clone)]
-struct AppState {
-    pool: PgPool,
+pub(crate) struct AppState {
+    pub(crate) pool: PgPool,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -218,6 +219,12 @@ async fn main() {
         .route("/license/import",                             post(import_license_handler))
         .route("/license/check",                              get(check_feature))
         .route("/license/generate-dev",                       post(generate_license))
+        // ── Admin routes ────────────────────────────────────────────────────
+        .route("/admin/tenants",                              get(admin::list_tenants).post(admin::create_tenant))
+        .route("/admin/tenants/:id/admin-user",               post(admin::create_admin_user))
+        .route("/admin/users",                                get(admin::list_users))
+        .route("/admin/users/invite",                         post(admin::invite_user))
+        .route("/admin/users/:id/role",                       put(admin::update_user_role))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state);

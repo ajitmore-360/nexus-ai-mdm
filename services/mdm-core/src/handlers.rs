@@ -2,6 +2,7 @@ use serde::Serialize;
 
 pub mod dashboard;
 pub mod entities;
+pub mod entity_types;
 pub mod lineage;
 pub mod matching;
 pub mod merge;
