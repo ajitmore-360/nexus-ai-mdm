@@ -2,6 +2,11 @@ import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../network/api_client.dart';
 import '../network/websocket_client.dart';
+import '../../features/entities/data/entity_repository.dart';
+import '../../features/match_queue/data/match_repository.dart';
+import '../../features/golden_records/data/golden_records_repository.dart';
+import '../../features/distribution/data/distribution_repository.dart';
+import '../../features/dashboard/data/dashboard_repository.dart';
 
 final GetIt sl = GetIt.instance;
 
@@ -20,8 +25,23 @@ Future<void> setupServiceLocator() async {
     sl.registerLazySingleton<WebSocketClient>(() => WebSocketClient());
   }
 
-  // Services would be registered here when implemented
-  // sl.registerLazySingleton<AuthService>(() => AuthService(sl<ApiClient>()));
-  // sl.registerLazySingleton<EntityService>(() => EntityService(sl<ApiClient>()));
-  // sl.registerLazySingleton<MatchService>(() => MatchService(sl<ApiClient>()));
+  // Repositories
+  if (!sl.isRegistered<EntityRepository>()) {
+    sl.registerLazySingleton<EntityRepository>(() => EntityRepository(sl<ApiClient>()));
+  }
+  if (!sl.isRegistered<MatchRepository>()) {
+    sl.registerLazySingleton<MatchRepository>(() => MatchRepository(sl<ApiClient>()));
+  }
+  if (!sl.isRegistered<GoldenRecordsRepository>()) {
+    sl.registerLazySingleton<GoldenRecordsRepository>(
+        () => GoldenRecordsRepository(sl<ApiClient>()));
+  }
+  if (!sl.isRegistered<DistributionRepository>()) {
+    sl.registerLazySingleton<DistributionRepository>(
+        () => DistributionRepository(sl<ApiClient>()));
+  }
+  if (!sl.isRegistered<DashboardRepository>()) {
+    sl.registerLazySingleton<DashboardRepository>(
+        () => DashboardRepository(sl<ApiClient>()));
+  }
 }

@@ -132,6 +132,12 @@ class _ShellPageState extends State<ShellPage> {
       label: 'Analytics',
       route: '/dashboard/analytics',
     ),
+    _NavItem(
+      icon: Icons.send_outlined,
+      activeIcon: Icons.send_rounded,
+      label: 'Distribution',
+      route: '/dashboard/distribution',
+    ),
   ];
 
   static const _bottomNavItems = [
@@ -782,6 +788,7 @@ class _ShellPageState extends State<ShellPage> {
     if (location.startsWith('/dashboard/lineage')) return 'Data Lineage';
     if (location.startsWith('/dashboard/governance')) return 'Governance';
     if (location.startsWith('/dashboard/analytics')) return 'Analytics';
+    if (location.startsWith('/dashboard/distribution')) return 'Distribution Monitor';
     if (location.startsWith('/dashboard/settings')) return 'Settings';
     return 'Nexus AI MDM';
   }

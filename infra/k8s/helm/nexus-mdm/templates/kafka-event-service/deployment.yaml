@@ -49,7 +49,10 @@ spec:
         - name: kafka-event-service
           image: "{{ tpl .Values.kafkaEventService.image.repository . }}:{{ .Values.kafkaEventService.image.tag }}"
           imagePullPolicy: {{ .Values.kafkaEventService.image.pullPolicy | default .Values.global.imagePullPolicy }}
-          # No ports — this is a pure background worker
+          ports:
+            - name: health
+              containerPort: {{ .Values.kafkaEventService.healthPort | default 8087 }}
+              protocol: TCP
           env:
             - name: RUST_LOG
               valueFrom:
@@ -92,17 +95,22 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.postgresql.existingSecret }}
                   key: {{ .Values.postgresql.databaseUrlKey }}
-          # No liveness/readiness HTTP probes — worker healthcheck via process exit code
-          # Kubernetes will restart if the process exits non-zero.
-          # Optional: add a custom exec probe if the binary exposes a health signal file.
+            - name: HEALTH_PORT
+              value: "{{ .Values.kafkaEventService.healthPort | default 8087 }}"
           livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - "kill -0 1"
+            httpGet:
+              path: /health
+              port: health
             initialDelaySeconds: 30
             periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
           resources:

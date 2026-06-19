@@ -57,9 +57,7 @@ impl IngestSettings {
                 .context("INGEST_PORT must be a valid port number")?,
 
             database_url: std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| {
-                    "postgres://nexus:nexus@localhost:5432/nexus_mdm".to_string()
-                }),
+                .context("DATABASE_URL is required")?,
 
             mdm_core_url: std::env::var("MDM_CORE_URL")
                 .unwrap_or_else(|_| "http://localhost:8081".to_string()),
@@ -97,13 +95,14 @@ mod tests {
 
     #[test]
     fn defaults_are_valid() {
-        // Remove any previously set env vars to rely on defaults.
-        // The function should succeed even without any env vars set.
+        // DATABASE_URL is required — provide a placeholder so the rest of the defaults are tested.
+        std::env::set_var("DATABASE_URL", "postgres://test:test@localhost:5432/test");
         let settings = IngestSettings::from_env().expect("defaults should be valid");
         assert_eq!(settings.port, 8082);
         assert!(!settings.mdm_core_url.is_empty());
         assert!(!settings.kafka_topics.is_empty());
         assert!(settings.max_batch_size > 0);
+        std::env::remove_var("DATABASE_URL");
     }
 
     #[test]

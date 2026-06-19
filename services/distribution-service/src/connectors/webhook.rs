@@ -119,7 +119,7 @@ impl Connector for WebhookConnector {
 
         // HMAC-SHA256 signature
         if let Some(secret) = &self.secret {
-            let signature = compute_hmac_sha256(secret, &body);
+            let signature = compute_hmac_sha256(secret, &body)?;
             req = req.header("X-Nexus-Signature", format!("sha256={}", signature));
         }
 
@@ -142,16 +142,16 @@ impl Connector for WebhookConnector {
 ///
 /// Produces the `X-Nexus-Signature: sha256=<hex>` header value.
 /// Receivers should verify using the same shared secret.
-fn compute_hmac_sha256(secret: &str, body: &str) -> String {
+fn compute_hmac_sha256(secret: &str, body: &str) -> anyhow::Result<String> {
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
 
     type HmacSha256 = Hmac<Sha256>;
 
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect("HMAC accepts any key length");
+        .map_err(|e| anyhow::anyhow!("HMAC key error: {}", e))?;
     mac.update(body.as_bytes());
-    hex::encode(mac.finalize().into_bytes())
+    Ok(hex::encode(mac.finalize().into_bytes()))
 }
 
 #[cfg(test)]

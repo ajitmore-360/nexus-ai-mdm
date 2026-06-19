@@ -18,6 +18,8 @@ import '../../features/entities/presentation/pages/entity_create_page.dart';
 import '../../features/entities/presentation/pages/entity_edit_page.dart';
 import '../../features/lineage/presentation/pages/lineage_page.dart';
 import '../../features/data_quality/presentation/pages/data_quality_page.dart';
+import '../../features/golden_records/presentation/pages/golden_records_page.dart';
+import '../../features/distribution/presentation/pages/distribution_monitor_page.dart';
 import '../../shared/models/entity.dart';
 
 class AppRouter {
@@ -140,7 +142,15 @@ class AppRouter {
             name: 'golden-records',
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
-              child: const DashboardPage(section: 'golden'),
+              child: const GoldenRecordsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/distribution',
+            name: 'distribution',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const DistributionMonitorPage(),
             ),
           ),
           GoRoute(

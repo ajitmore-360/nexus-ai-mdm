@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus MDM — UI Redesign Concept</title>
+<style>
+  :root {
+    --bg: #08080F;
+    --bg2: #0E0E1A;
+    --bg3: #14142A;
+    --glass: rgba(255,255,255,0.04);
+    --glass-border: rgba(255,255,255,0.08);
+    --violet: #7C3AED;
+    --violet-lite: #A855F7;
+    --cyan: #00D9FF;
+    --coral: #FF3366;
+    --green: #10F090;
+    --amber: #FFB800;
+    --text: #F0F0FF;
+    --text-dim: #8888AA;
+    --text-dimmer: #44445A;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(124,58,237,0.35) 0%, transparent 70%),
+                radial-gradient(ellipse 50% 40% at 80% 100%, rgba(0,217,255,0.15) 0%, transparent 60%),
+                var(--bg);
+    padding: 80px 40px 60px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(124,58,237,0.15);
+    border: 1px solid rgba(124,58,237,0.4);
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--violet-lite);
+    margin-bottom: 24px;
+  }
+  .hero h1 {
+    font-size: clamp(36px, 6vw, 72px);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin-bottom: 20px;
+  }
+  .hero h1 .accent { color: var(--violet-lite); }
+  .hero h1 .accent2 { color: var(--cyan); }
+  .hero p {
+    font-size: 18px;
+    color: var(--text-dim);
+    max-width: 640px;
+    margin: 0 auto 40px;
+  }
+
+  /* ── LAYOUT ── */
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+  .section { padding: 64px 0; }
+  .section-label {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--text-dimmer);
+    margin-bottom: 12px;
+  }
+  .section-label::after {
+    content: ''; flex: 1;
+    height: 1px; background: var(--glass-border);
+  }
+  .section-title {
+    font-size: 32px; font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  .section-sub {
+    color: var(--text-dim);
+    margin-bottom: 48px;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 28px;
+    backdrop-filter: blur(12px);
+  }
+  .card-glow-violet { box-shadow: 0 0 40px rgba(124,58,237,0.12); }
+  .card-glow-cyan   { box-shadow: 0 0 40px rgba(0,217,255,0.10); }
+  .card-glow-coral  { box-shadow: 0 0 40px rgba(255,51,102,0.10); }
+  .card-glow-green  { box-shadow: 0 0 40px rgba(16,240,144,0.10); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+  /* ── NAV MOCKUP ── */
+  .nav-mockup {
+    background: var(--bg2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    height: 520px;
+  }
+  .nav-sidebar {
+    width: 220px;
+    min-width: 220px;
+    background: rgba(0,0,0,0.3);
+    border-right: 1px solid var(--glass-border);
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .nav-logo {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid var(--glass-border);
+    margin-bottom: 12px;
+  }
+  .nav-logo-text {
+    font-size: 18px; font-weight: 900; letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--violet-lite), var(--cyan));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .nav-logo-sub { font-size: 10px; color: var(--text-dimmer); letter-spacing: 0.1em; text-transform: uppercase; }
+  .nav-group-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text-dimmer);
+    padding: 12px 20px 6px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 20px;
+    font-size: 13px; font-weight: 500;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-radius: 0;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-item.active {
+    color: var(--text);
+    background: rgba(124,58,237,0.15);
+  }
+  .nav-item.active::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: linear-gradient(180deg, var(--violet), var(--violet-lite));
+    border-radius: 0 3px 3px 0;
+  }
+  .nav-icon { width: 18px; text-align: center; font-size: 14px; }
+  .nav-badge {
+    margin-left: auto;
+    background: var(--coral);
+    color: white;
+    font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 99px;
+  }
+  .nav-badge-green {
+    background: rgba(16,240,144,0.15);
+    color: var(--green);
+    border: 1px solid rgba(16,240,144,0.3);
+  }
+  .nav-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .nav-topbar {
+    border-bottom: 1px solid var(--glass-border);
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-topbar-title { font-size: 16px; font-weight: 700; }
+  .nav-topbar-actions { display: flex; gap: 8px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    border: none; transition: all 0.15s;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--violet), var(--violet-lite));
+    color: white;
+  }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-ghost {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    color: var(--text-dim);
+  }
+  .nav-inner { padding: 24px; flex: 1; overflow: auto; }
+
+  /* ── SCREEN MOCKUPS ── */
+  .screen-mockup {
+    background: var(--bg2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .screen-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--glass-border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .screen-title { font-size: 14px; font-weight: 700; }
+  .screen-body { padding: 20px 24px; }
+
+  /* ── CHIPS / TAGS ── */
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 12px; border-radius: 99px;
+    font-size: 12px; font-weight: 600;
+  }
+  .chip-violet { background: rgba(124,58,237,0.15); color: var(--violet-lite); border: 1px solid rgba(124,58,237,0.3); }
+  .chip-cyan   { background: rgba(0,217,255,0.12); color: var(--cyan); border: 1px solid rgba(0,217,255,0.3); }
+  .chip-coral  { background: rgba(255,51,102,0.12); color: var(--coral); border: 1px solid rgba(255,51,102,0.3); }
+  .chip-green  { background: rgba(16,240,144,0.10); color: var(--green); border: 1px solid rgba(16,240,144,0.25); }
+  .chip-amber  { background: rgba(255,184,0,0.12); color: var(--amber); border: 1px solid rgba(255,184,0,0.3); }
+
+  /* ── FLOW DIAGRAM ── */
+  .flow {
+    display: flex; align-items: flex-start; gap: 0;
+    overflow-x: auto; padding-bottom: 8px;
+  }
+  .flow-step {
+    flex: 1; min-width: 160px;
+    position: relative;
+  }
+  .flow-step:not(:last-child)::after {
+    content: '→';
+    position: absolute; right: -10px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dimmer); font-size: 18px;
+    z-index: 2;
+  }
+  .flow-card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    margin: 0 20px;
+    text-align: center;
+    position: relative;
+  }
+  .flow-num {
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    width: 22px; height: 22px;
+    background: var(--violet);
+    border-radius: 99px;
+    font-size: 11px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .flow-icon { font-size: 28px; margin-bottom: 8px; display: block; }
+  .flow-label { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .flow-desc { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+
+  /* ── TABLE MOCK ── */
+  .table-mock { width: 100%; border-collapse: collapse; }
+  .table-mock th {
+    text-align: left; padding: 10px 14px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-dimmer);
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .table-mock td {
+    padding: 12px 14px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .table-mock tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* ── FORM MOCK ── */
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .form-field label {
+    display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text-dimmer); margin-bottom: 6px;
+  }
+  .form-input {
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 13px;
+  }
+  .form-input.focus { border-color: rgba(124,58,237,0.6); box-shadow: 0 0 0 3px rgba(124,58,237,0.12); }
+  .form-select {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    color: var(--text-dim);
+    font-size: 13px;
+    width: 100%;
+  }
+
+  /* ── STAT CARDS ── */
+  .stat-card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dimmer); margin-bottom: 8px; }
+  .stat-value { font-size: 32px; font-weight: 900; letter-spacing: -0.02em; }
+  .stat-delta { font-size: 12px; color: var(--green); margin-top: 4px; }
+
+  /* ── PERMISSION MATRIX ── */
+  .perm-table { width: 100%; border-collapse: collapse; }
+  .perm-table th, .perm-table td { padding: 10px 12px; text-align: center; font-size: 12px; }
+  .perm-table th { color: var(--text-dimmer); border-bottom: 1px solid var(--glass-border); }
+  .perm-table td:first-child { text-align: left; color: var(--text-dim); }
+  .perm-check { color: var(--green); font-size: 16px; }
+  .perm-cross { color: var(--text-dimmer); }
+  .perm-partial { color: var(--amber); font-size: 14px; }
+
+  /* ── ATTRIBUTE BUILDER ── */
+  .attr-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 8px;
+  }
+  .attr-drag { color: var(--text-dimmer); cursor: grab; font-size: 14px; }
+  .attr-name { flex: 1; font-size: 13px; font-weight: 600; }
+  .attr-type { font-size: 11px; color: var(--text-dimmer); background: rgba(255,255,255,0.06); padding: 3px 9px; border-radius: 99px; }
+  .attr-lock { font-size: 12px; color: var(--amber); }
+
+  /* ── SEQUENCE CONFIG ── */
+  .seq-card {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 16px 20px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .seq-icon { font-size: 28px; }
+  .seq-info { flex: 1; }
+  .seq-name { font-size: 14px; font-weight: 700; }
+  .seq-format {
+    font-size: 12px; color: var(--cyan);
+    font-family: monospace;
+    background: rgba(0,217,255,0.08);
+    padding: 2px 8px; border-radius: 4px;
+    display: inline-block; margin-top: 3px;
+  }
+  .seq-next { font-size: 11px; color: var(--text-dimmer); margin-top: 4px; }
+
+  /* ── SOURCE CARD ── */
+  .source-card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .source-card:hover {
+    border-color: rgba(124,58,237,0.4);
+    background: rgba(124,58,237,0.06);
+    transform: translateY(-2px);
+  }
+  .source-icon { font-size: 32px; }
+  .source-name { font-size: 13px; font-weight: 700; }
+  .source-desc { font-size: 11px; color: var(--text-dimmer); }
+
+  /* ── PALETTE SWATCHES ── */
+  .palette { display: flex; gap: 12px; flex-wrap: wrap; }
+  .swatch {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .swatch-color { width: 56px; height: 56px; border-radius: 12px; }
+  .swatch-label { font-size: 10px; color: var(--text-dimmer); text-align: center; }
+
+  /* ── TYPOGRAPHY SHOWCASE ── */
+  .type-showcase { display: flex; flex-direction: column; gap: 16px; }
+  .type-row { display: flex; align-items: baseline; gap: 20px; }
+  .type-meta { font-size: 10px; color: var(--text-dimmer); width: 100px; flex-shrink: 0; }
+
+  /* ── DIVIDER ── */
+  .divider { height: 1px; background: var(--glass-border); margin: 0; }
+
+  /* ── SECTION NAV ── */
+  .toc {
+    position: sticky; top: 20px;
+    background: var(--bg2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 20px;
+    font-size: 13px;
+  }
+  .toc-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dimmer); margin-bottom: 12px; }
+  .toc a { display: block; padding: 5px 0; color: var(--text-dim); text-decoration: none; }
+  .toc a:hover { color: var(--violet-lite); }
+
+  @media (max-width: 768px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .form-row { grid-template-columns: 1fr; }
+    .flow { flex-direction: column; }
+    .flow-step::after { display: none; }
+    .container { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="badge">🎨 UI Redesign Concept · v2.0</div>
+  <h1>
+    <span class="accent">Nexus</span> MDM<br>
+    <span class="accent2">Admin & Entity</span> Module
+  </h1>
+  <p>A clean, Gen-Z-friendly Master Data Management platform with a proper admin hierarchy, entity lifecycle flows, and a UI that actually slaps.</p>
+</div>
+
+<div class="container">
+
+  <!-- ── 1. UNDERSTANDING THE FLOW ── -->
+  <div class="section" id="concept">
+    <div class="section-label">01 · Concept</div>
+    <div class="section-title">The MDM Admin Hierarchy</div>
+    <div class="section-sub">Three distinct roles, three distinct workspaces — no overlap, no confusion.</div>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-card card-glow-violet">
+          <div class="flow-num">1</div>
+          <span class="flow-icon">👑</span>
+          <div class="flow-label">Super Admin</div>
+          <div class="flow-desc">Creates tenants, provisions plans, manages platform health</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-card card-glow-cyan">
+          <div class="flow-num">2</div>
+          <span class="flow-icon">🏢</span>
+          <div class="flow-label">Customer Admin</div>
+          <div class="flow-desc">Sets up org: users, roles, entity types, sequences, attributes, sources</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-card card-glow-green">
+          <div class="flow-num">3</div>
+          <span class="flow-icon">⚡</span>
+          <div class="flow-label">Data Steward / User</div>
+          <div class="flow-desc">Creates entities, reviews matches, approves merges, monitors distribution</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-card card-glow-coral">
+          <div class="flow-num">4</div>
+          <span class="flow-icon">🌟</span>
+          <div class="flow-label">Golden Record</div>
+          <div class="flow-desc">Deduplicated, trusted master record — the MDM output</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 2. NAVIGATION REDESIGN ── -->
+  <div class="section" id="navigation">
+    <div class="section-label">02 · Navigation</div>
+    <div class="section-title">Redesigned Sidebar Navigation</div>
+    <div class="section-sub">Role-aware navigation — each user sees only what they need. Context-switching is instant.</div>
+
+    <div class="nav-mockup">
+      <!-- Sidebar -->
+      <div class="nav-sidebar">
+        <div class="nav-logo">
+          <div class="nav-logo-text">⬡ NEXUS</div>
+          <div class="nav-logo-sub">Master Data Platform</div>
+        </div>
+
+        <div class="nav-group-label">Overview</div>
+        <div class="nav-item">
+          <span class="nav-icon">🏠</span> Dashboard
+        </div>
+
+        <div class="nav-group-label">Platform (Super Admin)</div>
+        <div class="nav-item active">
+          <span class="nav-icon">👑</span> Tenants
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🔧</span> System Config
+        </div>
+
+        <div class="nav-group-label">Org Setup (Admin)</div>
+        <div class="nav-item">
+          <span class="nav-icon">👥</span> Users &amp; Roles
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">#️⃣</span> Entity Types &amp; Sequences
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🗂️</span> Attribute Schemas
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🔌</span> Source Systems
+        </div>
+
+        <div class="nav-group-label">Entities</div>
+        <div class="nav-item">
+          <span class="nav-icon">✨</span> Browse &amp; Search
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">➕</span> Create Entity
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">📥</span> Ingest Data
+        </div>
+
+        <div class="nav-group-label">MDM Workflow</div>
+        <div class="nav-item">
+          <span class="nav-icon">🎯</span> Match Queue
+          <span class="nav-badge">12</span>
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🔀</span> Merge Studio
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">⭐</span> Golden Records
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">📡</span> Distribution
+        </div>
+        <div class="nav-item">
+          <span class="nav-icon">🔔</span> Notifications
+          <span class="nav-badge">3</span>
+        </div>
+      </div>
+
+      <!-- Main content area preview -->
+      <div class="nav-content">
+        <div class="nav-topbar">
+          <div class="nav-topbar-title">Tenants · 3 active</div>
+          <div class="nav-topbar-actions">
+            <button class="btn btn-ghost">🔍 Search</button>
+            <button class="btn btn-primary">+ New Tenant</button>
+          </div>
+        </div>
+        <div class="nav-inner">
+          <table class="table-mock">
+            <thead>
+              <tr>
+                <th>Tenant</th>
+                <th>Plan</th>
+                <th>Users</th>
+                <th>Entities</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Acme Corporation</strong><br><span style="font-size:11px;color:var(--text-dimmer)">acme.nexus.io</span></td>
+                <td><span class="chip chip-violet">Enterprise</span></td>
+                <td>24</td>
+                <td>1.2M</td>
+                <td><span class="chip chip-green">● Active</span></td>
+              </tr>
+              <tr>
+                <td><strong>GlobalTech Ltd</strong><br><span style="font-size:11px;color:var(--text-dimmer)">globaltech.nexus.io</span></td>
+                <td><span class="chip chip-cyan">Pro</span></td>
+                <td>8</td>
+                <td>340K</td>
+                <td><span class="chip chip-green">● Active</span></td>
+              </tr>
+              <tr>
+                <td><strong>StartupXYZ</strong><br><span style="font-size:11px;color:var(--text-dimmer)">startup.nexus.io</span></td>
+                <td><span class="chip chip-amber">Starter</span></td>
+                <td>2</td>
+                <td>12K</td>
+                <td><span class="chip chip-amber">⚡ Trial</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 3. SUPER ADMIN MODULE ── -->
+  <div class="section" id="super-admin">
+    <div class="section-label">03 · Super Admin</div>
+    <div class="section-title">Tenant Creation Flow</div>
+    <div class="section-sub">Super admin provisions a new tenant and bootstraps the customer admin account in one guided flow.</div>
+
+    <div class="grid-2" style="gap:24px">
+      <!-- Create Tenant Form -->
+      <div class="screen-mockup card-glow-violet">
+        <div class="screen-header">
+          <div class="screen-title">✨ Create New Tenant</div>
+          <span class="chip chip-violet">Step 1 of 2</span>
+        </div>
+        <div class="screen-body">
+          <div class="form-row">
+            <div class="form-field">
+              <label>Organization Name</label>
+              <div class="form-input focus">Acme Corporation</div>
+            </div>
+            <div class="form-field">
+              <label>Subdomain</label>
+              <div class="form-input">acme<span style="color:var(--text-dimmer)">.nexus.io</span></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Plan</label>
+              <div class="form-select">Enterprise ▾</div>
+            </div>
+            <div class="form-field">
+              <label>Max Users</label>
+              <div class="form-input">50</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Max Entities</label>
+              <div class="form-input">5,000,000</div>
+            </div>
+            <div class="form-field">
+              <label>Region</label>
+              <div class="form-select">US-East-1 ▾</div>
+            </div>
+          </div>
+          <div style="margin-top:8px; padding-top:16px; border-top:1px solid var(--glass-border); display:flex; gap:10px; justify-content:flex-end">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Next → Admin User</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Create Admin User Form -->
+      <div class="screen-mockup card-glow-cyan">
+        <div class="screen-header">
+          <div class="screen-title">👤 Bootstrap Admin User</div>
+          <span class="chip chip-cyan">Step 2 of 2</span>
+        </div>
+        <div class="screen-body">
+          <div style="background:rgba(0,217,255,0.06); border:1px solid rgba(0,217,255,0.2); border-radius:var(--radius-sm); padding:12px 16px; margin-bottom:16px; font-size:12px; color:var(--text-dim)">
+            💡 This user gets <strong style="color:var(--cyan)">Customer Admin</strong> role — they'll complete the org setup (users, entity types, attributes) after first login.
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>First Name</label>
+              <div class="form-input">Sarah</div>
+            </div>
+            <div class="form-field">
+              <label>Last Name</label>
+              <div class="form-input">Chen</div>
+            </div>
+          </div>
+          <div class="form-field" style="margin-bottom:16px">
+            <label>Work Email</label>
+            <div class="form-input focus">sarah.chen@acme.com</div>
+          </div>
+          <div class="form-field" style="margin-bottom:16px">
+            <label>Temporary Password</label>
+            <div class="form-input">●●●●●●●● <span style="float:right;color:var(--violet-lite);font-size:11px;cursor:pointer">Auto-generate</span></div>
+          </div>
+          <div style="padding-top:16px; border-top:1px solid var(--glass-border); display:flex; gap:10px; justify-content:flex-end">
+            <button class="btn btn-ghost">← Back</button>
+            <button class="btn btn-primary">🚀 Create Tenant</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 4. ORG SETUP MODULE ── -->
+  <div class="section" id="org-setup">
+    <div class="section-label">04 · Org Setup</div>
+    <div class="section-title">Customer Admin Workspace</div>
+    <div class="section-sub">Four setup areas the customer admin completes before the org can go live. Guided onboarding checklist keeps them on track.</div>
+
+    <!-- Onboarding Progress -->
+    <div class="card" style="margin-bottom:32px; background:linear-gradient(135deg, rgba(124,58,237,0.08), rgba(0,217,255,0.05));">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px">
+        <div>
+          <div style="font-size:18px; font-weight:800">Org Setup Progress</div>
+          <div style="font-size:13px; color:var(--text-dim)">Complete all 4 steps to go live</div>
+        </div>
+        <span class="chip chip-amber">2 of 4 complete</span>
+      </div>
+      <div style="display:flex; gap:8px">
+        <div style="flex:1; height:6px; border-radius:99px; background:var(--green)"></div>
+        <div style="flex:1; height:6px; border-radius:99px; background:var(--green)"></div>
+        <div style="flex:1; height:6px; border-radius:99px; background:rgba(255,255,255,0.1)"></div>
+        <div style="flex:1; height:6px; border-radius:99px; background:rgba(255,255,255,0.1)"></div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px">
+        <div style="flex:1; font-size:11px; color:var(--green)">✓ Users &amp; Roles</div>
+        <div style="flex:1; font-size:11px; color:var(--green)">✓ Entity Types</div>
+        <div style="flex:1; font-size:11px; color:var(--text-dimmer)">○ Attributes</div>
+        <div style="flex:1; font-size:11px; color:var(--text-dimmer)">○ Sources</div>
+      </div>
+    </div>
+
+    <!-- 4a. Users & Roles -->
+    <div style="margin-bottom:40px">
+      <div style="font-size:18px; font-weight:700; margin-bottom:4px">👥 Users &amp; Roles</div>
+      <div style="font-size:13px; color:var(--text-dim); margin-bottom:20px">Manage team members and define what each role can do.</div>
+
+      <div class="grid-2">
+        <!-- User list -->
+        <div class="screen-mockup">
+          <div class="screen-header">
+            <div class="screen-title">Team Members</div>
+            <button class="btn btn-primary" style="font-size:12px; padding:6px 12px">+ Invite</button>
+          </div>
+          <div class="screen-body" style="padding:0">
+            <table class="table-mock">
+              <thead><tr><th>User</th><th>Role</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Sarah Chen</strong><br><span style="font-size:11px;color:var(--text-dimmer)">sarah@acme.com</span></td>
+                  <td><span class="chip chip-violet" style="font-size:11px">Admin</span></td>
+                  <td><span class="chip chip-green" style="font-size:11px">Active</span></td>
+                </tr>
+                <tr>
+                  <td><strong>James Park</strong><br><span style="font-size:11px;color:var(--text-dimmer)">james@acme.com</span></td>
+                  <td><span class="chip chip-cyan" style="font-size:11px">Steward</span></td>
+                  <td><span class="chip chip-green" style="font-size:11px">Active</span></td>
+                </tr>
+                <tr>
+                  <td><strong>Priya Sharma</strong><br><span style="font-size:11px;color:var(--text-dimmer)">priya@acme.com</span></td>
+                  <td><span class="chip chip-amber" style="font-size:11px">Analyst</span></td>
+                  <td><span class="chip chip-amber" style="font-size:11px">Invited</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Permission Matrix -->
+        <div class="screen-mockup">
+          <div class="screen-header"><div class="screen-title">Permission Matrix</div></div>
+          <div class="screen-body" style="padding:0">
+            <table class="perm-table">
+              <thead>
+                <tr>
+                  <th style="text-align:left">Capability</th>
+                  <th>Admin</th>
+                  <th>Steward</th>
+                  <th>Analyst</th>
+                  <th>Viewer</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Create Entity</td><td><span class="perm-check">✓</span></td><td><span class="perm-check">✓</span></td><td><span class="perm-cross">—</span></td><td><span class="perm-cross">—</span></td></tr>
+                <tr><td>Approve Match</td><td><span class="perm-check">✓</span></td><td><span class="perm-check">✓</span></td><td><span class="perm-cross">—</span></td><td><span class="perm-cross">—</span></td></tr>
+                <tr><td>Execute Merge</td><td><span class="perm-check">✓</span></td><td><span class="perm-partial">◑</span></td><td><span class="perm-cross">—</span></td><td><span class="perm-cross">—</span></td></tr>
+                <tr><td>View Golden Records</td><td><span class="perm-check">✓</span></td><td><span class="perm-check">✓</span></td><td><span class="perm-check">✓</span></td><td><span class="perm-check">✓</span></td></tr>
+                <tr><td>Configure Sources</td><td><span class="perm-check">✓</span></td><td><span class="perm-cross">—</span></td><td><span class="perm-cross">—</span></td><td><span class="perm-cross">—</span></td></tr>
+                <tr><td>Manage Attributes</td><td><span class="perm-check">✓</span></td><td><span class="perm-cross">—</span></td><td><span class="perm-cross">—</span></td><td><span class="perm-cross">—</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4b. Entity Types & Sequences -->
+    <div style="margin-bottom:40px">
+      <div style="font-size:18px; font-weight:700; margin-bottom:4px">#️⃣ Entity Types &amp; Number Sequences</div>
+      <div style="font-size:13px; color:var(--text-dim); margin-bottom:20px">Define the entity types your org tracks. Each gets an auto-generated ID sequence.</div>
+
+      <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px">
+        <div class="seq-card">
+          <div class="seq-icon">🏢</div>
+          <div class="seq-info">
+            <div class="seq-name">Customer (Party)</div>
+            <div class="seq-format">CUST-{YYYY}-{00001}</div>
+            <div class="seq-next">Next: CUST-2026-00847 · Resets: Never</div>
+          </div>
+          <span class="chip chip-green" style="font-size:11px">Active</span>
+          <span style="color:var(--text-dimmer);cursor:pointer;font-size:14px">⚙️</span>
+        </div>
+        <div class="seq-card">
+          <div class="seq-icon">📦</div>
+          <div class="seq-info">
+            <div class="seq-name">Product</div>
+            <div class="seq-format">PROD-{00001}</div>
+            <div class="seq-next">Next: PROD-03241 · Resets: Never</div>
+          </div>
+          <span class="chip chip-green" style="font-size:11px">Active</span>
+          <span style="color:var(--text-dimmer);cursor:pointer;font-size:14px">⚙️</span>
+        </div>
+        <div class="seq-card">
+          <div class="seq-icon">📍</div>
+          <div class="seq-info">
+            <div class="seq-name">Location / Site</div>
+            <div class="seq-format">LOC-{REGION}-{000}</div>
+            <div class="seq-next">Next: LOC-US-088 · Resets: Never</div>
+          </div>
+          <span class="chip chip-green" style="font-size:11px">Active</span>
+          <span style="color:var(--text-dimmer);cursor:pointer;font-size:14px">⚙️</span>
+        </div>
+        <div class="seq-card" style="border-style:dashed; cursor:pointer; opacity:0.6">
+          <div class="seq-icon">➕</div>
+          <div class="seq-info">
+            <div class="seq-name" style="color:var(--text-dimmer)">Add Entity Type…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sequence format helper -->
+      <div class="card" style="background:rgba(0,217,255,0.04); border-color:rgba(0,217,255,0.15)">
+        <div style="font-size:12px; color:var(--cyan); font-weight:700; margin-bottom:8px">Format tokens you can use</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <span class="chip chip-cyan"><code>{YYYY}</code> Year</span>
+          <span class="chip chip-cyan"><code>{MM}</code> Month</span>
+          <span class="chip chip-cyan"><code>{DD}</code> Day</span>
+          <span class="chip chip-cyan"><code>{00001}</code> Padded sequence</span>
+          <span class="chip chip-cyan"><code>{REGION}</code> Custom var</span>
+          <span class="chip chip-cyan"><code>{TENANT}</code> Tenant code</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4c. Attribute Schemas -->
+    <div style="margin-bottom:40px">
+      <div style="font-size:18px; font-weight:700; margin-bottom:4px">🗂️ Attribute Schemas</div>
+      <div style="font-size:13px; color:var(--text-dim); margin-bottom:20px">Base attributes are system-defined. Add custom attributes per entity type to capture your org's specific data.</div>
+
+      <div class="grid-2">
+        <div>
+          <div style="font-size:12px; font-weight:700; color:var(--text-dimmer); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:10px">🔒 Base Attributes (System)</div>
+          <div class="attr-row"><span class="attr-drag">⠿</span><span class="attr-name">Full Name</span><span class="attr-type">text</span><span class="attr-lock">🔒</span></div>
+          <div class="attr-row"><span class="attr-drag">⠿</span><span class="attr-name">Primary Email</span><span class="attr-type">email</span><span class="attr-lock">🔒</span></div>
+          <div class="attr-row"><span class="attr-drag">⠿</span><span class="attr-name">Phone Number</span><span class="attr-type">phone</span><span class="attr-lock">🔒</span></div>
+          <div class="attr-row"><span class="attr-drag">⠿</span><span class="attr-name">Address</span><span class="attr-type">address</span><span class="attr-lock">🔒</span></div>
+          <div class="attr-row"><span class="attr-drag">⠿</span><span class="attr-name">Entity Status</span><span class="attr-type">enum</span><span class="attr-lock">🔒</span></div>
+          <div class="attr-row"><span class="attr-drag">⠿</span><span class="attr-name">Source System</span><span class="attr-type">reference</span><span class="attr-lock">🔒</span></div>
+        </div>
+        <div>
+          <div style="font-size:12px; font-weight:700; color:var(--violet-lite); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:10px">✏️ Custom Attributes (Your Org)</div>
+          <div class="attr-row" style="border-color:rgba(124,58,237,0.25)"><span class="attr-drag">⠿</span><span class="attr-name">Industry Segment</span><span class="attr-type">enum</span><span style="color:var(--coral);font-size:11px;cursor:pointer">✕</span></div>
+          <div class="attr-row" style="border-color:rgba(124,58,237,0.25)"><span class="attr-drag">⠿</span><span class="attr-name">Annual Revenue</span><span class="attr-type">currency</span><span style="color:var(--coral);font-size:11px;cursor:pointer">✕</span></div>
+          <div class="attr-row" style="border-color:rgba(124,58,237,0.25)"><span class="attr-drag">⠿</span><span class="attr-name">Account Manager</span><span class="attr-type">user</span><span style="color:var(--coral);font-size:11px;cursor:pointer">✕</span></div>
+          <div class="attr-row" style="border-color:rgba(124,58,237,0.25); opacity:0.5; border-style:dashed; cursor:pointer; justify-content:center; gap:6px">
+            <span style="color:var(--violet-lite); font-size:13px">+ Add Custom Attribute</span>
+          </div>
+          <div style="margin-top:12px; background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.2); border-radius:var(--radius-sm); padding:12px; font-size:12px; color:var(--text-dim)">
+            <strong style="color:var(--violet-lite)">Attribute Types:</strong><br>
+            text, number, currency, boolean, date, enum (picklist), phone, email, url, address, user (reference), entity (foreign key)
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4d. Source Systems -->
+    <div style="margin-bottom:40px">
+      <div style="font-size:18px; font-weight:700; margin-bottom:4px">🔌 Source Systems</div>
+      <div style="font-size:13px; color:var(--text-dim); margin-bottom:20px">Register where your entity data comes from. Each source gets a trust/priority weight for survivorship rules.</div>
+
+      <div class="grid-4">
+        <div class="source-card">
+          <div class="source-icon">☁️</div>
+          <div class="source-name">Salesforce CRM</div>
+          <div class="source-desc">REST API sync</div>
+          <span class="chip chip-green" style="font-size:10px">Connected</span>
+        </div>
+        <div class="source-card">
+          <div class="source-icon">🏗️</div>
+          <div class="source-name">SAP ERP</div>
+          <div class="source-desc">IDoc / RFC</div>
+          <span class="chip chip-green" style="font-size:10px">Connected</span>
+        </div>
+        <div class="source-card">
+          <div class="source-icon">📊</div>
+          <div class="source-name">CSV / Excel</div>
+          <div class="source-desc">File upload</div>
+          <span class="chip chip-cyan" style="font-size:10px">Always on</span>
+        </div>
+        <div class="source-card">
+          <div class="source-icon">⚡</div>
+          <div class="source-name">Kafka Stream</div>
+          <div class="source-desc">Real-time events</div>
+          <span class="chip chip-amber" style="font-size:10px">Config needed</span>
+        </div>
+        <div class="source-card">
+          <div class="source-icon">🌐</div>
+          <div class="source-name">REST API</div>
+          <div class="source-desc">Webhook / push</div>
+          <span class="chip chip-cyan" style="font-size:10px">Always on</span>
+        </div>
+        <div class="source-card">
+          <div class="source-icon">🗄️</div>
+          <div class="source-name">Database</div>
+          <div class="source-desc">JDBC / direct</div>
+          <span class="chip chip-amber" style="font-size:10px">Config needed</span>
+        </div>
+        <div class="source-card">
+          <div class="source-icon">📮</div>
+          <div class="source-name">HubSpot</div>
+          <div class="source-desc">Marketing data</div>
+          <span class="chip chip-coral" style="font-size:10px">Not connected</span>
+        </div>
+        <div class="source-card" style="border-style:dashed; opacity:0.5">
+          <div class="source-icon">➕</div>
+          <div class="source-name" style="color:var(--text-dimmer)">Add Source</div>
+          <div class="source-desc">Custom connector</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 5. ENTITY MANAGEMENT ── -->
+  <div class="section" id="entities">
+    <div class="section-label">05 · Entity Management</div>
+    <div class="section-title">Create &amp; Ingest Entities</div>
+    <div class="section-sub">Two distinct flows: manual entry for one-off records, ingestion for batch or streaming data from connected sources.</div>
+
+    <div class="grid-2" style="gap:24px; margin-bottom:40px">
+      <!-- Manual Create -->
+      <div>
+        <div style="font-size:16px; font-weight:700; margin-bottom:16px">✨ Manual Entity Creation</div>
+        <div class="screen-mockup card-glow-violet">
+          <div class="screen-header">
+            <div class="screen-title">New Entity</div>
+            <div style="display:flex; gap:8px">
+              <span class="chip chip-violet">Customer</span>
+              <span style="font-size:12px; color:var(--text-dimmer); display:flex; align-items:center">ID: CUST-2026-00848</span>
+            </div>
+          </div>
+          <div class="screen-body">
+            <div style="font-size:11px; font-weight:700; color:var(--text-dimmer); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:12px">Entity Type</div>
+            <div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap">
+              <span class="chip chip-violet">🏢 Customer</span>
+              <span class="chip" style="background:var(--glass); border:1px solid var(--glass-border); color:var(--text-dim)">📦 Product</span>
+              <span class="chip" style="background:var(--glass); border:1px solid var(--glass-border); color:var(--text-dim)">📍 Location</span>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>Full Name *</label>
+                <div class="form-input focus">Acme Suppliers Inc.</div>
+              </div>
+              <div class="form-field">
+                <label>Primary Email *</label>
+                <div class="form-input">contact@acme-sup.com</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>Phone</label>
+                <div class="form-input">+1 (555) 000-1234</div>
+              </div>
+              <div class="form-field">
+                <label>Industry Segment</label>
+                <div class="form-select">Manufacturing ▾</div>
+              </div>
+            </div>
+            <div class="form-field" style="margin-bottom:16px">
+              <label>Annual Revenue (Custom)</label>
+              <div class="form-input">$24,000,000</div>
+            </div>
+            <div style="padding-top:12px; border-top:1px solid var(--glass-border); display:flex; gap:8px; justify-content:flex-end">
+              <button class="btn btn-ghost">Preview</button>
+              <button class="btn btn-primary">💾 Save Entity</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ingest -->
+      <div>
+        <div style="font-size:16px; font-weight:700; margin-bottom:16px">📥 Data Ingestion</div>
+        <div class="screen-mockup card-glow-cyan">
+          <div class="screen-header">
+            <div class="screen-title">Ingest from Source</div>
+          </div>
+          <div class="screen-body">
+            <!-- Step 1: Pick source -->
+            <div style="font-size:12px; font-weight:700; color:var(--cyan); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:12px">1 · Choose Source</div>
+            <div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap">
+              <span class="chip chip-cyan">📊 CSV Upload</span>
+              <span class="chip" style="background:var(--glass); border:1px solid var(--glass-border); color:var(--text-dim)">☁️ Salesforce</span>
+              <span class="chip" style="background:var(--glass); border:1px solid var(--glass-border); color:var(--text-dim)">⚡ Kafka</span>
+              <span class="chip" style="background:var(--glass); border:1px solid var(--glass-border); color:var(--text-dim)">🌐 REST API</span>
+            </div>
+            <!-- Step 2: Upload / config -->
+            <div style="font-size:12px; font-weight:700; color:var(--cyan); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:12px">2 · Upload File</div>
+            <div style="background:rgba(0,217,255,0.04); border:2px dashed rgba(0,217,255,0.25); border-radius:var(--radius-sm); padding:24px; text-align:center; margin-bottom:20px">
+              <div style="font-size:24px; margin-bottom:8px">📁</div>
+              <div style="font-size:13px; font-weight:600">Drop CSV here or click to browse</div>
+              <div style="font-size:11px; color:var(--text-dimmer)">customers_2026_q2.csv — 2,341 rows detected</div>
+            </div>
+            <!-- Step 3: Preview mapping -->
+            <div style="font-size:12px; font-weight:700; color:var(--cyan); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:12px">3 · Field Mapping Preview</div>
+            <table class="table-mock" style="font-size:12px; margin-bottom:16px">
+              <thead><tr><th>CSV Column</th><th>→ MDM Attribute</th><th>Sample</th></tr></thead>
+              <tbody>
+                <tr><td><code>customer_name</code></td><td>Full Name</td><td>Acme Corp</td></tr>
+                <tr><td><code>email</code></td><td>Primary Email</td><td>a@acme.com</td></tr>
+                <tr><td><code>revenue</code></td><td>Annual Revenue</td><td>$1.2M</td></tr>
+                <tr><td><code>segment</code></td><td style="color:var(--amber)">⚠ Unmapped</td><td>Retail</td></tr>
+              </tbody>
+            </table>
+            <div style="display:flex; gap:8px; justify-content:flex-end">
+              <button class="btn btn-ghost">← Back</button>
+              <button class="btn btn-primary">🚀 Start Ingestion</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 6. COLOR & DESIGN SYSTEM ── -->
+  <div class="section" id="design">
+    <div class="section-label">06 · Design System</div>
+    <div class="section-title">Colors, Typography &amp; Vibe</div>
+    <div class="section-sub">Dark base with electric accents. Glassmorphism surfaces. Bold type. Gen Z energy without being chaotic.</div>
+
+    <div class="grid-2" style="gap:32px">
+      <!-- Palette -->
+      <div class="card">
+        <div style="font-size:14px; font-weight:700; margin-bottom:20px">Color Palette</div>
+        <div class="palette">
+          <div class="swatch">
+            <div class="swatch-color" style="background:#08080F; border:1px solid var(--glass-border)"></div>
+            <div class="swatch-label">#08080F<br>bg-deep</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#14142A; border:1px solid var(--glass-border)"></div>
+            <div class="swatch-label">#14142A<br>bg-surface</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#7C3AED"></div>
+            <div class="swatch-label">#7C3AED<br>violet</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#A855F7"></div>
+            <div class="swatch-label">#A855F7<br>violet-lite</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#00D9FF"></div>
+            <div class="swatch-label">#00D9FF<br>cyan</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#FF3366"></div>
+            <div class="swatch-label">#FF3366<br>coral</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#10F090"></div>
+            <div class="swatch-label">#10F090<br>green</div>
+          </div>
+          <div class="swatch">
+            <div class="swatch-color" style="background:#FFB800"></div>
+            <div class="swatch-label">#FFB800<br>amber</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typography -->
+      <div class="card">
+        <div style="font-size:14px; font-weight:700; margin-bottom:20px">Typography</div>
+        <div class="type-showcase">
+          <div class="type-row">
+            <div class="type-meta">H1 · 48px 900</div>
+            <div style="font-size:32px; font-weight:900; letter-spacing:-0.03em; line-height:1">Dashboard</div>
+          </div>
+          <div class="type-row">
+            <div class="type-meta">H2 · 24px 800</div>
+            <div style="font-size:22px; font-weight:800; letter-spacing:-0.02em">Entity Management</div>
+          </div>
+          <div class="type-row">
+            <div class="type-meta">H3 · 16px 700</div>
+            <div style="font-size:16px; font-weight:700">Customer Records</div>
+          </div>
+          <div class="type-row">
+            <div class="type-meta">Body · 14px 400</div>
+            <div style="font-size:14px; color:var(--text-dim)">View all golden records and their match confidence scores</div>
+          </div>
+          <div class="type-row">
+            <div class="type-meta">Label · 11px 700</div>
+            <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-dimmer)">Entity Type</div>
+          </div>
+          <div class="type-row">
+            <div class="type-meta">Code · mono</div>
+            <div style="font-family:monospace; font-size:13px; color:var(--cyan)">CUST-2026-00847</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UI Principles -->
+    <div class="grid-4" style="margin-top:24px">
+      <div class="card">
+        <div style="font-size:24px; margin-bottom:8px">🌑</div>
+        <div style="font-weight:700; margin-bottom:4px">Dark first</div>
+        <div style="font-size:12px; color:var(--text-dim)">Deep dark background reduces eye strain on data-heavy screens. Users spend hours here.</div>
+      </div>
+      <div class="card">
+        <div style="font-size:24px; margin-bottom:8px">⚡</div>
+        <div style="font-weight:700; margin-bottom:4px">Electric accents</div>
+        <div style="font-size:12px; color:var(--text-dim)">Violet for actions, cyan for data, coral for alerts, green for success. Consistent color language.</div>
+      </div>
+      <div class="card">
+        <div style="font-size:24px; margin-bottom:8px">🧊</div>
+        <div style="font-weight:700; margin-bottom:4px">Glass cards</div>
+        <div style="font-size:12px; color:var(--text-dim)">Glassmorphism surfaces with subtle blur. Depth without heavy shadows.</div>
+      </div>
+      <div class="card">
+        <div style="font-size:24px; margin-bottom:8px">💬</div>
+        <div style="font-weight:700; margin-bottom:4px">Emoji as icons</div>
+        <div style="font-size:12px; color:var(--text-dim)">Emoji for navigation and status chips — instantly recognizable, zero icon fatigue.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 7. IMPLEMENTATION PLAN ── -->
+  <div class="section" id="plan">
+    <div class="section-label">07 · Implementation Plan</div>
+    <div class="section-title">What Needs to Be Built</div>
+    <div class="section-sub">Backend API changes + new Flutter screens. Ordered by dependency.</div>
+
+    <div class="grid-2" style="gap:20px">
+      <!-- Backend -->
+      <div class="card card-glow-violet">
+        <div style="font-size:15px; font-weight:700; margin-bottom:16px">🦀 Rust Backend Changes</div>
+        <div style="display:flex; flex-direction:column; gap:10px">
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span style="font-size:16px; flex-shrink:0">1️⃣</span>
+            <div>
+              <div style="font-weight:600; font-size:13px">tenant-service: tenant CRUD + admin bootstrap</div>
+              <div style="font-size:12px; color:var(--text-dim)">POST /tenants, POST /tenants/{id}/admin-user</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span style="font-size:16px; flex-shrink:0">2️⃣</span>
+            <div>
+              <div style="font-weight:600; font-size:13px">mdm-core: entity_type_configs table + sequences</div>
+              <div style="font-size:12px; color:var(--text-dim)">GET/POST /entity-types, number seq generation</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span style="font-size:16px; flex-shrink:0">3️⃣</span>
+            <div>
+              <div style="font-weight:600; font-size:13px">mdm-core: attribute_schemas table per entity type</div>
+              <div style="font-size:12px; color:var(--text-dim)">GET/POST/PATCH /entity-types/{id}/attributes</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span style="font-size:16px; flex-shrink:0">4️⃣</span>
+            <div>
+              <div style="font-weight:600; font-size:13px">tenant-service: user invite + role assignment</div>
+              <div style="font-size:12px; color:var(--text-dim)">POST /users/invite, PUT /users/{id}/role</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span style="font-size:16px; flex-shrink:0">5️⃣</span>
+            <div>
+              <div style="font-weight:600; font-size:13px">ingest-service: source system registry</div>
+              <div style="font-size:12px; color:var(--text-dim)">GET/POST /source-systems, connection test</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Flutter -->
+      <div class="card card-glow-cyan">
+        <div style="font-size:15px; font-weight:700; margin-bottom:16px">🦋 Flutter UI Screens</div>
+        <div style="display:flex; flex-direction:column; gap:10px">
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span style="font-size:16px; flex-shrink:0">A</span>
+            <div>
+              <div style="font-weight:600; font-size:13px">Redesigned shell: sidebar nav + theme</div>
+              <div style="font-size:12px; color:var(--text-dim)">Dark theme, role-aware nav groups, badges</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span style="font-size:16px; flex-shrink:0">B</span>
+            <div>
+              <div style="font-weight:600; font-size:13px">Super Admin: Tenant list + create flow</div>
+              <div style="font-size:12px; color:var(--text-dim)">2-step wizard: tenant → admin user</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span style="font-size:16px; flex-shrink:0">C</span>
+            <div>
+              <div style="font-weight:600; font-size:13px">Org Setup: Users &amp; Roles page</div>
+              <div style="font-size:12px; color:var(--text-dim)">Invite flow, permission matrix display</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span style="font-size:16px; flex-shrink:0">D</span>
+            <div>
+              <div style="font-weight:600; font-size:13px">Org Setup: Entity Types &amp; Sequences page</div>
+              <div style="font-size:12px; color:var(--text-dim)">Config cards with format token helper</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span style="font-size:16px; flex-shrink:0">E</span>
+            <div>
+              <div style="font-weight:600; font-size:13px">Org Setup: Attribute Schema builder</div>
+              <div style="font-size:12px; color:var(--text-dim)">Drag-to-reorder, custom attr creation</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span style="font-size:16px; flex-shrink:0">F</span>
+            <div>
+              <div style="font-weight:600; font-size:13px">Entity Create + Ingest pages</div>
+              <div style="font-size:12px; color:var(--text-dim)">Dynamic form from schema + CSV wizard</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:60px"></div>
+</div>
+
+</body>
+</html>

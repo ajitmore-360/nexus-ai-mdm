@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/validation/validators.dart';
 
 // ─────────────────────────────────────────────
 // Models
@@ -1094,8 +1095,7 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                       style: AppTextStyles.inputText,
                       decoration: _inputDeco('Source Name',
                           hint: 'e.g. Salesforce CRM'),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Required' : null,
+                      validator: Validators.minLength(2, label: 'Source name'),
                     ),
                     const SizedBox(height: 14),
                     DropdownButtonFormField<String>(
@@ -1115,8 +1115,7 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                       style: AppTextStyles.inputText,
                       decoration: _inputDeco('Endpoint URL',
                           hint: 'https://...'),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Required' : null,
+                      validator: Validators.url,
                     ),
                     const SizedBox(height: 14),
                     Row(

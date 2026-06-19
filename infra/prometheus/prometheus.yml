@@ -5,6 +5,16 @@ global:
     environment: local
     platform:    nexus-ai-mdm
 
+# ── Alert rules ───────────────────────────────────────────────────────────────
+rule_files:
+  - "alerts.yml"
+
+# ── Alertmanager ─────────────────────────────────────────────────────────────
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
 scrape_configs:
   # ── Nexus Services ──────────────────────────────────────────────────────────
   - job_name: api-gateway
@@ -55,11 +65,35 @@ scrape_configs:
         labels:  { service: distribution-service }
     metrics_path: /metrics
 
+  - job_name: kafka-event-service
+    static_configs:
+      - targets: ['kafka-event-service:8087']
+        labels:  { service: kafka-event-service }
+    metrics_path: /metrics
+
+  - job_name: enrichment-service
+    static_configs:
+      - targets: ['enrichment-service:8088']
+        labels:  { service: enrichment-service }
+    metrics_path: /metrics
+
+  - job_name: tenant-service
+    static_configs:
+      - targets: ['tenant-service:8090']
+        labels:  { service: tenant-service }
+    metrics_path: /metrics
+
   # ── Kafka ────────────────────────────────────────────────────────────────────
   - job_name: kafka
     static_configs:
       - targets: ['kafka:9101']
         labels:  { service: kafka }
+
+  # ── PostgreSQL (postgres_exporter) ───────────────────────────────────────────
+  - job_name: postgres
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:  { service: postgres }
 
   # ── Prometheus self-monitoring ───────────────────────────────────────────────
   - job_name: prometheus

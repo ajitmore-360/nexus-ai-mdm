@@ -61,8 +61,8 @@ pub async fn login(
             }
         };
 
-        let tenant_id = req.tenant_id
-            .unwrap_or_else(|| Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
+        const SYSTEM_TENANT: Uuid = Uuid::from_bytes([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]);
+        let tenant_id = req.tenant_id.unwrap_or(SYSTEM_TENANT);
 
         let pair = match issue_tokens(&cfg, Uuid::new_v4(), tenant_id, &req.email, Role::Admin) {
             Ok(p) => p,

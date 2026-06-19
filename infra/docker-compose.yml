@@ -50,8 +50,9 @@ x-auth-env: &auth-env
   API_BEARER_TOKEN: ${API_BEARER_TOKEN:-nexus-local-dev-token}
 
 x-obs-env: &obs-env
-  RUST_LOG:      ${RUST_LOG:-info}
-  JSON_LOGS:     ${JSON_LOGS:-false}
+  RUST_LOG:                       ${RUST_LOG:-info}
+  JSON_LOGS:                      ${JSON_LOGS:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT:    ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4318}
 
 x-kafka-env: &kafka-env
   KAFKA_BROKERS:   kafka:29092
@@ -616,6 +617,29 @@ services:
   # OBSERVABILITY
   # ═══════════════════════════════════════════════════════════════════════════
 
+  # ── Grafana Tempo — distributed trace backend ────────────────────────────────
+  tempo:
+    image: grafana/tempo:latest
+    container_name: nexus-tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo UI / query API
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3200/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 512M }
+
   prometheus:
     image: prom/prometheus:latest
     container_name: nexus-prometheus
@@ -628,6 +652,7 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=30d'
       - '--web.enable-lifecycle'
+      - '--web.enable-remote-write-receiver'
       - '--log.level=warn'
     ports:
       - "9090:9090"
@@ -642,6 +667,53 @@ services:
     deploy:
       resources:
         limits: { cpus: "0.5", memory: 512M }
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: nexus-alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--log.level=warn'
+    environment:
+      ALERTMANAGER_WEBHOOK_URL: ${ALERTMANAGER_WEBHOOK_URL:-http://localhost:9999/alert}
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"   # localhost-only
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:9093/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128M }
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: nexus-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-nexus_dev_2024}@postgres:5432/nexus_mdm?sslmode=disable"
+      PG_EXPORTER_EXTEND_QUERY_PATH: /etc/postgres_exporter/queries.yml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:9187/metrics | head -1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 64M }
 
   grafana:
     image: grafana/grafana-oss:latest
@@ -676,12 +748,14 @@ services:
 # ═══════════════════════════════════════════════════════════════════════════
 
 volumes:
-  postgres_data:    { driver: local }
-  redis_data:       { driver: local }
-  pgadmin_data:     { driver: local }
-  zookeeper_data:   { driver: local }
-  zookeeper_log:    { driver: local }
-  kafka_data:       { driver: local }
-  ollama_models:    { driver: local }
-  prometheus_data:  { driver: local }
-  grafana_data:     { driver: local }
+  postgres_data:      { driver: local }
+  redis_data:         { driver: local }
+  pgadmin_data:       { driver: local }
+  zookeeper_data:     { driver: local }
+  zookeeper_log:      { driver: local }
+  kafka_data:         { driver: local }
+  ollama_models:      { driver: local }
+  prometheus_data:    { driver: local }
+  alertmanager_data:  { driver: local }
+  grafana_data:       { driver: local }
+  tempo_data:         { driver: local }

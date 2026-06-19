@@ -3,6 +3,10 @@ name = "policy-service"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "policy_service"
+path = "src/lib.rs"
+
 [[bin]]
 name = "policy-service"
 path = "src/main.rs"
@@ -30,7 +34,8 @@ chrono.workspace = true
 
 # Logging
 tracing.workspace = true
-tracing-subscriber.workspace = true
+tracing-subscriber.workspace  = true
+nexus-telemetry               = { workspace = true }
 
 # Async traits
 async-trait.workspace = true
@@ -52,3 +57,7 @@ futures.workspace = true
 contracts = { path = "../../shared/contracts" }
 database = { workspace = true }
 nexus-redis = { workspace = true }
+
+[dev-dependencies]
+tokio    = { workspace = true, features = ["full"] }
+dotenvy  = { workspace = true }

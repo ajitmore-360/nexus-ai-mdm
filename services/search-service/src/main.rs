@@ -25,6 +25,11 @@ async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "healthy", "service": "search-service" }))
 }
 
+async fn metrics_handler() -> String {
+    nexus_telemetry::metrics::render_metrics()
+        .unwrap_or_else(|e| format!("# metrics error: {}", e))
+}
+
 /// GET /search?tenant_id=&query=&entity_type=&limit=&offset=
 async fn search(
     State(state): State<AppState>,
@@ -57,12 +62,8 @@ async fn autocomplete(
 async fn main() {
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("search_service=info".parse().unwrap()),
-        )
-        .init();
+    nexus_telemetry::tracing_init::init_tracing("search-service");
+    nexus_telemetry::metrics::init_metrics("search-service");
 
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     tracing::info!(app_env = %app_env, "Search Service environment loaded");
@@ -107,6 +108,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/health",             get(health))
+        .route("/metrics",            get(metrics_handler))
         .route("/search",             get(search))
         .route("/search/autocomplete", get(autocomplete))
         .layer(TraceLayer::new_for_http())

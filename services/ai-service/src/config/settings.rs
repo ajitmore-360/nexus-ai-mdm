@@ -25,11 +25,11 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn from_env() -> Self {
-        Self {
+    pub fn from_env() -> anyhow::Result<Self> {
+        Ok(Self {
             port: env_u16("AI_SERVICE_PORT", 8082),
             database_url: std::env::var("DATABASE_URL")
-                .expect("DATABASE_URL must be set"),
+                .map_err(|_| anyhow::anyhow!("DATABASE_URL is required but not set"))?,
             redis_url: std::env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string()),
             redis_key_prefix: std::env::var("REDIS_KEY_PREFIX")
@@ -49,7 +49,7 @@ impl Settings {
             rag_min_score: env_f32("RAG_MIN_SCORE", 0.70),
 
             semantic_match_timeout_secs: env_u64("SEMANTIC_MATCH_TIMEOUT_SECS", 30),
-        }
+        })
     }
 
     pub fn llm_timeout(&self) -> Duration {

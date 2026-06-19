@@ -1,0 +1,222 @@
+# ============================================================================
+# Nexus AI MDM — Prometheus Alert Rules
+# ============================================================================
+# Evaluated every 15 s (global evaluation_interval in prometheus.yml).
+# All durations use [for:] to prevent flapping on transient spikes.
+# ============================================================================
+
+groups:
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Service Availability
+  # ──────────────────────────────────────────────────────────────────────────
+  - name: nexus.availability
+    rules:
+
+      - alert: NexusServiceDown
+        expr: up{job=~"api-gateway|mdm-core|ai-service|ingest-service|policy-service|search-service|notification-service|distribution-service|kafka-event-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Nexus service {{ $labels.service }} is down"
+          description: >
+            {{ $labels.service }} has been unreachable for more than 1 minute.
+            Pod may have crashed or failed its health check.
+            Check: kubectl logs -n nexus -l app={{ $labels.service }} --tail=100
+
+      - alert: NexusServiceUnhealthy
+        expr: |
+          sum by (service) (
+            rate(http_requests_total{job=~"api-gateway|mdm-core", status=~"5.."}[5m])
+          )
+          /
+          sum by (service) (
+            rate(http_requests_total{job=~"api-gateway|mdm-core"}[5m])
+          ) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.service }}"
+          description: >
+            {{ $labels.service }} is returning >10% HTTP 5xx responses over the last 5 minutes.
+            Current rate: {{ $value | humanizePercentage }}.
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Latency
+  # ──────────────────────────────────────────────────────────────────────────
+  - name: nexus.latency
+    rules:
+
+      - alert: NexusHighApiLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, service) (
+              rate(http_request_duration_seconds_bucket{job=~"api-gateway|mdm-core"}[5m])
+            )
+          ) > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High p99 API latency on {{ $labels.service }}"
+          description: >
+            p99 request latency for {{ $labels.service }} exceeds 2 s.
+            Current p99: {{ $value | humanizeDuration }}.
+            Investigate slow queries, match pipeline contention, or AI inference timeouts.
+
+      - alert: NexusMatchLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(match_duration_ms_bucket[5m]))
+          ) > 5000
+        for: 10m
+        labels:
+          severity: warning
+          team: data
+        annotations:
+          summary: "Matching pipeline p95 latency exceeds 5 s"
+          description: >
+            The entity matching pipeline p95 latency is {{ $value | humanizeDuration }}.
+            Check blocking/canopy, vector index performance, and LLM inference throughput.
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Error Rate
+  # ──────────────────────────────────────────────────────────────────────────
+  - name: nexus.errors
+    rules:
+
+      - alert: NexusHighGatewayErrorRate
+        expr: |
+          rate(http_requests_total{job="api-gateway", status=~"5.."}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "API Gateway error rate exceeds 0.5 req/s"
+          description: >
+            The API Gateway is returning 5xx responses at {{ $value | humanize }} req/s.
+            This indicates a systemic backend failure.
+
+      - alert: NexusKafkaPublishErrors
+        expr: |
+          rate(kafka_events_published_total{status="error"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Kafka event publish error rate is elevated"
+          description: >
+            The outbox worker is failing to publish events at {{ $value | humanize }} errors/s.
+            Check Kafka broker connectivity and outbox table for stalled messages.
+
+      - alert: NexusAiRequestErrors
+        expr: |
+          rate(ai_requests_total{status="error"}[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          team: ai
+        annotations:
+          summary: "AI service request error rate elevated"
+          description: >
+            AI service is returning errors at {{ $value | humanize }} req/s.
+            Check Ollama connectivity and LLM model availability.
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Database
+  # ──────────────────────────────────────────────────────────────────────────
+  - name: nexus.database
+    rules:
+
+      - alert: NexusDbConnectionPoolSaturation
+        expr: |
+          pg_stat_database_numbackends{datname="nexus_mdm"}
+          /
+          pg_settings_max_connections > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "PostgreSQL connection pool >80% saturated"
+          description: >
+            Active connections are at {{ $value | humanizePercentage }} of max_connections.
+            Risk of connection starvation. Scale the pool or add PgBouncer.
+
+      - alert: NexusDbReplicationLag
+        expr: pg_replication_lag > 30
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "PostgreSQL replication lag exceeds 30 s"
+          description: >
+            Replication lag is {{ $value | humanizeDuration }}.
+            Failover to replica may result in data loss.
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Pod / Process
+  # ──────────────────────────────────────────────────────────────────────────
+  - name: nexus.pods
+    rules:
+
+      - alert: NexusPodCrashLooping
+        expr: |
+          increase(kube_pod_container_status_restarts_total{
+            namespace="nexus",
+            container=~"api-gateway|mdm-core|ai-service|ingest-service|policy-service|search-service|notification-service|distribution-service|kafka-event-service"
+          }[15m]) > 3
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash-looping"
+          description: >
+            {{ $labels.container }} in pod {{ $labels.pod }} has restarted
+            {{ $value }} times in the last 15 minutes.
+            Check: kubectl describe pod {{ $labels.pod }} -n nexus
+
+      - alert: NexusPodOOMKilled
+        expr: |
+          kube_pod_container_status_last_terminated_reason{
+            namespace="nexus",
+            reason="OOMKilled"
+          } == 1
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Pod {{ $labels.pod }} was OOMKilled"
+          description: >
+            Container {{ $labels.container }} in {{ $labels.pod }} was killed by the OOM killer.
+            Increase memory limits or investigate memory leak.
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Business Metrics
+  # ──────────────────────────────────────────────────────────────────────────
+  - name: nexus.business
+    rules:
+
+      - alert: NexusMatchQueueBacklog
+        expr: |
+          sum(entity_operations_total{operation="match_queued"}) -
+          sum(entity_operations_total{operation="match_resolved"}) > 5000
+        for: 15m
+        labels:
+          severity: warning
+          team: data
+        annotations:
+          summary: "Match queue backlog exceeds 5,000 items"
+          description: >
+            The unresolved match queue has {{ $value }} items.
+            This may indicate the matching workers are falling behind ingestion rate.

@@ -9,16 +9,17 @@ pub struct NotificationSettings {
 }
 
 impl NotificationSettings {
-    pub fn from_env() -> Self {
-        Self {
+    pub fn from_env() -> anyhow::Result<Self> {
+        Ok(Self {
             port:             env_u16("NOTIFICATION_PORT", 8086),
-            database_url:     std::env::var("DATABASE_URL").expect("DATABASE_URL required"),
+            database_url:     std::env::var("DATABASE_URL")
+                                  .map_err(|_| anyhow::anyhow!("DATABASE_URL is required but not set"))?,
             redis_url:        std::env::var("REDIS_URL")
                                   .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string()),
             redis_key_prefix: std::env::var("REDIS_KEY_PREFIX")
                                   .unwrap_or_else(|_| "nexus".to_string()),
             heartbeat_secs:   env_u64("NOTIFICATION_HEARTBEAT_SECS", 30),
-        }
+        })
     }
 }
 

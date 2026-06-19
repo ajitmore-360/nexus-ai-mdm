@@ -1,0 +1,53 @@
+# ============================================================================
+# Alertmanager configuration for Nexus AI MDM
+#
+# Routes all alerts to a webhook receiver by default.
+# Set ALERTMANAGER_WEBHOOK_URL in infra/.env to receive alerts (e.g. Slack,
+# PagerDuty, or a generic HTTP endpoint).
+#
+# Production: override this file with real receivers (PagerDuty, OpsGenie,
+# email) via Helm values or Kubernetes ConfigMap.
+# ============================================================================
+
+global:
+  # How long to wait before re-sending a resolved alert
+  resolve_timeout: 5m
+
+  # SMTP settings (override in .env if using email receivers)
+  # smtp_smarthost: 'localhost:587'
+  # smtp_from: 'alertmanager@nexus.ai'
+
+# Grouping and inhibition
+route:
+  # Top-level defaults
+  group_by:       ['alertname', 'service']
+  group_wait:     30s     # wait before sending first notification in a group
+  group_interval: 5m      # wait before sending updated notification for a group
+  repeat_interval: 1h     # wait before re-sending an already-sent notification
+
+  receiver: default
+
+  # Severity-based routing: critical alerts re-notify every 15 minutes
+  routes:
+    - match:
+        severity: critical
+      receiver: default
+      repeat_interval: 15m
+      continue: false
+
+receivers:
+  - name: default
+    webhook_configs:
+      # Set ALERTMANAGER_WEBHOOK_URL in infra/.env to receive alerts
+      - url: '${ALERTMANAGER_WEBHOOK_URL:-http://localhost:9999/alert}'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+
+# Inhibition rules: suppress lower-severity alerts when high-severity fires
+inhibit_rules:
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ['alertname', 'service']

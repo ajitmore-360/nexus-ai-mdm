@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/models/api_responses.dart';
+import '../../data/match_repository.dart';
 
 // ──────────────────────────────────────────────
 // Demo Data Models
@@ -59,19 +62,65 @@ class _MatchReviewPageState extends State<MatchReviewPage>
   bool _isSubmitting = false;
   bool _isLoadingAi = false;
 
-  static const _source = _ReviewRecord(
-    entityName: 'Michael A. Rodriguez',
-    entityId: 'ENT-003',
-    sourceSystem: 'Salesforce CRM',
-    type: 'Customer',
+  ReviewQueueItem? _reviewItem;
+
+  // These defaults show until real data loads
+  _ReviewRecord _source = const _ReviewRecord(
+    entityName: 'Loading…',
+    entityId: '—',
+    sourceSystem: '—',
+    type: '—',
   );
 
-  static const _candidate = _ReviewRecord(
-    entityName: 'M. Rodriguez Jr.',
-    entityId: 'ENT-007',
-    sourceSystem: 'SAP ERP',
-    type: 'Customer',
+  _ReviewRecord _candidate = const _ReviewRecord(
+    entityName: 'Loading…',
+    entityId: '—',
+    sourceSystem: '—',
+    type: '—',
   );
+
+  double _overallScore = 0.0;
+  double _aiConfidence = 0.0;
+  String _aiExplanation = 'Loading AI analysis…';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReviewItem();
+  }
+
+  Future<void> _loadReviewItem() async {
+    final repo = GetIt.instance<MatchRepository>();
+    final result = await repo.getReviewQueue();
+    if (!mounted) return;
+    if (result case Success(:final data)) {
+      final item = data.cast<ReviewQueueItem?>().firstWhere(
+            (i) => i!.requestId == widget.matchId || i.candidateId == widget.matchId,
+            orElse: () => null,
+          );
+      if (item != null) {
+        setState(() {
+          _reviewItem = item;
+          _source = _ReviewRecord(
+            entityName: item.sourceEntityId,
+            entityId: item.sourceEntityId,
+            sourceSystem: 'Source System',
+            type: 'Entity',
+          );
+          _candidate = _ReviewRecord(
+            entityName: item.candidateEntityId,
+            entityId: item.candidateEntityId,
+            sourceSystem: 'Candidate System',
+            type: 'Entity',
+          );
+          _overallScore = item.score;
+          _aiConfidence = item.aiConfidence ?? 0.0;
+          _aiExplanation = item.aiExplanation ??
+              'AI analysis based on field-level similarity scores.';
+        });
+      }
+    }
+  }
 
   static const _fields = [
     _FieldComparison(
@@ -195,7 +244,7 @@ class _MatchReviewPageState extends State<MatchReviewPage>
           ),
           const Spacer(),
           // Overall score circle
-          const _OverallScoreIndicator(score: 0.93),
+          _OverallScoreIndicator(score: _overallScore),
           const SizedBox(width: 16),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -255,7 +304,9 @@ class _MatchReviewPageState extends State<MatchReviewPage>
                 Row(
                   children: [
                     Text(
-                      'AI Confidence: 97.8%',
+                      _aiConfidence > 0
+                          ? 'AI Confidence: ${(_aiConfidence * 100).toStringAsFixed(1)}%'
+                          : 'AI Analysis',
                       style: AppTextStyles.titleSmall.copyWith(color: AppColors.aiPurple),
                     ),
                     const SizedBox(width: 8),
@@ -274,7 +325,7 @@ class _MatchReviewPageState extends State<MatchReviewPage>
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'High confidence match based on phone number exact match and name phonetic similarity. Tax ID is identical confirming this is the same individual. Revenue discrepancy may reflect different reporting periods.',
+                  _aiExplanation,
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.secondaryText,
                     height: 1.5,
@@ -337,11 +388,11 @@ class _MatchReviewPageState extends State<MatchReviewPage>
         const SizedBox(height: 16),
 
         // Entity identity row
-        const Row(
+        Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: _EntityCard(record: _source)),
-            SizedBox(width: 80),
+            const SizedBox(width: 80),
             Expanded(child: _EntityCard(record: _candidate)),
           ],
         ),
@@ -575,33 +626,59 @@ class _MatchReviewPageState extends State<MatchReviewPage>
 
   void _handleApprove() async {
     setState(() => _isSubmitting = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
+    final repo = GetIt.instance<MatchRepository>();
+    final notes = _notesController.text.trim();
+    ApiResult<bool> result;
+    if (_reviewItem != null) {
+      result = await repo.approveReview(
+        _reviewItem!.requestId,
+        _reviewItem!.candidateId,
+        notes: notes.isEmpty ? null : notes,
+      );
+    } else {
+      result = await repo.approveMatch(widget.matchId);
+    }
     if (!mounted) return;
     setState(() => _isSubmitting = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 18),
-            const SizedBox(width: 10),
-            Text('Merge approved. Golden record created.', style: AppTextStyles.bodyMedium),
-          ],
-        ),
-        backgroundColor: AppColors.cardSurface,
+    final messenger = ScaffoldMessenger.of(context);
+    if (result case Failure(:final exception)) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('Error: ${exception.message}', style: AppTextStyles.bodyMedium),
+        backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
-      ),
-    );
+      ));
+      return;
+    }
+    messenger.showSnackBar(SnackBar(
+      content: Row(children: [
+        const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 18),
+        const SizedBox(width: 10),
+        Text('Merge approved. Golden record created.', style: AppTextStyles.bodyMedium),
+      ]),
+      backgroundColor: AppColors.cardSurface,
+      behavior: SnackBarBehavior.floating,
+    ));
     context.pop();
   }
 
-  void _handleReject() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Marked as not a duplicate.', style: AppTextStyles.bodyMedium),
-        backgroundColor: AppColors.cardSurface,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  void _handleReject() async {
+    final repo = GetIt.instance<MatchRepository>();
+    final notes = _notesController.text.trim();
+    if (_reviewItem != null) {
+      await repo.rejectReview(
+        _reviewItem!.requestId,
+        _reviewItem!.candidateId,
+        notes: notes.isEmpty ? null : notes,
+      );
+    } else {
+      await repo.rejectMatch(widget.matchId);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Marked as not a duplicate.', style: AppTextStyles.bodyMedium),
+      backgroundColor: AppColors.cardSurface,
+      behavior: SnackBarBehavior.floating,
+    ));
     context.pop();
   }
 

@@ -83,6 +83,12 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.auth.existingSecret }}
                   key: {{ .Values.auth.jwtSecretKey }}
+            - name: FIELD_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.fieldEncryption.existingSecret }}
+                  key: {{ .Values.fieldEncryption.encryptionKeyKey }}
+                  optional: true
           livenessProbe:
             httpGet:
               path: {{ .Values.distributionService.probes.liveness.path }}

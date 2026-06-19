@@ -8,8 +8,10 @@ mod state;
 use std::{net::SocketAddr, sync::Arc};
 
 use axum::{routing::{get, post}, Router, Json};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
+use axum::http::{HeaderName, HeaderValue, Method};
+use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 
 use config::settings::EnrichmentSettings;
 use consumer::EnrichmentConsumer;
@@ -27,14 +29,13 @@ use state::AppState;
 async fn main() {
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("enrichment_service=info".parse().unwrap()),
-        )
-        .init();
+    nexus_telemetry::tracing_init::init_tracing("enrichment-service");
+    nexus_telemetry::metrics::init_metrics("enrichment-service");
 
-    let settings = EnrichmentSettings::from_env();
+    let settings = EnrichmentSettings::from_env().unwrap_or_else(|e| {
+        eprintln!("[FATAL] Configuration error: {e}");
+        std::process::exit(1);
+    });
     tracing::info!("Enrichment Service starting on port {}", settings.port);
 
     // ── Build providers ─────────────────────────────────────────────────────
@@ -87,14 +88,38 @@ async fn main() {
 
     let state = AppState { orchestrator };
 
-    // ── Router ──────────────────────────────────────────────────────────────
+    // ── CORS ─────────────────────────────────────────────────────────────────
+    let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+    let allowed_origins_raw = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:3000,http://localhost:4000".to_string());
+    if matches!(app_env.as_str(), "production" | "prod" | "staging" | "stage") {
+        if allowed_origins_raw.contains("localhost") {
+            panic!(
+                "SECURITY: ALLOWED_ORIGINS contains 'localhost' in APP_ENV={}. Set to your production domain.",
+                app_env
+            );
+        }
+    }
+    let allowed_origins: Vec<HeaderValue> = allowed_origins_raw
+        .split(',')
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(allowed_origins)
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([
+            CONTENT_TYPE,
+            AUTHORIZATION,
+            HeaderName::from_static("x-tenant-id"),
+            HeaderName::from_static("x-request-id"),
+        ])
+        .allow_credentials(true);
+
+    // ── Router ──────────────────────────────────────────────────────────────
 
     let app = Router::new()
         .route("/health",              get(health))
+        .route("/metrics",             get(metrics_handler))
         .route("/enrich/:entity_id",   post(enrich_entity))
         .route("/enrich/batch",        post(enrich_batch))
         .layer(TraceLayer::new_for_http())
@@ -115,4 +140,9 @@ async fn main() {
 
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "healthy", "service": "enrichment-service" }))
+}
+
+async fn metrics_handler() -> String {
+    nexus_telemetry::metrics::render_metrics()
+        .unwrap_or_else(|e| format!("# metrics error: {}", e))
 }

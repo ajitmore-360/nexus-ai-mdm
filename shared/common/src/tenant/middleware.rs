@@ -1,8 +1,8 @@
 use axum::{
     extract::State,
-    http::Request,
+    http::{Request, StatusCode},
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
 };
 
 use sqlx::PgPool;
@@ -23,12 +23,11 @@ pub async fn tenant_context_middleware<B>(
     let tenant_id = match tenant_id {
         Some(v) => v,
         None => {
-            return Response::builder()
-                .status(400)
-                .body(axum::body::Body::from(
-                    "Missing x-tenant-id"
-                ))
-                .unwrap();
+            return (
+                StatusCode::BAD_REQUEST,
+                "Missing or invalid x-tenant-id header",
+            )
+                .into_response();
         }
     };
 

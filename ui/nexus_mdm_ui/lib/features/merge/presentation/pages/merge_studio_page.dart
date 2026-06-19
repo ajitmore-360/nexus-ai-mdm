@@ -1,6 +1,11 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
@@ -608,25 +613,72 @@ class _MergeStudioPageState extends State<MergeStudioPage> {
     ).animate().fadeIn(duration: 300.ms);
   }
 
+  /// Generates a v4-like UUID using dart:math for the merge request ID.
+  String _newId() {
+    final rng = Random.secure();
+    String hex(int n) => rng.nextInt(n).toRadixString(16).padLeft(2, '0');
+    return '${hex(256)}${hex(256)}${hex(256)}${hex(256)}'
+        '-${hex(256)}${hex(256)}'
+        '-4${hex(256).substring(1)}'
+        '-${(8 + rng.nextInt(4)).toRadixString(16)}${hex(256).substring(1)}'
+        '-${hex(256)}${hex(256)}${hex(256)}${hex(256)}${hex(256)}${hex(256)}';
+  }
+
   void _executeMerge() async {
     setState(() => _isExecuting = true);
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (!mounted) return;
-    setState(() => _isExecuting = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.stars_rounded, color: AppColors.statusGolden, size: 18),
-            const SizedBox(width: 10),
-            Text('Golden record created successfully.', style: AppTextStyles.bodyMedium),
-          ],
-        ),
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final tenantId = prefs.getString(AppConstants.storageTenantId) ??
+          '00000000-0000-0000-0000-000000000001';
+
+      final survivorshipRules = <String, dynamic>{
+        for (final a in _attributes)
+          a.key: (_selections[a.key] == _WinnerSide.source) ? 'source' : 'candidate',
+      };
+
+      final payload = <String, dynamic>{
+        'merge_request_id': _newId(),
+        'tenant_id': tenantId,
+        'merge_type': 'Party',
+        'strategy': _aiApplied ? 'AIRecommended' : 'ManualReview',
+        'status': 'Approved',
+        'primary_entity_id': widget.sourceId,
+        'candidate_entities': [
+          {
+            'entity_id': widget.candidateId,
+            'survivorship_rules': survivorshipRules,
+          }
+        ],
+      };
+
+      final client = GetIt.instance<ApiClient>();
+      await client.post<Map<String, dynamic>>(
+        AppConstants.mergePath,
+        data: payload,
+      );
+
+      if (!mounted) return;
+      setState(() => _isExecuting = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(children: [
+          const Icon(Icons.stars_rounded, color: AppColors.statusGolden, size: 18),
+          const SizedBox(width: 10),
+          Text('Golden record created successfully.', style: AppTextStyles.bodyMedium),
+        ]),
         backgroundColor: AppColors.cardSurface,
         behavior: SnackBarBehavior.floating,
-      ),
-    );
-    context.pop();
+      ));
+      context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isExecuting = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Merge failed: $e', style: AppTextStyles.bodyMedium),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
   }
 }
 

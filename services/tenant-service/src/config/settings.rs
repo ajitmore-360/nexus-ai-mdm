@@ -6,14 +6,14 @@ pub struct TenantServiceSettings {
 }
 
 impl TenantServiceSettings {
-    pub fn from_env() -> Self {
-        Self {
+    pub fn from_env() -> anyhow::Result<Self> {
+        Ok(Self {
             port:         std::env::var("TENANT_SERVICE_PORT")
                               .ok().and_then(|v| v.parse().ok()).unwrap_or(8090),
             database_url: std::env::var("DATABASE_URL")
-                              .expect("DATABASE_URL required"),
+                              .map_err(|_| anyhow::anyhow!("DATABASE_URL is required but not set"))?,
             redis_url:    std::env::var("REDIS_URL")
                               .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string()),
-        }
+        })
     }
 }

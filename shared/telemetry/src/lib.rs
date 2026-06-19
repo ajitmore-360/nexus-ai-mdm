@@ -8,4 +8,4 @@ pub use metrics::{
     ai_requests_total, kafka_events_published_total,
     MetricsRegistry, record_http_request,
 };
-pub use tracing_init::init_tracing;
+pub use tracing_init::{init_tracing, shutdown_tracing};

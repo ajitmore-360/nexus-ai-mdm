@@ -10,10 +10,11 @@ use contracts::events::mdm_events::MDMEventPayload;
 use contracts::mdm::distribution::{
     CreateEntityRequest, CreateEntityResponse, DistributionRequest, EntityRecordOrigin,
 };
-use contracts::mdm::entity::{EntitySourceSnapshot, EntityStatus};
+use contracts::mdm::entity::{EntityAttribute, EntitySourceSnapshot, EntityStatus};
 
 use database::{DbPool, PendingOutboxEvent, RequestContext, RequestContextFactory};
 use nexus_redis::{EntityCache, TaskQueue, queue::task_types};
+use nexus_security::encryption::field_encryption::FieldEncryptionService;
 
 use crate::db::repositories::entity_repository::EntityRepository;
 
@@ -34,6 +35,8 @@ pub struct EntityService {
     task_queue:        Option<Arc<TaskQueue>>,
     /// Optional Redis entity cache — if absent, every read hits PostgreSQL.
     entity_cache:      Option<Arc<EntityCache>>,
+    /// AES-256-GCM PII encryption. None = plaintext (dev only).
+    field_encryption:  Option<Arc<FieldEncryptionService>>,
 }
 
 impl EntityService {
@@ -42,7 +45,7 @@ impl EntityService {
         entity_repository: Arc<EntityRepository>,
         task_queue:        Option<Arc<TaskQueue>>,
     ) -> Self {
-        Self { pool, entity_repository, task_queue, entity_cache: None }
+        Self { pool, entity_repository, task_queue, entity_cache: None, field_encryption: None }
     }
 
     pub fn with_cache(mut self, cache: Arc<EntityCache>) -> Self {
@@ -54,6 +57,80 @@ impl EntityService {
     pub fn with_cache_opt(mut self, cache: Option<Arc<EntityCache>>) -> Self {
         self.entity_cache = cache;
         self
+    }
+
+    /// Attach field-level encryption for PII attributes.
+    pub fn with_encryption(mut self, enc: Option<Arc<FieldEncryptionService>>) -> Self {
+        self.field_encryption = enc;
+        self
+    }
+
+    /// Returns true if the attribute key is a well-known PII field.
+    fn is_pii_attribute(key: &str) -> bool {
+        const PII_KEYS: &[&str] = &[
+            "email", "email_address",
+            "phone", "phone_number", "mobile", "mobile_number", "cell_phone",
+            "ssn", "social_security_number", "national_id", "national_insurance_number",
+            "tax_id", "tax_number", "tin", "ein",
+            "date_of_birth", "dob", "birth_date",
+            "passport", "passport_number",
+            "driver_license", "drivers_license", "license_number",
+            "credit_card", "card_number", "cvv",
+            "bank_account", "account_number", "iban", "routing_number",
+            "ip_address",
+            "street_address", "home_address", "billing_address",
+        ];
+        let lower = key.to_lowercase();
+        // Exact match or ends with a known PII suffix (e.g. "contact_email")
+        PII_KEYS.contains(&lower.as_str())
+            || PII_KEYS.iter().any(|&pii| lower.ends_with(&format!("_{}", pii)))
+    }
+
+    /// Encrypt plaintext string values for PII-tagged attributes.
+    /// Returns a new attribute list — non-PII and already-encrypted attrs are unchanged.
+    fn encrypt_pii_attributes(
+        attrs: Vec<EntityAttribute>,
+        enc:   &FieldEncryptionService,
+    ) -> Vec<EntityAttribute> {
+        attrs.into_iter().map(|mut attr| {
+            if !attr.encrypted && Self::is_pii_attribute(&attr.key) {
+                if let serde_json::Value::String(ref plain) = attr.value {
+                    match enc.encrypt(plain) {
+                        Ok(ciphertext) => {
+                            attr.value     = serde_json::Value::String(ciphertext);
+                            attr.encrypted = true;
+                        }
+                        Err(e) => {
+                            tracing::warn!(key=%attr.key, error=%e, "PII encryption failed — storing plaintext");
+                        }
+                    }
+                }
+            }
+            attr
+        }).collect()
+    }
+
+    /// Decrypt encrypted attribute values back to plaintext.
+    fn decrypt_pii_attributes(
+        attrs: Vec<EntityAttribute>,
+        enc:   &FieldEncryptionService,
+    ) -> Vec<EntityAttribute> {
+        attrs.into_iter().map(|mut attr| {
+            if attr.encrypted {
+                if let serde_json::Value::String(ref ciphertext) = attr.value {
+                    match enc.decrypt(ciphertext) {
+                        Ok(plain) => {
+                            attr.value     = serde_json::Value::String(plain);
+                            attr.encrypted = false;
+                        }
+                        Err(e) => {
+                            tracing::warn!(key=%attr.key, error=%e, "PII decryption failed — returning ciphertext");
+                        }
+                    }
+                }
+            }
+            attr
+        }).collect()
     }
 
     /// Create or idempotently retrieve a canonical entity.
@@ -174,8 +251,18 @@ impl EntityService {
             .begin_uow(ctx.tenant_id, ctx.user_id, ctx.trace_id.clone())
             .await?;
 
+        // Encrypt PII attributes before writing to DB. The in-memory entity
+        // retains plaintext for outbox events and cache — the security boundary
+        // is the PostgreSQL database.
+        let db_entity = if let Some(enc) = &self.field_encryption {
+            let mut e = entity.clone();
+            e.attributes = Self::encrypt_pii_attributes(e.attributes, enc);
+            e
+        } else {
+            entity.clone()
+        };
         self.entity_repository
-            .create_entity(&mut uow.tx, &entity)
+            .create_entity(&mut uow.tx, &db_entity)
             .await?;
 
         // EntityCreated outbox event
@@ -300,9 +387,15 @@ impl EntityService {
         let entity = self
             .entity_repository
             .fetch_entity(tenant_id, entity_id)
-            .await?;
+            .await?
+            .map(|mut e| {
+                if let Some(enc) = &self.field_encryption {
+                    e.attributes = Self::decrypt_pii_attributes(e.attributes, enc);
+                }
+                e
+            });
 
-        // Populate cache on miss
+        // Populate cache on miss (cache stores decrypted plaintext — stays in Redis TTL only)
         if let (Some(cache), Some(ref e)) = (&self.entity_cache, &entity) {
             if let Err(err) = cache.set_entity(tenant_id, entity_id, e).await {
                 tracing::warn!(error=%err, "entity cache population failed");

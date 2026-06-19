@@ -36,6 +36,11 @@ async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "healthy", "service": "tenant-service" }))
 }
 
+async fn metrics_handler() -> String {
+    nexus_telemetry::metrics::render_metrics()
+        .unwrap_or_else(|e| format!("# metrics error: {}", e))
+}
+
 /// POST /tenants/onboard — Create a new organisation with admin user + sequences
 async fn onboard(
     State(state): State<AppState>,
@@ -160,17 +165,16 @@ async fn next_number(
 async fn main() {
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("tenant_service=info".parse().unwrap()),
-        )
-        .init();
+    nexus_telemetry::tracing_init::init_tracing("tenant-service");
+    nexus_telemetry::metrics::init_metrics("tenant-service");
 
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     tracing::info!(app_env = %app_env, "Tenant Service environment loaded");
 
-    let settings = TenantServiceSettings::from_env();
+    let settings = TenantServiceSettings::from_env().unwrap_or_else(|e| {
+        eprintln!("[FATAL] Configuration error: {e}");
+        std::process::exit(1);
+    });
     tracing::info!("Tenant Service starting on port {}", settings.port);
 
     let allowed_origins_raw = std::env::var("ALLOWED_ORIGINS")
@@ -204,6 +208,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/health",                                     get(health))
+        .route("/metrics",                                    get(metrics_handler))
         .route("/tenants/onboard",                            post(onboard))
         .route("/tenants/entity-types",                       get(list_entity_types))
         .route("/tenants/schemas/:entity_type",               get(get_entity_schema))

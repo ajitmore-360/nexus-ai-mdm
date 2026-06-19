@@ -497,6 +497,113 @@ impl<T: Serialize> ApiResponse<T> {
     }
 }
 
+//
+// ========================================
+// CONSENT TYPE
+// ========================================
+//
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConsentType {
+    Marketing,
+    Analytics,
+    Profiling,
+    ThirdPartyShare,
+    AutomatedDecision,
+    Research,
+    /// Generic processing consent used when no specific type applies
+    Processing,
+}
+
+impl std::fmt::Display for ConsentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ConsentType::Marketing          => "marketing",
+            ConsentType::Analytics          => "analytics",
+            ConsentType::Profiling          => "profiling",
+            ConsentType::ThirdPartyShare    => "third_party_share",
+            ConsentType::AutomatedDecision  => "automated_decision",
+            ConsentType::Research           => "research",
+            ConsentType::Processing         => "processing",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl std::str::FromStr for ConsentType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "marketing"          => Ok(ConsentType::Marketing),
+            "analytics"          => Ok(ConsentType::Analytics),
+            "profiling"          => Ok(ConsentType::Profiling),
+            "third_party_share"  => Ok(ConsentType::ThirdPartyShare),
+            "automated_decision" => Ok(ConsentType::AutomatedDecision),
+            "research"           => Ok(ConsentType::Research),
+            "processing"         => Ok(ConsentType::Processing),
+            other => Err(anyhow::anyhow!("Unknown ConsentType: {}", other)),
+        }
+    }
+}
+
+//
+// ========================================
+// CONSENT RECORD
+// ========================================
+//
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsentRecord {
+    pub consent_id:    Uuid,
+    pub tenant_id:     Uuid,
+    pub entity_id:     Uuid,
+    pub consent_type:  ConsentType,
+    pub legal_basis:   String,
+    pub consent_given: bool,
+    pub purpose:       Option<String>,
+    pub source:        Option<String>,
+    pub granted_at:    Option<DateTime<Utc>>,
+    pub withdrawn_at:  Option<DateTime<Utc>>,
+    pub expires_at:    Option<DateTime<Utc>>,
+    pub recorded_by:   Option<String>,
+    pub metadata:      serde_json::Value,
+    pub created_at:    DateTime<Utc>,
+    pub updated_at:    DateTime<Utc>,
+}
+
+//
+// ========================================
+// RECORD CONSENT REQUEST
+// ========================================
+//
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecordConsentRequest {
+    pub tenant_id:     Uuid,
+    pub entity_id:     Uuid,
+    pub consent_type:  ConsentType,
+    pub legal_basis:   Option<String>,
+    pub consent_given: bool,
+    pub purpose:       Option<String>,
+    pub source:        Option<String>,
+    pub expires_at:    Option<DateTime<Utc>>,
+    pub recorded_by:   Option<String>,
+    pub metadata:      Option<serde_json::Value>,
+}
+
+//
+// ========================================
+// WITHDRAW CONSENT QUERY
+// ========================================
+//
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WithdrawConsentQuery {
+    pub tenant_id: Uuid,
+}
+
 #[cfg(test)]
 mod tests {
 

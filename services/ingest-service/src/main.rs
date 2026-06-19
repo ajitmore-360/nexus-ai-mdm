@@ -23,12 +23,8 @@ use state::AppState;
 async fn main() {
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("ingest_service=info".parse().unwrap()),
-        )
-        .init();
+    nexus_telemetry::tracing_init::init_tracing("ingest-service");
+    nexus_telemetry::metrics::init_metrics("ingest-service");
 
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     tracing::info!(app_env = %app_env, "Ingest Service environment loaded");
@@ -48,8 +44,10 @@ async fn main() {
             );
         }
         if std::env::var("FIELD_ENCRYPTION_KEY").is_err() {
-            tracing::warn!(
-                "SECURITY: FIELD_ENCRYPTION_KEY is not set in APP_ENV={}. PII data will be stored unencrypted.",
+            panic!(
+                "SECURITY: FIELD_ENCRYPTION_KEY is not set in APP_ENV={}. \
+                 PII data must be encrypted in production. \
+                 Generate a 32-byte key: openssl rand -hex 32",
                 app_env
             );
         }
@@ -71,6 +69,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/health",          get(health))
+        .route("/metrics",         get(metrics_handler))
         .route("/ingest/batch",    post(ingest_batch))
         .route("/ingest/entities", post(ingest_entities))
         .route("/ingest/csv",      post(ingest_csv))
@@ -95,4 +94,9 @@ async fn health() -> Json<serde_json::Value> {
         "status":  "healthy",
         "service": "ingest-service",
     }))
+}
+
+async fn metrics_handler() -> String {
+    nexus_telemetry::metrics::render_metrics()
+        .unwrap_or_else(|e| format!("# metrics error: {}", e))
 }

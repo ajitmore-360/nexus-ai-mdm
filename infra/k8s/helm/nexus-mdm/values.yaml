@@ -92,6 +92,19 @@ redis:
   rateLimitWindowSecs: 60
 
 # -----------------------------------------------------------------------------
+# FIELD-LEVEL PII ENCRYPTION
+# -----------------------------------------------------------------------------
+fieldEncryption:
+  # Existing Secret must contain a FIELD_ENCRYPTION_KEY entry (32-byte hex key).
+  # Generate: openssl rand -hex 32
+  # When externalSecrets.enabled=true the ExternalSecret controller creates this
+  # secret automatically; otherwise create it manually before deploying:
+  #   kubectl create secret generic nexus-mdm-encryption-secret \
+  #     --from-literal=FIELD_ENCRYPTION_KEY=$(openssl rand -hex 32)
+  existingSecret: nexus-mdm-encryption-secret
+  encryptionKeyKey: FIELD_ENCRYPTION_KEY
+
+# -----------------------------------------------------------------------------
 # KAFKA (external — deployed separately)
 # -----------------------------------------------------------------------------
 kafka:
@@ -545,7 +558,7 @@ distributionService:
     minAvailable: 1
 
 # -----------------------------------------------------------------------------
-# KAFKA EVENT SERVICE  (background worker — no HTTP port)
+# KAFKA EVENT SERVICE  (background worker + health HTTP on :8087)
 # -----------------------------------------------------------------------------
 kafkaEventService:
   name: kafka-event-service
@@ -555,6 +568,7 @@ kafkaEventService:
     pullPolicy: "{{ .Values.global.imagePullPolicy }}"
   # Workers are stateless outbox processors — 2 replicas for HA
   replicas: 2
+  healthPort: 8087
   env:
     OUTBOX_POLL_INTERVAL_MS: "500"
     OUTBOX_BATCH_SIZE: "100"
@@ -580,3 +594,32 @@ kafkaEventService:
   pdb:
     enabled: true
     minAvailable: 1
+
+# -----------------------------------------------------------------------------
+# EXTERNAL SECRETS (optional — requires external-secrets operator)
+# -----------------------------------------------------------------------------
+# Install the operator before enabling:
+#   helm repo add external-secrets https://charts.external-secrets.io
+#   helm install external-secrets external-secrets/external-secrets \
+#     --namespace external-secrets --create-namespace
+#
+# Supported providers: aws | vault
+# When disabled, secrets must be pre-created manually (see templates/secrets.yaml).
+# -----------------------------------------------------------------------------
+externalSecrets:
+  enabled: false
+  provider: ""          # "aws" or "vault"
+  refreshInterval: "1h"
+
+  aws:
+    region: ""           # e.g. "us-east-1"
+    roleArn: ""          # IRSA role ARN; leave empty to use node IAM role
+    secretPrefix: "nexus-mdm"
+
+  vault:
+    server: ""           # e.g. "https://vault.internal:8200"
+    path: "secret"
+    version: "v2"
+    secretPrefix: "nexus-mdm"
+    kubernetesMountPath: "kubernetes"
+    kubernetesRole: "nexus-mdm"

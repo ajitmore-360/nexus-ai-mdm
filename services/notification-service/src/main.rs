@@ -40,6 +40,11 @@ async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "healthy", "service": "notification-service" }))
 }
 
+async fn metrics_handler() -> String {
+    nexus_telemetry::metrics::render_metrics()
+        .unwrap_or_else(|e| format!("# metrics error: {}", e))
+}
+
 /// GET /ws?tenant_id=<uuid>&user_id=<uuid>
 ///
 /// Upgrades the connection to WebSocket.  The client receives all notifications
@@ -81,17 +86,16 @@ async fn push(
 async fn main() {
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("notification_service=info".parse().unwrap()),
-        )
-        .init();
+    nexus_telemetry::tracing_init::init_tracing("notification-service");
+    nexus_telemetry::metrics::init_metrics("notification-service");
 
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     tracing::info!(app_env = %app_env, "Notification Service environment loaded");
 
-    let settings = NotificationSettings::from_env();
+    let settings = NotificationSettings::from_env().unwrap_or_else(|e| {
+        eprintln!("[FATAL] Configuration error: {e}");
+        std::process::exit(1);
+    });
     tracing::info!("Notification Service starting on port {}", settings.port);
 
     let allowed_origins_raw = std::env::var("ALLOWED_ORIGINS")
@@ -131,8 +135,9 @@ async fn main() {
         .allow_credentials(true);
 
     let app = Router::new()
-        .route("/health", get(health))
-        .route("/ws",     get(ws_handler))
+        .route("/health",   get(health))
+        .route("/metrics",  get(metrics_handler))
+        .route("/ws",       get(ws_handler))
         .route("/notify", axum::routing::post(push))
         .layer(TraceLayer::new_for_http())
         .layer(cors)

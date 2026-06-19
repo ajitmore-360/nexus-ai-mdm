@@ -1,0 +1,19 @@
+# cargo audit configuration for Nexus AI MDM
+# https://docs.rs/cargo-audit/latest/cargo_audit/
+#
+# Add entries to `ignore` ONLY for advisories with no fix available yet.
+# Each ignored advisory MUST have a comment explaining:
+#   - which advisory it is
+#   - why it cannot be updated right now
+#   - the tracking issue / target fix date
+#
+# Example (remove the leading # to activate):
+# [advisories]
+# ignore = [
+#     "RUSTSEC-2024-XXXX",  # crate foo@1.x — no fix upstream yet (tracked #123)
+# ]
+
+[advisories]
+# No advisories currently ignored.
+# All vulnerabilities in cargo audit output must be resolved before merging.
+ignore = []

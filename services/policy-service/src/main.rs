@@ -1,4 +1,5 @@
 mod config;
+mod consent;
 mod engine;
 mod handlers;
 mod models;
@@ -12,6 +13,7 @@ use axum::{
     routing::{delete, get, post},
     Router, Json,
 };
+use consent::ConsentRepository;
 use database::{config::DatabaseConfig, connection::create_pool};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
@@ -21,6 +23,7 @@ use engine::{GdprEngine, OpaClient, PolicyEvaluator};
 use handlers::{
     create_rule, delete_rule, evaluate, evaluate_merge,
     gdpr_access, gdpr_erasure, list_rules,
+    list_consent, record_consent, withdraw_consent,
 };
 use rules::PolicyRepository;
 use state::AppState;
@@ -29,12 +32,8 @@ use state::AppState;
 async fn main() {
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("policy_service=info".parse().unwrap()),
-        )
-        .init();
+    nexus_telemetry::tracing_init::init_tracing("policy-service");
+    nexus_telemetry::metrics::init_metrics("policy-service");
 
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     tracing::info!(app_env = %app_env, "Policy Service environment loaded");
@@ -56,15 +55,17 @@ async fn main() {
     }
 
     // ── Service layer ─────────────────────────────────────────────────────────
-    let evaluator = Arc::new(PolicyEvaluator::new(pool.clone(), Arc::clone(&opa)));
-    let gdpr      = Arc::new(GdprEngine::new(pool.clone()));
-    let rule_repo = Arc::new(PolicyRepository::new(pool.clone()));
+    let evaluator  = Arc::new(PolicyEvaluator::new(pool.clone(), Arc::clone(&opa)));
+    let gdpr       = Arc::new(GdprEngine::new(pool.clone()));
+    let rule_repo  = Arc::new(PolicyRepository::new(pool.clone()));
+    let consent    = Arc::new(ConsentRepository::new(pool.clone()));
 
     let state = Arc::new(AppState {
         settings: Arc::new(settings.clone()),
         evaluator,
         gdpr,
         rule_repo,
+        consent,
     });
 
     // ── Router ────────────────────────────────────────────────────────────────
@@ -91,13 +92,16 @@ async fn main() {
         .allow_credentials(true);
 
     let app = Router::new()
-        .route("/health",                  get(health))
-        .route("/policy/evaluate",         post(evaluate))
-        .route("/policy/evaluate/merge",   post(evaluate_merge))
-        .route("/policy/rules",            get(list_rules).post(create_rule))
-        .route("/policy/rules/:id",        delete(delete_rule))
-        .route("/policy/gdpr/erasure",     post(gdpr_erasure))
-        .route("/policy/gdpr/access",      post(gdpr_access))
+        .route("/health",                          get(health))
+        .route("/metrics",                         get(metrics_handler))
+        .route("/policy/evaluate",                 post(evaluate))
+        .route("/policy/evaluate/merge",           post(evaluate_merge))
+        .route("/policy/rules",                    get(list_rules).post(create_rule))
+        .route("/policy/rules/:id",                delete(delete_rule))
+        .route("/policy/gdpr/erasure",             post(gdpr_erasure))
+        .route("/policy/gdpr/access",              post(gdpr_access))
+        .route("/policy/consent",                  get(list_consent).post(record_consent))
+        .route("/policy/consent/:id/withdraw",     post(withdraw_consent))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state);
@@ -119,4 +123,9 @@ async fn health() -> Json<serde_json::Value> {
         "status":  "healthy",
         "service": "policy-service",
     }))
+}
+
+async fn metrics_handler() -> String {
+    nexus_telemetry::metrics::render_metrics()
+        .unwrap_or_else(|e| format!("# metrics error: {}", e))
 }

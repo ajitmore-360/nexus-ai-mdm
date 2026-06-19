@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/empty_state.dart';
+import '../../../../core/validation/validators.dart';
 
 // ─────────────────────────────────────────────
 // Models
@@ -774,8 +775,7 @@ class _CreateRuleDialogState extends State<_CreateRuleDialog> {
                         style: AppTextStyles.inputText,
                         decoration: _inputDeco('Rule Name',
                             hint: 'e.g. Mask SSN on export'),
-                        validator: (v) =>
-                            v == null || v.isEmpty ? 'Required' : null,
+                        validator: Validators.minLength(2, label: 'Rule name'),
                       ),
                       const SizedBox(height: 14),
                       Row(
@@ -812,8 +812,7 @@ class _CreateRuleDialogState extends State<_CreateRuleDialog> {
                               style: AppTextStyles.inputText,
                               decoration: _inputDeco('Entity Type',
                                   hint: 'e.g. Person, Contact'),
-                              validator: (v) =>
-                                  v == null || v.isEmpty ? 'Required' : null,
+                              validator: Validators.entityType,
                             ),
                           ),
                         ],
@@ -851,8 +850,7 @@ class _CreateRuleDialogState extends State<_CreateRuleDialog> {
                           alignLabelWithHint: true,
                           fillColor: AppColors.navyBackground,
                         ),
-                        validator: (v) =>
-                            v == null || v.isEmpty ? 'Required' : null,
+                        validator: Validators.regoPolicy,
                       ),
                       const SizedBox(height: 24),
                     ],

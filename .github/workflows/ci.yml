@@ -76,7 +76,6 @@ jobs:
 
       - name: Run integration tests (with database)
         run: cargo test --workspace --test '*'
-        continue-on-error: true  # integration tests are optional in CI for now
 
   # ─────────────────────────────────────────────────────────────────────────
   # Flutter build + analyze
@@ -107,7 +106,6 @@ jobs:
 
       - name: Run unit tests
         run: flutter test --no-pub
-        continue-on-error: true
 
       - name: Build web (release)
         run: flutter build web --release
@@ -126,5 +124,7 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Audit Cargo dependencies
+        # Fails the build on any unfixed vulnerability (RUSTSEC advisory).
+        # To ignore a specific advisory that has no fix yet, add it to
+        # .cargo/audit.toml (deny.advisories.ignore = ["RUSTSEC-YYYY-NNNN"]).
         run: cargo audit
-        continue-on-error: true  # advisory, not blocking

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     config::settings::PolicySettings,
+    consent::ConsentRepository,
     engine::{GdprEngine, PolicyEvaluator},
     rules::PolicyRepository,
 };
@@ -13,4 +14,5 @@ pub struct AppState {
     pub evaluator: Arc<PolicyEvaluator>,
     pub gdpr:      Arc<GdprEngine>,
     pub rule_repo: Arc<PolicyRepository>,
+    pub consent:   Arc<ConsentRepository>,
 }

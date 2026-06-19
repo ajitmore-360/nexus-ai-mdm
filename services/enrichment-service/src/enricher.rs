@@ -57,13 +57,47 @@ impl EnrichmentOrchestrator {
                 merged.extend(data.fields.clone());
             }
 
-            // PATCH entity attributes via mdm-core
-            if let Err(e) = self.patch_entity(req.tenant_id, req.entity_id, &merged).await {
-                warn!(entity_id=%req.entity_id, error=%e, "failed to patch enriched entity");
+            // PATCH entity attributes via mdm-core; on success record lineage
+            match self.patch_entity(req.tenant_id, req.entity_id, &merged).await {
+                Ok(()) => {
+                    if let Err(e) = self.record_lineage(req.tenant_id, req.entity_id).await {
+                        warn!(entity_id=%req.entity_id, error=%e, "lineage recording failed (non-fatal)");
+                    }
+                }
+                Err(e) => {
+                    warn!(entity_id=%req.entity_id, error=%e, "failed to patch enriched entity");
+                }
             }
         }
 
         Ok(results)
+    }
+
+    async fn record_lineage(&self, tenant_id: Uuid, entity_id: Uuid) -> Result<()> {
+        let url = format!("{}/lineage", self.mdm_core_url.trim_end_matches('/'));
+        let resp = self.http
+            .post(&url)
+            .header("x-tenant-id", tenant_id.to_string())
+            .header("x-source", "enrichment-service")
+            .json(&serde_json::json!({
+                "tenant_id":        tenant_id,
+                "source_entity_id": entity_id,
+                "target_entity_id": entity_id,
+                "lineage_type":     "enriched",
+                "metadata": {
+                    "source": "enrichment-service"
+                }
+            }))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body   = resp.text().await.unwrap_or_default();
+            anyhow::bail!("mdm-core POST /lineage returned {}: {}", status, body);
+        }
+
+        Ok(())
     }
 
     async fn patch_entity(

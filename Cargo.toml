@@ -128,5 +128,8 @@ hex          = "0.4"
 hmac         = "0.12"
 
 # Observability
-prometheus    = { version = "0.13", features = ["process"] }
-opentelemetry = { version = "0.21", features = ["trace"] }
+prometheus             = { version = "0.13", features = ["process"] }
+opentelemetry          = { version = "0.21", features = ["trace"] }
+opentelemetry_sdk      = { version = "0.21", features = ["rt-tokio"] }
+opentelemetry-otlp     = { version = "0.14", features = ["grpc-tonic"] }
+tracing-opentelemetry  = "0.22"

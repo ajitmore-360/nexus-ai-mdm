@@ -10,6 +10,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/models/api_responses.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../data/entity_repository.dart';
+import '../../../../core/validation/validators.dart';
 import '../../../../shared/widgets/nexus_dialog.dart';
 // ──────────────────────────────────────────────
 // Domain enums / models
@@ -727,6 +728,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
                     decoration: _inputDecoration(hintText: 'field_key'),
                     style: AppTextStyles.inputText
                         .copyWith(fontFamily: 'monospace', fontSize: 13),
+                    validator: Validators.required('Field key'),
                   )
                 : Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -746,14 +748,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
                 attr.value = v;
                 if (v.length >= 2) _triggerDupCheck();
               },
-              validator: attr.type == 'email'
-                  ? (v) {
-                      if (v != null && v.isNotEmpty && !v.contains('@')) {
-                        return 'Invalid email';
-                      }
-                      return null;
-                    }
-                  : null,
+              validator: attr.type == 'email' ? Validators.emailOptional : null,
               decoration: _inputDecoration(hintText: 'Enter value…'),
               style: AppTextStyles.inputText,
             ),

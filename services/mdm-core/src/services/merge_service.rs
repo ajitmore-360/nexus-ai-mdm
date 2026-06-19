@@ -110,6 +110,30 @@ impl MergeService {
             .set_golden_record_id(&mut uow.tx, tenant_id, primary.entity_id, golden.golden_record_id)
             .await?;
 
+        // Lineage: each merged entity has a "merged_into" edge pointing at the primary
+        let mut lineage_ids: Vec<Uuid> = Vec::with_capacity(merged_ids.len());
+        for &mid in &merged_ids {
+            let lid = Uuid::new_v4();
+            sqlx::query(
+                r#"
+                INSERT INTO lineage.entity_lineage
+                    (lineage_id, tenant_id, source_entity_id, target_entity_id, lineage_type, metadata)
+                VALUES ($1, $2, $3, $4, 'merged_into', $5)
+                "#,
+            )
+            .bind(lid)
+            .bind(tenant_id)
+            .bind(mid)
+            .bind(primary.entity_id)
+            .bind(serde_json::json!({
+                "golden_record_id":  golden.golden_record_id,
+                "merge_request_id":  request.merge_request_id,
+            }))
+            .execute(&mut *uow.tx)
+            .await?;
+            lineage_ids.push(lid);
+        }
+
         // Outbox events
         uow.add_event(PendingOutboxEvent::new(
             tenant_id,
@@ -161,7 +185,7 @@ impl MergeService {
             errors:                   vec![],
             execution_summary:        Some("Merge completed successfully".to_string()),
             execution_trace:          vec![],
-            lineage_event_ids:        vec![],
+            lineage_event_ids:        lineage_ids,
             published_event_ids:      vec![],
             search_reindexed:         false,
             embeddings_regenerated:   false,

@@ -36,10 +36,16 @@ use routes::{
     health::{health, prometheus_metrics},
     mdm::{create_entity, execute_match},
     service_proxy::{
-        autocomplete, create_policy_rule, dashboard_activity, dashboard_stats,
-        enqueue_distribution, evaluate_policy, gdpr_access, gdpr_erasure,
-        get_entity_by_id, patch_entity, ingest_batch, ingest_csv, ingest_entities,
-        list_entities, list_policy_rules, recommend_weights, scan_anomalies, search,
+        approve_match_candidate, autocomplete, create_policy_rule,
+        dashboard_activity, dashboard_stats,
+        enqueue_distribution, evaluate_policy, execute_merge, gdpr_access, gdpr_erasure,
+        get_distribution_job, get_entity_by_id, get_entity_lineage,
+        get_match_review_queue, get_policy_weights,
+        ingest_batch, ingest_csv, ingest_entities,
+        list_consent, list_distribution_jobs, list_entities, list_policy_rules,
+        patch_entity, record_consent, recommend_weights,
+        reject_match_candidate, scan_anomalies, search,
+        update_policy_weights, withdraw_consent,
     },
 };
 
@@ -52,12 +58,7 @@ async fn main() {
     dotenvy::dotenv().ok();
 
     // ---- Tracing -----------------------------------------------------------
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("api_gateway=info".parse().unwrap()),
-        )
-        .init();
+    nexus_telemetry::tracing_init::init_tracing("api-gateway");
 
     // ---- Config ------------------------------------------------------------
     let settings = Settings::from_env();
@@ -176,6 +177,9 @@ async fn main() {
         .route("/entities",              get(list_entities).post(create_entity))
         .route("/entities/:id",          get(get_entity_by_id).patch(patch_entity))
         .route("/match",                 post(execute_match))
+        .route("/match/review-queue",    get(get_match_review_queue))
+        .route("/match/:rid/candidates/:cid/approve", post(approve_match_candidate))
+        .route("/match/:rid/candidates/:cid/reject",  post(reject_match_candidate))
         // ── AI Copilot ────────────────────────────────────────────────
         .route("/copilot",               post(copilot))
         .route("/weights/recommend",     get(recommend_weights))
@@ -191,12 +195,20 @@ async fn main() {
         .route("/policy/rules",          get(list_policy_rules).post(create_policy_rule))
         .route("/policy/gdpr/erasure",   post(gdpr_erasure))
         .route("/policy/gdpr/access",    post(gdpr_access))
+        .route("/policy/weights",        get(get_policy_weights).patch(update_policy_weights))
+        .route("/merge",                 post(execute_merge))
         // ── Ingest ────────────────────────────────────────────────────
         .route("/ingest/batch",          post(ingest_batch))
         .route("/ingest/entities",       post(ingest_entities))
         .route("/ingest/csv",            post(ingest_csv))
         // ── Distribution ─────────────────────────────────────────────
-        .route("/distribution/jobs",     post(enqueue_distribution))
+        .route("/distribution/jobs",             get(list_distribution_jobs).post(enqueue_distribution))
+        .route("/distribution/jobs/:id",         get(get_distribution_job))
+        // ── Consent ───────────────────────────────────────────────────
+        .route("/policy/consent",                get(list_consent).post(record_consent))
+        .route("/policy/consent/:id/withdraw",   post(withdraw_consent))
+        // ── Lineage ───────────────────────────────────────────────────
+        .route("/entities/:id/lineage",          get(get_entity_lineage))
         .layer(axum_middleware::from_fn_with_state(state.clone(), auth_middleware))
         .layer(axum_middleware::from_fn_with_state(state.clone(), tenant_middleware))
         .layer(axum_middleware::from_fn_with_state(state.clone(), rate_limit_middleware))

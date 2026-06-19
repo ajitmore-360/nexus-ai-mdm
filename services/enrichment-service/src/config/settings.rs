@@ -38,12 +38,12 @@ pub struct EnrichmentSettings {
 
 impl EnrichmentSettings {
     /// Build settings from environment variables.
-    pub fn from_env() -> Self {
-        Self {
+    pub fn from_env() -> anyhow::Result<Self> {
+        Ok(Self {
             port: env_u16("ENRICHMENT_PORT", 8088),
 
             database_url: env::var("DATABASE_URL")
-                .expect("DATABASE_URL must be set"),
+                .map_err(|_| anyhow::anyhow!("DATABASE_URL is required but not set"))?,
 
             redis_url: env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string()),
@@ -65,7 +65,7 @@ impl EnrichmentSettings {
 
             dnb_api_key:      env::var("DNB_API_KEY").ok(),
             experian_api_key: env::var("EXPERIAN_API_KEY").ok(),
-        }
+        })
     }
 }
 

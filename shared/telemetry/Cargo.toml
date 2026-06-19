@@ -11,4 +11,8 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 anyhow.workspace      = true
 chrono.workspace      = true
 
-prometheus = { workspace = true }
+prometheus             = { workspace = true }
+opentelemetry          = { workspace = true }
+opentelemetry_sdk      = { workspace = true }
+opentelemetry-otlp     = { workspace = true }
+tracing-opentelemetry  = { workspace = true }

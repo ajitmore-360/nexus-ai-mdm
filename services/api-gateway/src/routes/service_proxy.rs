@@ -242,6 +242,98 @@ pub async fn enqueue_distribution(
     forward_post(&state.services.http, &state.settings.distribution_service_url, "/jobs", &headers, body).await
 }
 
+pub async fn list_distribution_jobs(
+    State(state):  State<AppState>,
+    headers:       HeaderMap,
+    Query(params): Query<Value>,
+) -> Response {
+    let qs = params.as_object()
+        .map(|m| m.iter()
+            .filter_map(|(k, v)| v.as_str().map(|s| format!("{}={}", k, s)))
+            .collect::<Vec<_>>().join("&"))
+        .unwrap_or_default();
+    let path = if qs.is_empty() { "/jobs".to_string() } else { format!("/jobs?{}", qs) };
+    forward_get(&state.services.http, &state.settings.distribution_service_url, &path, &headers).await
+}
+
+pub async fn get_distribution_job(
+    State(state):                      State<AppState>,
+    headers:                           HeaderMap,
+    axum::extract::Path(job_id):       axum::extract::Path<String>,
+    Query(params):                     Query<Value>,
+) -> Response {
+    let qs = params.as_object()
+        .map(|m| m.iter()
+            .filter_map(|(k, v)| v.as_str().map(|s| format!("{}={}", k, s)))
+            .collect::<Vec<_>>().join("&"))
+        .unwrap_or_default();
+    let path = if qs.is_empty() {
+        format!("/jobs/{}", job_id)
+    } else {
+        format!("/jobs/{}?{}", job_id, qs)
+    };
+    forward_get(&state.services.http, &state.settings.distribution_service_url, &path, &headers).await
+}
+
+// ── Match review queue routes ─────────────────────────────────────────────────
+
+pub async fn get_match_review_queue(
+    State(state):  State<AppState>,
+    headers:       HeaderMap,
+    Query(params): Query<Value>,
+) -> Response {
+    let qs = params.as_object()
+        .map(|m| m.iter()
+            .filter_map(|(k, v)| v.as_str().map(|s| format!("{}={}", k, s)))
+            .collect::<Vec<_>>().join("&"))
+        .unwrap_or_default();
+    let path = if qs.is_empty() {
+        "/match/review-queue".to_string()
+    } else {
+        format!("/match/review-queue?{}", qs)
+    };
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn approve_match_candidate(
+    State(state):  State<AppState>,
+    headers:       HeaderMap,
+    axum::extract::Path((request_id, candidate_id)): axum::extract::Path<(String, String)>,
+    body:          Option<Json<Value>>,
+) -> Response {
+    let path = format!("/match/{}/candidates/{}/approve", request_id, candidate_id);
+    let body = body.map(|b| b.0).unwrap_or(Value::Null);
+    forward_post(&state.services.http, &state.settings.mdm_core_url, &path, &headers, body).await
+}
+
+pub async fn reject_match_candidate(
+    State(state):  State<AppState>,
+    headers:       HeaderMap,
+    axum::extract::Path((request_id, candidate_id)): axum::extract::Path<(String, String)>,
+    body:          Option<Json<Value>>,
+) -> Response {
+    let path = format!("/match/{}/candidates/{}/reject", request_id, candidate_id);
+    let body = body.map(|b| b.0).unwrap_or(Value::Null);
+    forward_post(&state.services.http, &state.settings.mdm_core_url, &path, &headers, body).await
+}
+
+// ── Policy weights (expose mdm-core internal route via gateway) ───────────────
+
+pub async fn get_policy_weights(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> Response {
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, "/policy/weights", &headers).await
+}
+
+pub async fn update_policy_weights(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> Response {
+    forward_patch(&state.services.http, &state.settings.mdm_core_url, "/policy/weights", &headers, body).await
+}
+
 // ── Ingest routes ─────────────────────────────────────────────────────────────
 
 pub async fn ingest_batch(
@@ -347,6 +439,76 @@ pub async fn dashboard_activity(
         format!("/dashboard/activity?{}", qs)
     };
     forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+// ── Consent routes ────────────────────────────────────────────────────────────
+
+pub async fn record_consent(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> Response {
+    forward_post(&state.services.http, &state.settings.policy_service_url, "/policy/consent", &headers, body).await
+}
+
+pub async fn list_consent(
+    State(state):  State<AppState>,
+    headers:       HeaderMap,
+    Query(params): Query<Value>,
+) -> Response {
+    let qs: String = params.as_object()
+        .map(|m| m.iter()
+            .filter_map(|(k, v)| v.as_str().map(|s| format!("{}={}", k, s)))
+            .collect::<Vec<_>>().join("&"))
+        .unwrap_or_default();
+    let path = if qs.is_empty() {
+        "/policy/consent".to_string()
+    } else {
+        format!("/policy/consent?{}", qs)
+    };
+    forward_get(&state.services.http, &state.settings.policy_service_url, &path, &headers).await
+}
+
+pub async fn withdraw_consent(
+    State(state):         State<AppState>,
+    headers:              HeaderMap,
+    axum::extract::Path(consent_id): axum::extract::Path<String>,
+    Query(params):        Query<Value>,
+) -> Response {
+    let qs: String = params.as_object()
+        .map(|m| m.iter()
+            .filter_map(|(k, v)| v.as_str().map(|s| format!("{}={}", k, s)))
+            .collect::<Vec<_>>().join("&"))
+        .unwrap_or_default();
+    let path = format!("/policy/consent/{}/withdraw?{}", consent_id, qs);
+    forward_post(&state.services.http, &state.settings.policy_service_url, &path, &headers, Value::Null).await
+}
+
+// ── Lineage routes ────────────────────────────────────────────────────────────
+
+pub async fn get_entity_lineage(
+    State(state):         State<AppState>,
+    headers:              HeaderMap,
+    axum::extract::Path(entity_id): axum::extract::Path<String>,
+    Query(params):        Query<Value>,
+) -> Response {
+    let qs: String = params.as_object()
+        .map(|m| m.iter()
+            .filter_map(|(k, v)| v.as_str().map(|s| format!("{}={}", k, s)))
+            .collect::<Vec<_>>().join("&"))
+        .unwrap_or_default();
+    let path = format!("/entities/{}/lineage?{}", entity_id, qs);
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+// ── Merge routes ─────────────────────────────────────────────────────────────
+
+pub async fn execute_merge(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> Response {
+    forward_post(&state.services.http, &state.settings.mdm_core_url, "/merge", &headers, body).await
 }
 
 // ── AI service routes ─────────────────────────────────────────────────────────

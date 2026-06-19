@@ -185,45 +185,24 @@ impl OutboxEventBuilder {
         self
     }
 
-    pub fn build(self) -> OutboxEvent {
-
-        OutboxEvent {
-
-            event_id: Uuid::new_v4(),
-
-            tenant_id: self.tenant_id
-                .expect("tenant_id required"),
-
-            aggregate_type: self.aggregate_type
-                .expect("aggregate_type required"),
-
-            aggregate_id: self.aggregate_id
-                .expect("aggregate_id required"),
-
-            event_type: self.event_type
-                .expect("event_type required"),
-
-            payload: self.payload.unwrap_or(json!({})),
-
-            metadata: self.metadata.unwrap_or(json!({})),
-
-            headers: self.headers.unwrap_or(json!({})),
-
+    pub fn build(self) -> anyhow::Result<OutboxEvent> {
+        Ok(OutboxEvent {
+            event_id:       Uuid::new_v4(),
+            tenant_id:      self.tenant_id.ok_or_else(|| anyhow::anyhow!("OutboxEvent: tenant_id is required"))?,
+            aggregate_type: self.aggregate_type.ok_or_else(|| anyhow::anyhow!("OutboxEvent: aggregate_type is required"))?,
+            aggregate_id:   self.aggregate_id.ok_or_else(|| anyhow::anyhow!("OutboxEvent: aggregate_id is required"))?,
+            event_type:     self.event_type.ok_or_else(|| anyhow::anyhow!("OutboxEvent: event_type is required"))?,
+            topic_name:     self.topic_name.ok_or_else(|| anyhow::anyhow!("OutboxEvent: topic_name is required"))?,
+            payload:        self.payload.unwrap_or(json!({})),
+            metadata:       self.metadata.unwrap_or(json!({})),
+            headers:        self.headers.unwrap_or(json!({})),
             correlation_id: self.correlation_id,
-
-            causation_id: self.causation_id,
-
-            trace_id: self.trace_id,
-
-            partition_key: self.partition_key,
-
-            topic_name: self.topic_name
-                .expect("topic_name required"),
-
-            event_version: 1,
-
-            created_at: Utc::now(),
-        }
+            causation_id:   self.causation_id,
+            trace_id:       self.trace_id,
+            partition_key:  self.partition_key,
+            event_version:  1,
+            created_at:     Utc::now(),
+        })
     }
 }
 

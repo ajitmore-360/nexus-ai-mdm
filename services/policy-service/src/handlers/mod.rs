@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::models::{
     ApiResponse, CreateRuleRequest, EvaluateMergeRequest,
     GdprRequest, PolicyContext, PolicyOperation,
+    RecordConsentRequest, WithdrawConsentQuery,
 };
 use crate::state::AppState;
 
@@ -130,5 +131,49 @@ pub async fn gdpr_access(
     match state.gdpr.process_access(&req).await {
         Ok(data) => ok!(data),
         Err(e)   => err!(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+// ── POST /policy/consent ──────────────────────────────────────────────────
+
+pub async fn record_consent(
+    State(state): State<Arc<AppState>>,
+    Json(req):    Json<RecordConsentRequest>,
+) -> Response {
+    match state.consent.record_consent(&req).await {
+        Ok(record) => (StatusCode::CREATED, Json(ApiResponse::ok(record))).into_response(),
+        Err(e)     => err!(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+// ── GET /policy/consent ───────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct ConsentListQuery {
+    pub tenant_id: uuid::Uuid,
+    pub entity_id: uuid::Uuid,
+}
+
+pub async fn list_consent(
+    State(state): State<Arc<AppState>>,
+    Query(q):     Query<ConsentListQuery>,
+) -> Response {
+    match state.consent.list_by_entity(q.tenant_id, q.entity_id).await {
+        Ok(records) => ok!(records),
+        Err(e)      => err!(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+// ── POST /policy/consent/:id/withdraw ────────────────────────────────────
+
+pub async fn withdraw_consent(
+    State(state):    State<Arc<AppState>>,
+    Path(consent_id): Path<uuid::Uuid>,
+    Query(q):        Query<WithdrawConsentQuery>,
+) -> Response {
+    match state.consent.withdraw(q.tenant_id, consent_id).await {
+        Ok(true)  => ok!(serde_json::json!({ "withdrawn": true })),
+        Ok(false) => err!(StatusCode::NOT_FOUND, "consent record not found or already withdrawn"),
+        Err(e)    => err!(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     }
 }

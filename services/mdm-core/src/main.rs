@@ -43,10 +43,6 @@ use tracing::{
     warn,
 };
 
-use tracing_subscriber::{
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
-};
 
 use uuid::Uuid;
 
@@ -71,9 +67,11 @@ use std::sync::Arc;
 use handlers::{
     dashboard::{get_activity_feed, get_dashboard_stats},
     entities::{create_entity, get_entity_by_id, list_entities, patch_entity},
+    lineage::{get_entity_lineage, record_lineage},
     matching::execute_match,
     merge::execute_merge,
     policy::{get_weights, update_weights},
+    review::{approve_match, get_review_queue, reject_match},
     users::{change_role, list_users, login, register},
 };
 use middleware::{
@@ -300,22 +298,6 @@ async fn liveness() -> impl IntoResponse {
 // ========================================
 //
 
-fn init_tracing() {
-
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::new(
-                env::var("RUST_LOG")
-                    .unwrap_or_else(|_| {
-                        "info".to_string()
-                    })
-            )
-        )
-        .with(
-            tracing_subscriber::fmt::layer()
-        )
-        .init();
-}
 
 //
 // ========================================
@@ -418,10 +400,15 @@ fn build_router(
             .allow_credentials(true);
 
     let protected = Router::new()
-        .route("/entities",     get(list_entities).post(create_entity))
-        .route("/entities/:id", get(get_entity_by_id).patch(patch_entity))
-        .route("/match", post(execute_match))
-        .route("/merge", post(execute_merge))
+        .route("/entities",               get(list_entities).post(create_entity))
+        .route("/entities/:id",           get(get_entity_by_id).patch(patch_entity))
+        .route("/entities/:id/lineage",   get(get_entity_lineage))
+        .route("/lineage",                post(record_lineage))
+        .route("/match",                  post(execute_match))
+        .route("/match/review-queue",     get(get_review_queue))
+        .route("/match/:request_id/candidates/:candidate_id/approve", axum::routing::post(approve_match))
+        .route("/match/:request_id/candidates/:candidate_id/reject",  axum::routing::post(reject_match))
+        .route("/merge",                  post(execute_merge))
         // /search is served by the dedicated search-service via api-gateway
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
@@ -445,6 +432,10 @@ fn build_router(
         .route("/health",       get(health))
         .route("/health/live",  get(liveness))
         .route("/health/ready", get(readiness))
+        .route("/metrics",      get(|| async {
+            nexus_telemetry::metrics::render_metrics()
+                .unwrap_or_else(|e| format!("# metrics error: {}", e))
+        }))
         .merge(auth_routes)
         .merge(management_routes)
         .merge(protected)
@@ -514,7 +505,8 @@ async fn main() {
     // ====================================
     //
 
-    init_tracing();
+    nexus_telemetry::tracing_init::init_tracing("mdm-core");
+    nexus_telemetry::metrics::init_metrics("mdm-core");
 
     info!(
         "Starting Nexus AI MDM Core"
@@ -539,8 +531,10 @@ async fn main() {
             );
         }
         if env::var("FIELD_ENCRYPTION_KEY").is_err() {
-            warn!(
-                "SECURITY: FIELD_ENCRYPTION_KEY is not set in APP_ENV={}. PII data will be stored unencrypted.",
+            panic!(
+                "SECURITY: FIELD_ENCRYPTION_KEY is not set in APP_ENV={}. \
+                 PII data must be encrypted in production. \
+                 Generate a 32-byte key: openssl rand -hex 32",
                 app_env
             );
         }
@@ -679,13 +673,41 @@ async fn main() {
     let entity_cache = entity_cache;
     let task_queue   = task_queue;
 
+    // ── Field-level encryption ─────────────────────────────────────────────────
+    // FIELD_ENCRYPTION_KEY must be exactly 32 bytes (256-bit), hex-encoded (64 chars).
+    // If absent, PII attributes are stored plaintext — acceptable only in development.
+    let field_encryption = match env::var("FIELD_ENCRYPTION_KEY") {
+        Ok(hex_key) => {
+            match hex::decode(&hex_key) {
+                Ok(key_bytes) if key_bytes.len() == 32 => {
+                    let key: [u8; 32] = key_bytes.try_into().expect("key is 32 bytes");
+                    info!("Field-level encryption enabled (AES-256-GCM)");
+                    Some(Arc::new(nexus_security::encryption::field_encryption::FieldEncryptionService::new(&key)))
+                }
+                Ok(_) => {
+                    warn!("FIELD_ENCRYPTION_KEY must be 64 hex chars (32 bytes) — encryption disabled");
+                    None
+                }
+                Err(e) => {
+                    warn!(error=%e, "FIELD_ENCRYPTION_KEY is not valid hex — encryption disabled");
+                    None
+                }
+            }
+        }
+        Err(_) => {
+            warn!("FIELD_ENCRYPTION_KEY not set — PII attributes stored plaintext. Set in production.");
+            None
+        }
+    };
+
     let entity_service = Arc::new(
         EntityService::new(
             db.clone(),
             Arc::new(entity_repository.clone()),
             task_queue,
         )
-        .with_cache_opt(entity_cache),
+        .with_cache_opt(entity_cache)
+        .with_encryption(field_encryption.clone()),
     );
 
     let merge_service = Arc::new(MergeService::new(
@@ -713,33 +735,6 @@ async fn main() {
     // BUILD APPLICATION STATE
     // ====================================
     //
-
-    // ── Field-level encryption ─────────────────────────────────────────────────
-    // FIELD_ENCRYPTION_KEY must be exactly 32 bytes (256-bit), hex-encoded (64 chars).
-    // If absent, PII attributes are stored plaintext — acceptable only in development.
-    let field_encryption = match env::var("FIELD_ENCRYPTION_KEY") {
-        Ok(hex_key) => {
-            match hex::decode(&hex_key) {
-                Ok(key_bytes) if key_bytes.len() == 32 => {
-                    let key: [u8; 32] = key_bytes.try_into().expect("key is 32 bytes");
-                    info!("Field-level encryption enabled (AES-256-GCM)");
-                    Some(Arc::new(nexus_security::encryption::field_encryption::FieldEncryptionService::new(&key)))
-                }
-                Ok(_) => {
-                    warn!("FIELD_ENCRYPTION_KEY must be 64 hex chars (32 bytes) — encryption disabled");
-                    None
-                }
-                Err(e) => {
-                    warn!(error=%e, "FIELD_ENCRYPTION_KEY is not valid hex — encryption disabled");
-                    None
-                }
-            }
-        }
-        Err(_) => {
-            warn!("FIELD_ENCRYPTION_KEY not set — PII attributes stored plaintext. Set in production.");
-            None
-        }
-    };
 
     let state = Arc::new(
         AppState {

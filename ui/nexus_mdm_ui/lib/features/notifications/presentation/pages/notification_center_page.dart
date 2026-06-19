@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:get_it/get_it.dart';
+import '../../../../core/network/websocket_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
@@ -176,8 +179,63 @@ class NotificationCenterPanel extends StatefulWidget {
 }
 
 class _NotificationCenterPanelState extends State<NotificationCenterPanel> {
-  _NotifType? _activeFilter; // null = All
-  bool _wsLive = true;
+  _NotifType? _activeFilter;
+
+  // WebSocket
+  late final WebSocketClient _wsClient;
+  StreamSubscription<Map<String, dynamic>>? _msgSub;
+  void Function()? _stateListener;
+
+  bool get _wsLive =>
+      _wsClient.connectionState.value == WsConnectionState.connected;
+
+  @override
+  void initState() {
+    super.initState();
+    _wsClient = GetIt.instance<WebSocketClient>();
+    _wsClient.connect();
+    _msgSub = _wsClient.messages.listen(_onWsMessage);
+    _stateListener = () { if (mounted) setState(() {}); };
+    _wsClient.connectionState.addListener(_stateListener!);
+  }
+
+  @override
+  void dispose() {
+    _msgSub?.cancel();
+    if (_stateListener != null) {
+      _wsClient.connectionState.removeListener(_stateListener!);
+    }
+    super.dispose();
+  }
+
+  void _onWsMessage(Map<String, dynamic> msg) {
+    final type = msg['type'] as String? ?? '';
+    final notifType = switch (type) {
+      'match_detected' || 'match_found'           => _NotifType.match,
+      'golden_record_created' || 'merge_completed' => _NotifType.merge,
+      'quality_alert' || 'quality_degraded'        => _NotifType.quality,
+      _                                            => _NotifType.system,
+    };
+    final payload = msg['payload'] as Map<String, dynamic>? ?? {};
+    final title = payload['title'] as String? ??
+        type.replaceAll('_', ' ').toLowerCase();
+    final body  = payload['message'] as String? ??
+        payload['body'] as String? ?? '';
+    final entityId = msg['entity_id'] as String? ??
+        payload['entity_id'] as String?;
+
+    final notif = _Notification(
+      id: 'ws_${DateTime.now().millisecondsSinceEpoch}',
+      type: notifType,
+      title: title,
+      body: body,
+      entityId: entityId,
+      timestamp: msg['timestamp'] != null
+          ? DateTime.tryParse(msg['timestamp'] as String) ?? DateTime.now()
+          : DateTime.now(),
+    );
+    if (mounted) setState(() => _notifications.insert(0, notif));
+  }
 
   final List<_Notification> _notifications = [
     _Notification(
@@ -378,12 +436,9 @@ class _NotificationCenterPanelState extends State<NotificationCenterPanel> {
             ),
           ),
           const Spacer(),
-          GestureDetector(
-            onTap: () => setState(() => _wsLive = !_wsLive),
-            child: Text(
-              'WebSocket',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedText),
-            ),
+          Text(
+            'WebSocket',
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedText),
           ),
         ],
       ),
