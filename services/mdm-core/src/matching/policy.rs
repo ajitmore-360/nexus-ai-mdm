@@ -5,7 +5,7 @@ use std::sync::Arc;
 ///
 /// Construct once at startup and share as `Arc<MatchingPolicy>`.
 /// All defaults represent sensible production starting values.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MatchingPolicy {
     // ---- decision thresholds ------------------------------------------------
     /// Score at or above which a pair is auto-merged without human review.

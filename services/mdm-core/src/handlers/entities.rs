@@ -19,6 +19,8 @@ use crate::handlers::ApiResponse;
 use crate::middleware::tenant::TenantContext;
 use crate::AppState;
 
+// nexus_auth::Claims is used by gdpr_erase_entity — referenced via full path below.
+
 // ── Query params for GET /entities ──────────────────────────────────────────
 
 #[allow(dead_code)]
@@ -39,17 +41,69 @@ pub async fn create_entity(
     headers:                   HeaderMap,
     Json(request):             Json<CreateEntityRequest>,
 ) -> impl IntoResponse {
+    // Enforce record quota before any work is done.
+    match state.license_service.check_record_quota(tenant_ctx.tenant_id).await {
+        Ok(quota) if !quota.allowed => {
+            return (
+                StatusCode::PAYMENT_REQUIRED,
+                Json(ApiResponse::<CreateEntityResponse> {
+                    success: false,
+                    data:    None,
+                    error:   Some(format!(
+                        "Record quota exceeded ({}/{}).  Upgrade your plan to add more records.",
+                        quota.current, quota.limit,
+                    )),
+                }),
+            );
+        }
+        Err(e) => {
+            // Quota service unavailable — log and continue (fail open to avoid
+            // blocking legitimate creates when the license table is unreachable).
+            error!(error=?e, "record quota check failed — proceeding without enforcement");
+        }
+        Ok(quota) => {
+            // Fire quota-proximity notification (debounced to once per 24 h).
+            let ns  = std::sync::Arc::clone(&state.notification_service);
+            let tid = tenant_ctx.tenant_id;
+            let (cur, lim) = (quota.current, quota.limit);
+            tokio::spawn(async move {
+                ns.check_and_notify_record_quota(tid, cur, lim).await.ok();
+            });
+        }
+    }
+
+    // ── Input validation ──────────────────────────────────────────────────────
+    // Checked here (not in the service) because the service accepts trusted
+    // internal callers that bypass the HTTP boundary.
+    if let Some(err) = validate_entity_attributes(&request.entity.attributes) {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ApiResponse::<CreateEntityResponse> {
+                success: false,
+                data:    None,
+                error:   Some(err),
+            }),
+        );
+    }
+
     let ctx = extract_request_context(&tenant_ctx, &headers);
 
     match state.entity_service.create_entity(ctx, request).await {
-        Ok(response) => (
-            StatusCode::CREATED,
-            Json(ApiResponse {
-                success: true,
-                data:    Some(response),
-                error:   None,
-            }),
-        ),
+        Ok(response) => {
+            // Kick off completeness scoring without blocking the response.
+            state.data_quality_service.compute_and_update_background(
+                tenant_ctx.tenant_id,
+                response.entity_id,
+            );
+            (
+                StatusCode::CREATED,
+                Json(ApiResponse {
+                    success: true,
+                    data:    Some(response),
+                    error:   None,
+                }),
+            )
+        }
         Err(err) => {
             error!(error=?err, "entity creation failed");
             (
@@ -299,6 +353,15 @@ pub async fn patch_entity(
         ).into_response(),
     };
 
+    if let Some(attrs) = &request.attributes {
+        if let Some(err) = validate_entity_attributes(attrs) {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({ "success": false, "error": err })),
+            ).into_response();
+        }
+    }
+
     let mut tx = match state.db.begin().await {
         Ok(t)  => t,
         Err(e) => {
@@ -346,6 +409,97 @@ pub async fn patch_entity(
     }
 }
 
+// ── DELETE /entities/:id/gdpr-erase — permanent GDPR Art. 17 erasure ──────────
+
+/// Hard-deletes an entity and all its personal data.
+///
+/// Requires Admin or SuperAdmin role.  Writes a non-PII audit event after
+/// the stored procedure commits, so there is always a record that erasure
+/// was requested even though the subject data is gone.
+pub async fn gdpr_erase_entity(
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    Extension(claims):     Extension<nexus_auth::Claims>,
+    Path(entity_id_str):   Path<String>,
+) -> impl IntoResponse {
+    if !claims.nxs_role.can_admin() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "admin role required for GDPR erasure"
+            })),
+        )
+            .into_response();
+    }
+
+    let entity_id = match Uuid::parse_str(&entity_id_str) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "success": false, "error": "invalid entity id" })),
+            )
+                .into_response();
+        }
+    };
+
+    let tenant_id = tenant_ctx.tenant_id;
+
+    // Call stored procedure — runs all deletes in FK-safe order atomically.
+    let deleted: i32 = match sqlx::query_scalar(
+        "SELECT core_mdm.gdpr_erase_entity($1, $2)",
+    )
+    .bind(tenant_id)
+    .bind(entity_id)
+    .fetch_one(&state.db)
+    .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            error!(
+                tenant_id = %tenant_id,
+                entity_id = %entity_id,
+                error = %e,
+                "gdpr_erase_entity stored proc failed"
+            );
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "success": false, "error": "erasure failed" })),
+            )
+                .into_response();
+        }
+    };
+
+    if deleted == 0 {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "success": false, "error": "entity not found" })),
+        )
+            .into_response();
+    }
+
+    // Write a non-PII audit record via AuditService.
+    state.audit_service.log_background(crate::services::audit_service::AuditEvent {
+        tenant_id,
+        event_type:    "gdpr.entity.erased".to_owned(),
+        actor_id:      Uuid::parse_str(&claims.sub).ok(),
+        resource_type: "entity".to_owned(),
+        resource_id:   entity_id.to_string(),
+        metadata:      serde_json::json!({ "reason": "gdpr_art17" }),
+    });
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "success":   true,
+            "entity_id": entity_id.to_string(),
+            "message":   "Entity and all associated personal data permanently erased (GDPR Art. 17)."
+        })),
+    )
+        .into_response()
+}
+
 // ── Local type-mapping helpers (use string variants from DB) ─────────────────
 
 fn entity_type_to_flutter_type(et: &EntityType) -> &'static str {
@@ -368,4 +522,59 @@ fn entity_status_to_flutter_status(es: &EntityStatus) -> &'static str {
         EntityStatus::Inactive | EntityStatus::Deleted
         | EntityStatus::Archived | EntityStatus::SoftDeleted             => "inactive",
     }
+}
+
+// ── Input validation ──────────────────────────────────────────────────────────
+
+const MAX_ATTRIBUTES:     usize = 200;
+const MAX_ATTR_KEY_LEN:   usize = 256;
+const MAX_ATTR_VALUE_LEN: usize = 65_536; // 64 KB per attribute value string
+
+/// Validates entity attribute payloads arriving at the HTTP boundary.
+/// Returns `None` when valid, or a human-readable error string on the first
+/// violation so callers can return 422 immediately.
+pub(crate) fn validate_entity_attributes(
+    attrs: &[contracts::mdm::entity::EntityAttribute],
+) -> Option<String> {
+    if attrs.len() > MAX_ATTRIBUTES {
+        return Some(format!(
+            "too many attributes: {} exceeds maximum of {}",
+            attrs.len(),
+            MAX_ATTRIBUTES,
+        ));
+    }
+    for attr in attrs {
+        if attr.key.is_empty() {
+            return Some("attribute key must not be empty".into());
+        }
+        if attr.key.len() > MAX_ATTR_KEY_LEN {
+            return Some(format!(
+                "attribute key '{}...' exceeds maximum length of {} characters",
+                &attr.key[..32.min(attr.key.len())],
+                MAX_ATTR_KEY_LEN,
+            ));
+        }
+        if attr.key.contains('\0') {
+            return Some(format!(
+                "attribute key '{}' contains NUL character",
+                &attr.key[..32.min(attr.key.len())],
+            ));
+        }
+        // Validate string values only — numbers/bools/arrays are fine at any size.
+        if let serde_json::Value::String(s) = &attr.value {
+            if s.len() > MAX_ATTR_VALUE_LEN {
+                return Some(format!(
+                    "attribute '{}' value exceeds maximum length of {} bytes",
+                    attr.key, MAX_ATTR_VALUE_LEN,
+                ));
+            }
+            if s.contains('\0') {
+                return Some(format!(
+                    "attribute '{}' value contains NUL character",
+                    attr.key,
+                ));
+            }
+        }
+    }
+    None
 }

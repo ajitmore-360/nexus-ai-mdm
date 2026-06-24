@@ -4,31 +4,40 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio.workspace = true
-axum.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-tower.workspace = true
-tower-http.workspace = true
-uuid.workspace = true
-chrono.workspace = true
-sqlx.workspace = true
-tracing.workspace = true
+tokio.workspace        = true
+axum.workspace         = true
+serde.workspace        = true
+serde_json.workspace   = true
+tower.workspace        = true
+tower-http.workspace   = true
+uuid.workspace         = true
+chrono.workspace       = true
+sqlx.workspace         = true
+tracing.workspace      = true
 tracing-subscriber.workspace = true
-anyhow.workspace = true
-thiserror.workspace = true
-config.workspace = true
-async-trait.workspace = true
-validator.workspace = true
-dotenvy.workspace = true
+anyhow.workspace       = true
+thiserror.workspace    = true
+config.workspace       = true
+async-trait.workspace  = true
+validator.workspace    = true
+dotenvy.workspace      = true
+futures.workspace      = true
+reqwest.workspace      = true
+prometheus.workspace   = true
 strsim      = "0.11"
 hex         = "0.4"
-futures.workspace = true
-reqwest.workspace = true
-contracts        = { path = "../../shared/contracts" }
-database         = { workspace = true }
-nexus-redis      = { workspace = true }
-nexus-auth       = { workspace = true }
-nexus-telemetry  = { workspace = true }
-nexus-security   = { workspace = true }
-prometheus       = { workspace = true }
+rand        = "0.8"
+hmac        = "0.12"
+sha2        = "0.10"
+
+# Internal shared crates — used in production code (handlers, services, main)
+database        = { workspace = true }
+nexus-redis     = { workspace = true }
+nexus-auth      = { workspace = true }
+nexus-telemetry = { workspace = true }
+nexus-security  = { workspace = true }
+contracts       = { path = "../../shared/contracts" }
+
+[dev-dependencies]
+# test-util feature adds tokio::test macro support
+tokio    = { version = "1", features = ["full", "test-util"] }
