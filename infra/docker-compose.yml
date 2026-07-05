@@ -45,9 +45,10 @@ x-redis-env: &redis-env
   REDIS_KEY_PREFIX: nexus
 
 x-auth-env: &auth-env
-  AUTH_DISABLED:    ${AUTH_DISABLED:-false}
-  JWT_SECRET:       ${JWT_SECRET:-nexus-local-dev-jwt-secret-min-32-chars!!}
-  API_BEARER_TOKEN: ${API_BEARER_TOKEN:-nexus-local-dev-token}
+  AUTH_DISABLED:        ${AUTH_DISABLED:-false}
+  JWT_SECRET:           ${JWT_SECRET:-nexus-local-dev-jwt-secret-min-32-chars!!}
+  API_BEARER_TOKEN:     ${API_BEARER_TOKEN:-nexus-local-dev-token}
+  FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
 
 x-obs-env: &obs-env
   RUST_LOG:                       ${RUST_LOG:-info}
@@ -302,6 +303,7 @@ services:
     <<: *deps-infra
     environment:
       <<: [*db-env, *redis-env, *auth-env, *obs-env]
+      AI_SERVICE_URL: http://ai-service:8082
       RUST_LOG: "mdm_core=info,database=info"
     ports:
       - "8081:8081"
@@ -401,9 +403,10 @@ services:
         condition: service_healthy
     environment:
       <<: [*db-env, *redis-env, *kafka-env, *obs-env]
-      MDM_CORE_URL:    http://mdm-core:8081
-      INGEST_PORT:     "8083"
-      RUST_LOG:        "ingest_service=info"
+      MDM_CORE_URL:         http://mdm-core:8081
+      INGEST_PORT:          "8083"
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
+      RUST_LOG:             "ingest_service=info"
     ports:
       - "8083:8083"
     healthcheck:
@@ -467,6 +470,17 @@ services:
       resources:
         limits: { memory: 256M }
 
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: nexus-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    deploy:
+      resources:
+        limits: { memory: 64M }
+
   notification-service:
     build:
       context: ..
@@ -476,10 +490,18 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     environment:
       <<: [*db-env, *redis-env, *obs-env]
       NOTIFICATION_PORT: "8086"
       RUST_LOG:          "notification_service=info"
+      SMTP_HOST:         "${SMTP_HOST:-mailhog}"
+      SMTP_PORT:         "${SMTP_PORT:-1025}"
+      SMTP_FROM:         "${SMTP_FROM:-Nexus AI MDM <noreply@nexus-mdm.io>}"
+      SMTP_INSECURE:     "${SMTP_INSECURE:-true}"
+      SMTP_USER:         "${SMTP_USER:-}"
+      SMTP_PASS:         "${SMTP_PASS:-}"
     ports:
       - "8086:8086"
     healthcheck:
@@ -504,8 +526,9 @@ services:
         condition: service_healthy
     environment:
       <<: [*db-env, *kafka-env, *obs-env]
-      DISTRIBUTION_PORT: "8089"
-      RUST_LOG:          "distribution_service=info"
+      DISTRIBUTION_PORT:    "8089"
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
+      RUST_LOG:             "distribution_service=info"
     ports:
       - "8089:8089"
     healthcheck:
@@ -619,7 +642,7 @@ services:
 
   # ── Grafana Tempo — distributed trace backend ────────────────────────────────
   tempo:
-    image: grafana/tempo:latest
+    image: grafana/tempo:2.6.1
     container_name: nexus-tempo
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/tempo.yml"]

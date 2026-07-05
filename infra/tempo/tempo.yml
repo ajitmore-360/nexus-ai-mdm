@@ -54,8 +54,6 @@ query_frontend:
 
 querier:
   max_concurrent_queries: 20
-  search:
-    prefer_self: 10
 
 # ── Metrics generator: derives RED metrics from trace data ───────────────────
 # Writes to Prometheus remote-write endpoint so Grafana can correlate traces

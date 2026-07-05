@@ -64,33 +64,75 @@ mod matching;
 mod middleware;
 mod services;
 mod survivorship;
+mod workers;
+
+#[cfg(test)]
+mod tests;
 
 use std::sync::Arc;
 
 use handlers::{
-    dashboard::{get_activity_feed, get_dashboard_stats},
-    entities::{create_entity, get_entity_by_id, list_entities, patch_entity},
+    data_governance::{
+        approve_entity, bulk_approve_entities, bulk_reject_entities,
+        create_assignment, delete_assignment, list_assignments,
+        list_pending_approvals, my_assigned_types, reject_entity, submit_for_review,
+    },
+    branding::{get_branding, upsert_branding},
+    distribution::{
+        cancel_distribution_job, create_distribution_job, get_distribution_job,
+        list_distribution_jobs, queue_distribution_job,
+    },
+    notifications::{
+        list_notifications, mark_all_read, mark_notification_read, unread_count,
+    },
+    admin::embed_migration,
+    license::{activate_license, admin_upsert_license, get_my_license, internal_get_license},
+    audit::list_audit_events,
+    dashboard::{get_activity_feed, get_dashboard_stats, get_steward_performance, get_quality_dimensions},
+    domain_policies::{
+        delete_domain_policy, get_domain_policy, list_domain_policies, upsert_domain_policy,
+    },
+    entities::{create_entity, gdpr_erase_entity, get_entity_by_id, list_entities, patch_entity},
     entity_types::{
         create_attribute, create_entity_type, delete_attribute, delete_entity_type,
         list_attributes, list_entity_types, next_sequence, reorder_attributes,
         update_entity_type,
     },
-    lineage::{get_entity_lineage, record_lineage},
+    golden_records::{
+        get_golden_record, list_golden_records, patch_golden_record_attributes,
+    },
+    lineage::{get_entity_lineage, lineage_graph, lineage_stats, list_lineage, record_lineage},
     matching::execute_match,
     merge::execute_merge,
-    policy::{get_weights, update_weights},
-    review::{approve_match, get_review_queue, reject_match},
-    users::{change_role, list_users, login, register},
+    policy::{get_weights, update_weights, get_survivorship_suggestions, list_gdpr_requests},
+    relationships::{
+        list_relationship_types, create_relationship_type, delete_relationship_type,
+        list_entity_relationships, create_entity_relationship, delete_entity_relationship,
+    },
+    review::{
+        approve_match, get_review_queue, reject_match,
+        queue_metrics, bulk_approve_matches, bulk_reject_matches, defer_match, assign_review,
+    },
+    users::{accept_invite, change_password, change_role, invite_info, invite_user, list_users,
+            login, request_password_reset, reset_password, sso_exchange},
 };
 use middleware::{
     auth::auth_middleware,
     tenant::tenant_middleware,
 };
 use services::{
+    audit_service::AuditService,
+    branding_service::BrandingService,
+    data_quality_service::DataQualityService,
+    distribution_service::DistributionService,
+    license_service::LicenseService,
+    notification_service::NotificationService,
+    domain_policy_service::DomainPolicyService,
     entity_service::EntityService,
     golden_record_service::GoldenRecordService,
     matching_service::MatchingService,
     merge_service::MergeService,
+    relationship_service::RelationshipService,
     review_service::ReviewService,
     survivorship_service::SurvivorshipService,
 };
@@ -135,6 +177,12 @@ pub struct AppState {
     pub tenant_repository:
         TenantRepository,
 
+    pub domain_policy_service:
+        Arc<DomainPolicyService>,
+
+    pub relationship_service:
+        Arc<RelationshipService>,
+
     pub matching_service:
         Arc<MatchingService>,
 
@@ -153,12 +201,37 @@ pub struct AppState {
     pub review_service:
         Arc<ReviewService>,
 
+    pub audit_service:
+        Arc<AuditService>,
+
+    pub branding_service:
+        Arc<BrandingService>,
+
+    pub data_quality_service:
+        Arc<DataQualityService>,
+
+    pub distribution_service:
+        Arc<DistributionService>,
+
+    pub license_service:
+        Arc<LicenseService>,
+
+    pub notification_service:
+        Arc<NotificationService>,
+
     /// Live matching policy — can be updated at runtime via PATCH /policy/weights
     /// without restarting the service.
     pub matching_policy: Arc<std::sync::RwLock<matching::MatchingPolicy>>,
 
     /// Optional Redis-backed rate limiter for brute-force protection on /auth/login.
     pub redis_rate_limiter: Option<Arc<nexus_redis::RedisRateLimiter>>,
+
+    /// Optional Redis task queue — used for re-embedding on PATCH and other async work.
+    pub task_queue: Option<Arc<nexus_redis::TaskQueue>>,
+
+    /// Optional Redis pub/sub publisher — broadcasts real-time events to the API gateway
+    /// which fans them out to connected WebSocket clients on the `nexus:tenant:<id>` channel.
+    pub pubsub: Option<Arc<nexus_redis::PubSubClient>>,
 
     /// AES-256-GCM field-level encryption for PII attributes (email, phone, tax_id, etc.).
     /// None when FIELD_ENCRYPTION_KEY is not set — PII stored plaintext (dev mode only).
@@ -408,31 +481,66 @@ fn build_router(
             .allow_credentials(true);
 
     let protected = Router::new()
+        // Approval workflow — static routes BEFORE /:id to avoid Axum ambiguity
+        .route("/entities/pending-approvals", get(list_pending_approvals))
+        .route("/entities/bulk-approve",      post(bulk_approve_entities))
+        .route("/entities/bulk-reject",       post(bulk_reject_entities))
+        .route("/entities/:id/submit-for-review", post(submit_for_review))
+        .route("/entities/:id/approve",           post(approve_entity))
+        .route("/entities/:id/reject",            post(reject_entity))
         .route("/entities",               get(list_entities).post(create_entity))
         .route("/entities/:id",           get(get_entity_by_id).patch(patch_entity))
+        .route("/entities/:id/gdpr-erase", delete(gdpr_erase_entity))
         .route("/entities/:id/lineage",   get(get_entity_lineage))
-        .route("/lineage",                post(record_lineage))
+        .route("/lineage",                get(list_lineage).post(record_lineage))
+        .route("/lineage/graph",          axum::routing::get(lineage_graph))
+        .route("/lineage/stats",          axum::routing::get(lineage_stats))
         .route("/match",                  post(execute_match))
         .route("/match/review-queue",     get(get_review_queue))
         .route("/match/:request_id/candidates/:candidate_id/approve", axum::routing::post(approve_match))
         .route("/match/:request_id/candidates/:candidate_id/reject",  axum::routing::post(reject_match))
+        .route("/match/queue-metrics",    get(queue_metrics))
+        .route("/match/bulk-approve",     axum::routing::post(bulk_approve_matches))
+        .route("/match/bulk-reject",      axum::routing::post(bulk_reject_matches))
+        .route("/match/:request_id/candidates/:candidate_id/defer", axum::routing::post(defer_match))
+        .route("/match/review-queue/:review_id/assign", patch(assign_review))
         .route("/merge",                  post(execute_merge))
+        // Golden records — read + manual attribute override
+        .route("/golden-records",         get(list_golden_records))
+        .route("/golden-records/:id",     get(get_golden_record))
+        .route("/golden-records/:id/attributes", patch(patch_golden_record_attributes))
+        // Entity relationship routes
+        .route("/entities/:id/relationships",     get(list_entity_relationships).post(create_entity_relationship))
+        .route("/relationships/:id",              delete(delete_entity_relationship))
         // /search is served by the dedicated search-service via api-gateway
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
 
     // Public auth routes — no tenant/auth middleware
+    // NOTE: /auth/register intentionally omitted. Account creation requires an invite token
+    // via /auth/accept-invite. Open self-registration is a security violation in a multi-tenant MDM.
     let auth_routes = Router::new()
-        .route("/auth/login",    axum::routing::post(login))
-        .route("/auth/register", axum::routing::post(register));
+        .route("/auth/login",            axum::routing::post(login))
+        .route("/auth/accept-invite",    axum::routing::post(accept_invite))
+        .route("/auth/invite-info",      axum::routing::get(invite_info))
+        .route("/auth/forgot-password",  axum::routing::post(request_password_reset))
+        .route("/auth/reset-password",   axum::routing::post(reset_password))
+        .route("/auth/sso-exchange",     axum::routing::post(sso_exchange));
 
     // Protected user management + policy routes
     let management_routes = Router::new()
+        .route("/auth/change-password",   axum::routing::post(change_password))
         .route("/users",                  axum::routing::get(list_users))
+        .route("/users/invite",           axum::routing::post(invite_user))
         .route("/users/:id/role",         axum::routing::patch(change_role))
-        .route("/policy/weights",         axum::routing::get(get_weights).patch(update_weights))
-        .route("/dashboard/stats",        axum::routing::get(get_dashboard_stats))
-        .route("/dashboard/activity",     axum::routing::get(get_activity_feed))
+        .route("/policy/weights",                    axum::routing::get(get_weights).patch(update_weights))
+        .route("/policy/survivorship-suggestions",   axum::routing::get(get_survivorship_suggestions))
+        .route("/policy/gdpr/requests",              axum::routing::get(list_gdpr_requests))
+        .route("/dashboard/stats",              axum::routing::get(get_dashboard_stats))
+        .route("/dashboard/activity",           axum::routing::get(get_activity_feed))
+        .route("/dashboard/steward-performance",   axum::routing::get(get_steward_performance))
+        .route("/dashboard/quality-dimensions",    axum::routing::get(get_quality_dimensions))
+        .route("/audit/events",           axum::routing::get(list_audit_events))
         // ── Entity type config admin routes ──────────────────────────────────
         .route("/entity-types",
             get(list_entity_types).post(create_entity_type))
@@ -448,8 +556,59 @@ fn build_router(
             delete(delete_attribute))
         .route("/entity-types/:code/next-sequence",
             get(next_sequence))
+        // ── Domain-level policy overrides ─────────────────────────────────────
+        .route("/domain-policies",
+            get(list_domain_policies))
+        .route("/domain-policies/:entity_type_code",
+            get(get_domain_policy)
+                .put(upsert_domain_policy)
+                .delete(delete_domain_policy))
+        // ── Relationship type config admin routes ─────────────────────────────
+        .route("/relationship-types",
+            get(list_relationship_types).post(create_relationship_type))
+        .route("/relationship-types/:type_id",
+            delete(delete_relationship_type))
+        // ── License routes ────────────────────────────────────────────────────
+        .route("/license",
+            get(get_my_license))
+        .route("/license/activate",
+            post(activate_license))
+        .route("/admin/tenants/:id/license",
+            post(admin_upsert_license))
+        .route("/admin/embed-migration",
+            axum::routing::post(embed_migration))
+        // ── Branding routes (Enterprise / white-label) ────────────────────────
+        .route("/tenant/branding",
+            get(get_branding).put(upsert_branding))
+        // ── Notification inbox ────────────────────────────────────────────────
+        .route("/notifications",
+            get(list_notifications))
+        .route("/notifications/unread-count",
+            get(unread_count))
+        .route("/notifications/:id/read",
+            patch(mark_notification_read))
+        .route("/notifications/read-all",
+            post(mark_all_read))
+        // ── Distribution jobs ─────────────────────────────────────────────────
+        .route("/distribution/jobs",
+            get(list_distribution_jobs).post(create_distribution_job))
+        .route("/distribution/jobs/:id",
+            get(get_distribution_job).delete(cancel_distribution_job))
+        .route("/distribution/jobs/:id/queue",
+            post(queue_distribution_job))
+        // ── Data Governance — assignment CRUD (BusinessAdmin/Admin only) ──────
+        .route("/governance/assignments",
+            get(list_assignments).post(create_assignment))
+        .route("/governance/assignments/my-types",
+            get(my_assigned_types))
+        .route("/governance/assignments/:id",
+            delete(delete_assignment))
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
+
+    // Internal no-auth route group — gateway-to-service only, not exposed publicly.
+    let internal_routes = Router::new()
+        .route("/internal/license/:tenant_id", get(internal_get_license));
 
     Router::new()
         .route("/health",       get(health))
@@ -461,6 +620,7 @@ fn build_router(
         }))
         .merge(auth_routes)
         .merge(management_routes)
+        .merge(internal_routes)
         .merge(protected)
         .layer(TraceLayer::new_for_http())
         .layer(cors)
@@ -544,6 +704,20 @@ async fn main() {
     let app_env = env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     info!(app_env = %app_env, "MDM Core environment loaded");
 
+    // Guard: reject known dev default JWT secret in non-dev environments.
+    const KNOWN_DEV_JWT_SECRET: &str = "nexus-local-dev-jwt-secret-min-32-chars!!";
+    let jwt_secret_val = env::var("JWT_SECRET").unwrap_or_default();
+    if jwt_secret_val == KNOWN_DEV_JWT_SECRET
+        && matches!(app_env.as_str(), "production" | "staging" | "prod" | "stage")
+    {
+        panic!(
+            "SECURITY: JWT_SECRET is the well-known dev default. \
+             Rotate it before deploying to APP_ENV={}. \
+             Generate: openssl rand -hex 32",
+            app_env
+        );
+    }
+
     let allowed_origins_raw = env::var("ALLOWED_ORIGINS")
         .unwrap_or_else(|_| "http://localhost:3000,http://localhost:4000".to_string());
     if matches!(app_env.as_str(), "production" | "prod" | "staging" | "stage") {
@@ -602,14 +776,28 @@ async fn main() {
 
     info!("Running database migrations...");
 
-    database::migration::run_migrations(&db)
-        .await
-        .unwrap_or_else(|e| {
-            // Log but do not panic — init scripts may have already
-            // created tables, and the migration might report a
-            // conflict that is actually safe to ignore in dev.
-            tracing::warn!(error=%e, "migration step reported a warning (continuing)");
-        });
+    match database::migration::run_migrations(&db).await {
+        Ok(()) => {}
+        Err(e) => {
+            let msg = e.to_string();
+            // Checksum mismatches mean a migration file was edited after being applied.
+            // Tables still exist; log loudly and continue so the app can serve requests.
+            // Any other migration error (connection failure, syntax error) is fatal.
+            if msg.contains("checksum") || msg.contains("Checksum")
+                || msg.contains("modified") || msg.contains("previously applied")
+            {
+                tracing::error!(
+                    error = %e,
+                    "Migration checksum mismatch — a migration file was modified after \
+                     it was applied to this database. Re-run migrations against a clean DB \
+                     or update the checksum in _sqlx_migrations to resolve. Continuing \
+                     because tables were pre-applied."
+                );
+            } else {
+                panic!("Database migration failed: {}", e);
+            }
+        }
+    }
 
     info!("Database migrations complete");
 
@@ -666,30 +854,57 @@ async fn main() {
     // No frozen copy exists; every match execution reads the current weights.
     let live_policy = Arc::new(std::sync::RwLock::new(MatchingPolicy::default()));
 
-    let matcher = Arc::new(Matcher::new(
+    // Optional SemanticClient — wired when AI_SERVICE_URL is set.
+    // Falls back gracefully when absent: grey-zone candidates stay in RequiresReview.
+    let semantic_client = env::var("AI_SERVICE_URL").ok().map(|url| {
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(35))
+            .build()
+            .expect("reqwest client build failed");
+        crate::matching::SemanticClient::new(http, &url)
+    });
+
+    let matcher_base = Matcher::new(
         matching_repository_arc,
         Arc::clone(&live_policy),
-    ));
+    );
+    let matcher = Arc::new(match semantic_client {
+        Some(sc) => {
+            info!("SemanticClient enabled — LLM grey-zone resolution active");
+            matcher_base.with_semantic_client(sc)
+        }
+        None => {
+            warn!("AI_SERVICE_URL not set — semantic matching disabled");
+            matcher_base
+        }
+    });
 
     let matching_service =
         Arc::new(MatchingService::new(matcher));
 
-    // Redis — entity cache, task queue, and login rate limiter (all optional)
-    let (entity_cache, task_queue, login_rate_limiter) = {
-        use nexus_redis::{create_pool, EntityCache, RedisConfig, RedisRateLimiter, TaskQueue};
+    let domain_policy_service =
+        Arc::new(DomainPolicyService::new(db.clone()));
+
+    let relationship_service =
+        Arc::new(RelationshipService::new(db.clone()));
+
+    // Redis — entity cache, task queue, login rate limiter, and pub/sub publisher (all optional)
+    let (entity_cache, task_queue, login_rate_limiter, pubsub_client) = {
+        use nexus_redis::{create_pool, EntityCache, PubSubClient, RedisConfig, RedisRateLimiter, TaskQueue};
         let cfg = RedisConfig::from_env();
         match create_pool(&cfg) {
             Ok(pool) => {
                 let cache   = Arc::new(EntityCache::new(pool.clone(), &cfg.key_prefix));
                 let queue   = Arc::new(TaskQueue::new(pool.clone(), cfg.key_prefix.clone()));
+                let pubsub  = Arc::new(PubSubClient::new(pool.clone(), cfg.key_prefix.clone()));
                 // Login: max 10 attempts per 5-minute window per IP+email combo
                 let limiter = Arc::new(RedisRateLimiter::new(pool, cfg.key_prefix.clone(), 10, 300));
-                tracing::info!("Redis connected — entity cache, task queue, and login rate limiter enabled");
-                (Some(cache), Some(queue), Some(limiter))
+                tracing::info!("Redis connected — entity cache, task queue, pub/sub, and login rate limiter enabled");
+                (Some(cache), Some(queue), Some(limiter), Some(pubsub))
             }
             Err(e) => {
                 tracing::warn!(error=%e, "Redis unavailable — login rate limiting disabled");
-                (None, None, None)
+                (None, None, None, None)
             }
         }
     };
@@ -723,6 +938,7 @@ async fn main() {
         }
     };
 
+    let task_queue_for_state = task_queue.clone();
     let entity_service = Arc::new(
         EntityService::new(
             db.clone(),
@@ -733,11 +949,17 @@ async fn main() {
         .with_encryption(field_encryption.clone()),
     );
 
-    let merge_service = Arc::new(MergeService::new(
-        db.clone(),
-        Arc::new(entity_repository.clone()),
-        Arc::new(golden_record_repository.clone()),
-    ));
+    let merge_service = Arc::new({
+        let svc = MergeService::new(
+            db.clone(),
+            Arc::new(entity_repository.clone()),
+            Arc::new(golden_record_repository.clone()),
+        );
+        match task_queue_for_state.clone() {
+            Some(q) => svc.with_task_queue(q),
+            None    => svc,
+        }
+    });
 
     let golden_record_service = Arc::new(GoldenRecordService::new(
         db.clone(),
@@ -752,6 +974,13 @@ async fn main() {
         db.clone(),
         Arc::new(matching_repository.clone()),
     ));
+
+    let license_service       = Arc::new(LicenseService::new(db.clone()));
+    let branding_service      = Arc::new(BrandingService::new(db.clone()));
+    let audit_service         = Arc::new(AuditService::new(db.clone()));
+    let notification_service  = Arc::new(NotificationService::new(db.clone()));
+    let data_quality_service  = Arc::new(DataQualityService::new(db.clone()));
+    let distribution_service  = Arc::new(DistributionService::new(db.clone()));
 
     //
     // ====================================
@@ -776,17 +1005,44 @@ async fn main() {
 
             tenant_repository,
 
+            domain_policy_service,
+            relationship_service,
             matching_service,
             entity_service,
             merge_service,
             golden_record_service,
             survivorship_service,
             review_service,
+            license_service,
+            branding_service,
+            audit_service,
+            notification_service,
+            data_quality_service,
+            distribution_service,
             matching_policy:    live_policy,
             redis_rate_limiter: login_rate_limiter,
+            task_queue:         task_queue_for_state,
+            pubsub:             pubsub_client,
             field_encryption,
         }
     );
+
+    // ── Background workers ─────────────────────────────────────────────────────
+    // These run independently of the HTTP server; failures are logged but never
+    // crash the process.
+
+    // License expiry: check at startup + every 24 h; fires quota-proximity
+    // notifications for tenants whose license expires within 30 days.
+    tokio::spawn(workers::license_expiry::run(
+        state.db.clone(),
+        Arc::clone(&state.notification_service),
+    ));
+
+    // Webhook delivery: poll delivery_log every 10 s, POST with HMAC-SHA256,
+    // update delivery status.
+    tokio::spawn(workers::webhook_delivery::run(state.db.clone()));
+
+    info!("Background workers started (license_expiry, webhook_delivery)");
 
     //
     // ====================================
