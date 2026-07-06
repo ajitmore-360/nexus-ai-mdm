@@ -54,7 +54,7 @@ impl SemanticMatcher {
 
         // Graceful degradation: if LLM is unavailable, fall back to a
         // score-based heuristic rather than surfacing an error to the caller.
-        let raw = match self.llm.generate(&prompt).await {
+        let raw = match self.llm.generate(&prompt, false).await {
             Ok(r) => r,
             Err(e) => {
                 warn!(
@@ -133,7 +133,7 @@ impl SemanticMatcher {
         field_results:   &Value,
     ) -> Result<String> {
         let prompt = Prompts::explain_match(source_attrs, candidate_attrs, score, field_results);
-        self.llm.generate(&prompt).await
+        self.llm.generate(&prompt, false).await
     }
 }
 

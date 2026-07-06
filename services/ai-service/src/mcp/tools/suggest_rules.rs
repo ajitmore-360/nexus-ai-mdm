@@ -108,7 +108,7 @@ pub async fn suggest_survivorship_rules(
             &Value::Object(source_trust.clone()),
         );
 
-        match llm.generate(&prompt).await {
+        match llm.generate(&prompt, false).await {
             Ok(raw) => {
                 if let Some(s) = parse_suggestion(field, &raw) {
                     suggestions.push(s);

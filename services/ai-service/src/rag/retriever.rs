@@ -163,6 +163,72 @@ impl RagRetriever {
         lines.join("\n")
     }
 
+    /// Like `fetch_live_stats` but filtered to specific entity types (for steward scope).
+    pub async fn fetch_live_stats_scoped(&self, tenant_id: Uuid, entity_types: Option<&[String]>) -> String {
+        match entity_types {
+            Some(types) if !types.is_empty() => {
+                let result = sqlx::query(
+                    r#"
+                    SELECT entity_type,
+                           status,
+                           COUNT(*)::BIGINT                       AS cnt,
+                           ROUND(AVG(trust_score)::NUMERIC, 2)    AS avg_trust
+                    FROM   core_mdm.entities
+                    WHERE  tenant_id   = $1
+                      AND  entity_type = ANY($2)
+                      AND  valid_to    = 'infinity'
+                    GROUP  BY entity_type, status
+                    ORDER  BY entity_type, status
+                    "#,
+                )
+                .bind(tenant_id)
+                .bind(types)
+                .fetch_all(&self.pool)
+                .await;
+
+                let rows = match result {
+                    Err(e) => {
+                        tracing::warn!(error=%e, "scoped live stats query failed");
+                        return String::new();
+                    }
+                    Ok(r) if r.is_empty() => {
+                        return format!(
+                            "No entities found for entity types: {}.",
+                            types.join(", ")
+                        );
+                    }
+                    Ok(r) => r,
+                };
+
+                let mut by_type: BTreeMap<String, Vec<(String, i64)>> = BTreeMap::new();
+                let mut grand_total: i64 = 0;
+                for row in &rows {
+                    let etype:  String = row.try_get("entity_type").unwrap_or_default();
+                    let status: String = row.try_get("status").unwrap_or_default();
+                    let cnt:    i64    = row.try_get("cnt").unwrap_or(0);
+                    grand_total += cnt;
+                    by_type.entry(etype).or_default().push((status, cnt));
+                }
+
+                let mut lines = Vec::with_capacity(by_type.len() + 2);
+                lines.push(format!("Total entities (scoped): {}", grand_total));
+                for (etype, statuses) in &by_type {
+                    let type_total: i64 = statuses.iter().map(|(_, c)| c).sum();
+                    let breakdown: Vec<String> =
+                        statuses.iter().map(|(s, c)| format!("{} {}", c, s)).collect();
+                    lines.push(format!(
+                        "- {} entities: {} total ({})",
+                        etype,
+                        type_total,
+                        breakdown.join(", ")
+                    ));
+                }
+                lines.join("\n")
+            }
+            _ => self.fetch_live_stats(tenant_id).await,
+        }
+    }
+
     pub fn format_context(&self, docs: &[RetrievedDoc]) -> String {
         if docs.is_empty() {
             return "No relevant context found.".to_string();

@@ -23,6 +23,7 @@ class CopilotRepository {
         AppConstants.aiCopilotStreamPath,
         data: {
           'message': message,
+          'response_format': 'auto',
           if (history != null && history.isNotEmpty) 'history': history,
         },
         options: Options(
@@ -81,6 +82,7 @@ class CopilotRepository {
         AppConstants.aiCopilotPath,
         data: {
           'message': message,
+          'response_format': 'auto',
           if (history != null && history.isNotEmpty) 'history': history,
         },
       );

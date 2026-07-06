@@ -1,6 +1,6 @@
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, sse::{Event, KeepAlive, Sse}},
     Json,
 };
@@ -10,8 +10,8 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::feedback::{StewardFeedback, WeightTuner};
-use crate::llm::sanitize_user_query;
-use crate::mcp::{McpRequest, route};
+use crate::llm::{sanitize_user_query, Prompts};
+use crate::mcp::{McpRequest, RoleContext, route};
 use crate::state::AppState;
 
 // =========================================================================
@@ -34,10 +34,70 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
 
 pub async fn copilot(
     State(state): State<AppState>,
+    headers:      HeaderMap,
     Json(request): Json<McpRequest>,
 ) -> impl IntoResponse {
-    let response = route(&state, request).await;
-    (StatusCode::OK, Json(response))
+    // Cross-tenant isolation: body tenant_id must match the JWT-derived header
+    let header_tid = headers
+        .get("x-tenant-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<Uuid>().ok());
+
+    if let Some(hdr_tid) = header_tid {
+        if hdr_tid != request.tenant_id {
+            tracing::warn!(
+                body_tid  = %request.tenant_id,
+                hdr_tid   = %hdr_tid,
+                user_id   = ?request.user_id,
+                "tenant_id mismatch — possible gateway bypass"
+            );
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "success": false, "error": "tenant_id mismatch" })),
+            ).into_response();
+        }
+    }
+
+    // Role from the JWT-derived gateway header (never from the request body)
+    let role = headers
+        .get("x-user-role")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("viewer")
+        .to_string();
+
+    // Steward scope: look up assigned entity types from DB
+    let entity_types: Vec<String> = if role == "steward" {
+        if let Some(uid) = request.user_id {
+            sqlx::query_scalar::<_, String>(
+                "SELECT entity_type_code FROM core_mdm.entity_type_assignments \
+                 WHERE identity_id = $1 AND tenant_id = $2",
+            )
+            .bind(uid)
+            .bind(request.tenant_id)
+            .fetch_all(&state.pool)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!(error=%e, "entity type lookup failed; using empty scope");
+                vec![]
+            })
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    };
+
+    // Resolve format — default to "auto" so keyword detection runs when client omits the field
+    let raw_fmt = request.response_format.as_deref().unwrap_or("auto");
+    let fmt = if raw_fmt == "auto" {
+        Prompts::detect_response_format(request.prompt.as_deref().unwrap_or("")).to_string()
+    } else {
+        raw_fmt.to_string()
+    };
+
+    let ctx = RoleContext { role, entity_types, fmt };
+    let response = route(&state, request, ctx).await;
+    (StatusCode::OK, Json(response)).into_response()
 }
 
 // =========================================================================
@@ -48,8 +108,29 @@ pub async fn copilot(
 /// Tool calls are NOT supported on the streaming path; they still use /mcp/query.
 pub async fn copilot_stream(
     State(state): State<AppState>,
+    headers:      HeaderMap,
     Json(request): Json<McpRequest>,
 ) -> axum::response::Response {
+    // Cross-tenant isolation
+    let header_tid = headers
+        .get("x-tenant-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<Uuid>().ok());
+
+    if let Some(hdr_tid) = header_tid {
+        if hdr_tid != request.tenant_id {
+            tracing::warn!(
+                body_tid = %request.tenant_id,
+                hdr_tid  = %hdr_tid,
+                "stream tenant_id mismatch — possible gateway bypass"
+            );
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "success": false, "error": "tenant_id mismatch" })),
+            ).into_response();
+        }
+    }
+
     if request.tool.is_some() {
         return (
             StatusCode::BAD_REQUEST,
@@ -67,14 +148,13 @@ pub async fn copilot_stream(
 
     let prompt = sanitize_user_query(raw_prompt);
     if prompt.contains("redacted") {
-        // Track injection attempts per user (or tenant if no user_id).
         let tracker_key = request.user_id
             .map(|u| u.to_string())
             .unwrap_or_else(|| request.tenant_id.to_string());
         let rate_exceeded = state.record_injection_attempt(&tracker_key);
         tracing::warn!(
-            tenant_id    = %request.tenant_id,
-            user_id      = ?request.user_id,
+            tenant_id     = %request.tenant_id,
+            user_id       = ?request.user_id,
             rate_exceeded = rate_exceeded,
             "stream prompt injection attempt blocked"
         );
@@ -90,12 +170,47 @@ pub async fn copilot_stream(
         ).into_response();
     }
 
+    // Role from JWT-derived gateway header
+    let role = headers
+        .get("x-user-role")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("viewer")
+        .to_string();
+
+    let entity_types: Vec<String> = if role == "steward" {
+        if let Some(uid) = request.user_id {
+            sqlx::query_scalar::<_, String>(
+                "SELECT entity_type_code FROM core_mdm.entity_type_assignments \
+                 WHERE identity_id = $1 AND tenant_id = $2",
+            )
+            .bind(uid)
+            .bind(request.tenant_id)
+            .fetch_all(&state.pool)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!(error=%e, "entity type lookup failed in stream");
+                vec![]
+            })
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    };
+
+    let raw_fmt = request.response_format.as_deref().unwrap_or("auto");
+    let fmt = if raw_fmt == "auto" {
+        Prompts::detect_response_format(&prompt).to_string()
+    } else {
+        raw_fmt.to_string()
+    };
+
     let tenant_name = state.tenant_name(request.tenant_id).await;
 
     // Embed + retrieve + format prompt (fast; ~100-300ms)
     let augmented_prompt = match state
         .rag_pipeline
-        .build_prompt(request.tenant_id, &tenant_name, &prompt, None)
+        .build_prompt(request.tenant_id, &tenant_name, &prompt, None, &role, &entity_types, &fmt)
         .await
     {
         Err(e) => {
@@ -108,8 +223,8 @@ pub async fn copilot_stream(
         Ok(p) => p,
     };
 
-    // Start the streaming LLM generation
-    let token_stream = match state.llm.generate_stream(&augmented_prompt).await {
+    // Start the streaming LLM generation (JSON mode when table format is expected)
+    let token_stream = match state.llm.generate_stream(&augmented_prompt, fmt == "table").await {
         Err(e) => {
             tracing::error!(error=%e, "LLM generate_stream failed to start");
             return (

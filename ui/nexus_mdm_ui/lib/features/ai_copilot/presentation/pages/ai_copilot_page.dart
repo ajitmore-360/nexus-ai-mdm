@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
@@ -17,6 +18,7 @@ class _ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   final bool isStreaming;
+  final Map<String, dynamic>? tableData;
 
   const _ChatMessage({
     required this.id,
@@ -24,15 +26,22 @@ class _ChatMessage {
     required this.isUser,
     required this.timestamp,
     this.isStreaming = false,
+    this.tableData,
   });
 
-  _ChatMessage copyWith({String? content, bool? isStreaming}) =>
+  _ChatMessage copyWith({
+    String? content,
+    bool? isStreaming,
+    Map<String, dynamic>? tableData,
+    bool clearTable = false,
+  }) =>
       _ChatMessage(
         id: id,
         content: content ?? this.content,
         isUser: isUser,
         timestamp: timestamp,
         isStreaming: isStreaming ?? this.isStreaming,
+        tableData: clearTable ? null : (tableData ?? this.tableData),
       );
 }
 
@@ -137,7 +146,6 @@ What would you like to know about your master data?''';
         if (!mounted) break;
         if (firstChunk) {
           firstChunk = false;
-          // Hide the "Thinking…" indicator as soon as tokens start arriving.
           setState(() => _isThinking = false);
         }
         buffer.write(chunk);
@@ -156,13 +164,34 @@ What would you like to know about your master data?''';
     }
 
     if (!mounted) return;
+
+    // After streaming: extract table JSON from anywhere in the response.
+    // The LLM may prepend a prose sentence before the JSON object.
+    Map<String, dynamic>? parsedTable;
+    String finalContent = buffer.isEmpty ? 'No response received.' : buffer.toString();
+    const tableMarker = '{"type":"table"';
+    final jsonIdx = finalContent.indexOf(tableMarker);
+    if (jsonIdx >= 0) {
+      try {
+        final decoded = jsonDecode(finalContent.substring(jsonIdx));
+        if (decoded is Map<String, dynamic> && decoded['type'] == 'table') {
+          parsedTable = decoded;
+          // Keep any preamble prose; strip the raw JSON block
+          finalContent = finalContent.substring(0, jsonIdx).trim();
+        }
+      } catch (_) {
+        // Not valid JSON at that position — treat full response as prose
+      }
+    }
+
     setState(() {
       _isThinking = false;
       final idx = _messages.indexWhere((m) => m.id == msgId);
       if (idx != -1) {
         _messages[idx] = _messages[idx].copyWith(
-          content: buffer.isEmpty ? 'No response received.' : buffer.toString(),
+          content: finalContent,
           isStreaming: false,
+          tableData: parsedTable,
         );
       }
     });
@@ -361,7 +390,10 @@ What would you like to know about your master data?''';
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildMarkdownText(msg.content),
+                        if (msg.tableData != null)
+                          _buildTableMessage(msg.tableData!)
+                        else
+                          _buildMarkdownText(msg.content),
                         if (msg.isStreaming)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
@@ -377,6 +409,68 @@ What would you like to know about your master data?''';
         ),
       ).animate(delay: 0.ms).fadeIn(duration: 300.ms).slideX(
           begin: -0.05, end: 0, duration: 300.ms),
+    );
+  }
+
+  Widget _buildTableMessage(Map<String, dynamic> data) {
+    final columns = (data['columns'] as List?)?.map((c) => c.toString()).toList() ?? [];
+    final rawRows = (data['rows'] as List?) ?? [];
+    final summary = data['summary'] as String? ?? '';
+
+    // Normalize rows: LLM may return either arrays or objects per row
+    final rows = rawRows.map((row) {
+      if (row is List) return row.map((v) => v?.toString() ?? '').toList();
+      if (row is Map) return columns.map((c) => row[c]?.toString() ?? '').toList();
+      return <String>[];
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (summary.isNotEmpty) ...[
+          Text(summary, style: AppTextStyles.aiMessage),
+          const SizedBox(height: 10),
+        ],
+        Text(
+          '${rows.length} result${rows.length == 1 ? '' : 's'}',
+          style: AppTextStyles.labelSmall.copyWith(color: AppColors.secondaryText),
+        ),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            headingRowColor: WidgetStateProperty.all(
+              AppColors.aiPurple.withValues(alpha: 0.08),
+            ),
+            dataRowColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? AppColors.aiPurple.withValues(alpha: 0.04)
+                  : null,
+            ),
+            border: TableBorder.all(
+              color: AppColors.divider,
+              width: 1,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            headingTextStyle: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.primaryText,
+              fontWeight: FontWeight.w600,
+            ),
+            dataTextStyle: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.primaryText,
+            ),
+            columns: columns.map((c) => DataColumn(label: Text(c))).toList(),
+            rows: rows
+                .map((row) => DataRow(
+                      cells: List.generate(
+                        columns.length,
+                        (i) => DataCell(Text(i < row.length ? row[i] : '')),
+                      ),
+                    ))
+                .toList(),
+          ),
+        ),
+      ],
     );
   }
 
