@@ -1,4 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import '../../../core/auth/auth_manager.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_client.dart' hide ApiException;
 import '../../../shared/models/api_responses.dart';
 
@@ -124,15 +127,22 @@ class EntityTypeRepository {
   final ApiClient _apiClient;
   EntityTypeRepository(this._apiClient);
 
+  // Always inject the tenant header directly so requests succeed even when the
+  // async interceptor hasn't fired yet (e.g. first call after page refresh).
+  static Options _tenantOpts(String tenantId) => Options(
+        headers: {AppConstants.tenantHeaderKey: tenantId},
+      );
+
   Future<ApiResult<List<EntityTypeModel>>> listEntityTypes(String tenantId) async {
     try {
       final response = await _apiClient.get<Map<String, dynamic>>(
         '/admin/entity-types',
         queryParameters: {'tenant_id': tenantId},
+        options: _tenantOpts(tenantId),
       );
       final data = response.data;
       if (data == null) return const Failure(ApiException(message: 'Empty response'));
-      final items = (data['items'] as List<dynamic>? ?? [])
+      final items = (data['data'] as List<dynamic>? ?? [])
           .map((e) => EntityTypeModel.fromJson(e as Map<String, dynamic>))
           .toList();
       return Success(items);
@@ -141,7 +151,7 @@ class EntityTypeRepository {
         debugPrint('[EntityTypeRepository] listEntityTypes error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 
@@ -158,6 +168,7 @@ class EntityTypeRepository {
     try {
       final response = await _apiClient.post<Map<String, dynamic>>(
         '/admin/entity-types',
+        options: _tenantOpts(tenantId),
         data: {
           'tenant_id': tenantId,
           'name': name,
@@ -177,7 +188,7 @@ class EntityTypeRepository {
         debugPrint('[EntityTypeRepository] createEntityType error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 
@@ -187,15 +198,13 @@ class EntityTypeRepository {
   ) async {
     try {
       final response = await _apiClient.get<Map<String, dynamic>>(
-        '/admin/attributes',
-        queryParameters: {
-          'tenant_id': tenantId,
-          'entity_type_code': entityTypeCode,
-        },
+        '/admin/entity-types/$entityTypeCode/attributes',
+        queryParameters: {'tenant_id': tenantId},
+        options: _tenantOpts(tenantId),
       );
       final data = response.data;
       if (data == null) return const Failure(ApiException(message: 'Empty response'));
-      final items = (data['items'] as List<dynamic>? ?? [])
+      final items = (data['data'] as List<dynamic>? ?? [])
           .map((e) => AttributeSchemaModel.fromJson(e as Map<String, dynamic>))
           .toList();
       return Success(items);
@@ -204,7 +213,7 @@ class EntityTypeRepository {
         debugPrint('[EntityTypeRepository] listAttributes error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 
@@ -221,9 +230,9 @@ class EntityTypeRepository {
   }) async {
     try {
       final response = await _apiClient.post<Map<String, dynamic>>(
-        '/admin/attributes',
+        '/admin/entity-types/$entityTypeCode/attributes',
+        options: _tenantOpts(tenantId),
         data: {
-          'entity_type_code': entityTypeCode,
           'tenant_id': tenantId,
           'attribute_key': attributeKey,
           'display_name': displayName,
@@ -242,7 +251,7 @@ class EntityTypeRepository {
         debugPrint('[EntityTypeRepository] createAttribute error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 
@@ -251,14 +260,18 @@ class EntityTypeRepository {
     String attrId,
   ) async {
     try {
-      await _apiClient.delete<Map<String, dynamic>>('/admin/attributes/$attrId');
+      final tenantId = await AuthManager.getTenantId() ?? '';
+      await _apiClient.delete<Map<String, dynamic>>(
+        '/admin/entity-types/$entityTypeCode/attributes/$attrId',
+        options: _tenantOpts(tenantId),
+      );
       return const Success(true);
     } catch (e) {
       assert(() {
         debugPrint('[EntityTypeRepository] deleteAttribute error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 
@@ -270,6 +283,7 @@ class EntityTypeRepository {
       final response = await _apiClient.get<Map<String, dynamic>>(
         '/admin/entity-types/$entityTypeCode/next-sequence',
         queryParameters: {'tenant_id': tenantId},
+        options: _tenantOpts(tenantId),
       );
       final data = response.data;
       if (data == null) return const Failure(ApiException(message: 'Empty response'));
@@ -280,7 +294,7 @@ class EntityTypeRepository {
         debugPrint('[EntityTypeRepository] nextSequence error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 }

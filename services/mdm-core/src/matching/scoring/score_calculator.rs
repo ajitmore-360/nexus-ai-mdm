@@ -129,9 +129,15 @@ impl ScoreCalculator {
         let fuzzy    = self.fuzzy_similarity(&sv, &cv);
         let phonetic = self.phonetic_similarity(&sv, &cv);
 
-        let score = exact    * self.policy.exact_weight
-                  + fuzzy    * self.policy.fuzzy_weight
-                  + phonetic * self.policy.phonetic_weight;
+        let w_e = self.policy.exact_weight;
+        let w_f = self.policy.fuzzy_weight;
+        let w_p = self.policy.phonetic_weight;
+        let weight_sum = w_e + w_f + w_p;
+        let score = if weight_sum > 0.0 {
+            (exact * w_e + fuzzy * w_f + phonetic * w_p) / weight_sum
+        } else {
+            0.0
+        };
 
         FieldMatchResult {
             field: source.key.clone(),
@@ -297,11 +303,104 @@ impl ScoreCalculator {
 
     //
     // ========================================================
-    // STRING EXTRACTION
+    // STRING EXTRACTION + NORMALIZATION
     // ========================================================
     //
 
     fn extract_string(&self, attr: &EntityAttribute) -> String {
-        attr.value.as_str().unwrap_or("").trim().to_lowercase()
+        let raw = attr.value.as_str().unwrap_or("").trim().to_lowercase();
+        let key = attr.key.to_lowercase();
+        if is_phone_key(&key) {
+            normalize_phone_e164_scoring(&raw)
+        } else if is_email_key(&key) {
+            raw // already lowercase + trimmed
+        } else {
+            normalize_name(&raw)
+        }
     }
+}
+
+// ── Key-type detectors ────────────────────────────────────────────────────────
+
+fn is_phone_key(key: &str) -> bool {
+    key.contains("phone") || key.contains("mobile") || key.contains("tel") || key.contains("fax")
+}
+
+fn is_email_key(key: &str) -> bool {
+    key.contains("email") || key.contains("e_mail") || key.contains("e-mail")
+}
+
+// ── Phone E.164 normalization (matching-local, no external dep) ───────────────
+
+fn normalize_phone_e164_scoring(s: &str) -> String {
+    let digits: String = s.chars().filter(|c| c.is_ascii_digit()).collect();
+    match digits.len() {
+        10 => format!("+1{}", digits),
+        11 if digits.starts_with('1') => format!("+{}", digits),
+        _ if !digits.is_empty() => format!("+{}", digits),
+        _ => s.to_string(),
+    }
+}
+
+// ── Name-suffix normalization ─────────────────────────────────────────────────
+//
+// Collapses common legal-entity suffixes to a canonical short form before any
+// similarity computation so that "IBM Incorporated" and "IBM Inc" compare equal,
+// and "General Electric Company" isn't penalised vs "General Electric Co".
+//
+// Normalisation is suffix-only: the token must appear at the end of the string
+// (optionally followed by punctuation) to avoid false positives inside names
+// like "National Association of…".
+//
+// Ordering matters: longer patterns must precede shorter ones that are prefixes
+// of them (e.g. "limited liability company" before "limited").
+
+static SUFFIX_MAP: &[(&str, &str)] = &[
+    // Full → canonical short
+    ("incorporated",                 "inc"),
+    ("incorporation",                "inc"),
+    ("corporation",                  "corp"),
+    ("limited liability company",    "llc"),
+    ("limited liability partnership","llp"),
+    ("limited partnership",          "lp"),
+    ("public limited company",       "plc"),
+    ("private limited",              "pvt ltd"),
+    ("gesellschaft mit beschränkter haftung", "gmbh"),
+    ("aktiengesellschaft",           "ag"),
+    ("société anonyme",              "sa"),
+    // Common abbreviation variants → canonical
+    ("corp.",    "corp"),
+    ("inc.",     "inc"),
+    ("ltd.",     "ltd"),
+    ("llc.",     "llc"),
+    ("llp.",     "llp"),
+    ("lp.",      "lp"),
+    ("plc.",     "plc"),
+    ("co.",      "co"),
+    ("company",  "co"),
+    ("limited",  "ltd"),
+    ("and company", "& co"),
+    ("and co",   "& co"),
+    ("& company","& co"),
+];
+
+/// Strip trailing punctuation (comma, period, space) then apply suffix map.
+fn normalize_name(s: &str) -> String {
+    // Remove trailing punctuation noise first.
+    let s = s.trim_end_matches(|c: char| c == ',' || c == '.' || c == ' ');
+
+    for (pattern, canonical) in SUFFIX_MAP {
+        // Match suffix: string ends with exactly ` <pattern>` (space-separated).
+        let suffix = format!(" {}", pattern);
+        if s.ends_with(suffix.as_str()) {
+            let base = &s[..s.len() - suffix.len()];
+            return format!("{} {}", base.trim_end(), canonical);
+        }
+        // Also handle when the whole string is just the suffix (rare single-token).
+        if s == *pattern {
+            return canonical.to_string();
+        }
+    }
+
+    s.to_string()
 }

@@ -53,7 +53,11 @@ pub async fn tenant_middleware(
         .map(|v| v == "true" || v == "1")
         .unwrap_or(false);
 
-    if !auth_disabled {
+    // When a JWT is present, its tenant claim is authoritative — the x-tenant-id
+    // header is a routing hint only.  If the header disagrees with the JWT, reject
+    // the request (IDOR / horizontal privilege escalation attempt).
+    // Without a JWT (service-to-service via API_BEARER_TOKEN) the header is trusted.
+    let authoritative_tenant = if !auth_disabled {
         if let Some(claims) = request.extensions().get::<nexus_auth::Claims>() {
             if claims.nxs_tenant_id != tenant_id {
                 tracing::warn!(
@@ -71,9 +75,17 @@ pub async fn tenant_middleware(
                 )
                     .into_response();
             }
+            // JWT wins — use its value regardless of what the header said
+            claims.nxs_tenant_id
+        } else {
+            // No JWT (API_BEARER_TOKEN path, service-to-service) — trust header
+            tenant_id
         }
-    }
+    } else {
+        // AUTH_DISABLED dev mode — trust header
+        tenant_id
+    };
 
-    request.extensions_mut().insert(TenantContext { tenant_id });
+    request.extensions_mut().insert(TenantContext { tenant_id: authoritative_tenant });
     next.run(request).await
 }

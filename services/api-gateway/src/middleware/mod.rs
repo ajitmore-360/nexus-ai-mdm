@@ -1,6 +1,9 @@
 pub mod auth;
+pub mod license;
+pub mod rbac;
 pub mod tenant;
 pub mod logging;
 pub mod request_id;
 pub mod tracing;
 pub mod rate_limit;
+pub mod user_context;

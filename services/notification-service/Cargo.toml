@@ -24,9 +24,20 @@ contracts   = { path = "../../shared/contracts" }
 database    = { workspace = true }
 nexus-redis = { workspace = true }
 
+# HTTP client (for webhook delivery)
+reqwest.workspace = true
+
 # Redis (direct - for pub/sub subscription API)
 redis.workspace   = true
 
 # WebSocket
 tokio-tungstenite = "0.21"
 futures-util      = "0.3"
+
+# Email
+lettre.workspace = true
+
+# Cryptography (HMAC-SHA256 for webhook signatures)
+hmac = { workspace = true }
+sha2 = { workspace = true }
+hex  = { workspace = true }

@@ -1,17 +1,20 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
-    Json,
+    Extension, Json,
 };
+use serde::Deserialize;
 use chrono::Datelike;
 use serde_json::json;
 use sqlx::Row;
 use tracing::error;
 use uuid::Uuid;
 
+use crate::middleware::tenant::TenantContext;
+use crate::services::audit_service::AuditEvent;
 use crate::AppState;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -52,22 +55,10 @@ fn format_sequence_id(
 // ── GET /entity-types?tenant_id=... ──────────────────────────────────────────
 
 pub async fn list_entity_types(
-    State(state):   State<Arc<AppState>>,
-    Query(params):  Query<HashMap<String, String>>,
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
 ) -> impl IntoResponse {
-    let tenant_id = match params
-        .get("tenant_id")
-        .and_then(|s| Uuid::parse_str(s).ok())
-    {
-        Some(id) => id,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "success": false, "error": "tenant_id query param is required" })),
-            )
-                .into_response();
-        }
-    };
+    let tenant_id = tenant_ctx.tenant_id;
 
     let rows = sqlx::query(
         r#"
@@ -129,23 +120,12 @@ pub async fn list_entity_types(
 // ── POST /entity-types ────────────────────────────────────────────────────────
 
 pub async fn create_entity_type(
-    State(state): State<Arc<AppState>>,
-    Json(body):   Json<serde_json::Value>,
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    headers:               HeaderMap,
+    Json(body):            Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let tenant_id = match body
-        .get("tenant_id")
-        .and_then(|v| v.as_str())
-        .and_then(|s| Uuid::parse_str(s).ok())
-    {
-        Some(id) => id,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "success": false, "error": "tenant_id is required" })),
-            )
-                .into_response();
-        }
-    };
+    let tenant_id = tenant_ctx.tenant_id;
 
     let name = match body.get("name").and_then(|v| v.as_str()) {
         Some(s) => s.to_owned(),
@@ -168,6 +148,46 @@ pub async fn create_entity_type(
                 .into_response();
         }
     };
+
+    // Domain quota: count current entity types for this tenant and compare to
+    // the license limit.  We query directly to avoid relying on stale tenant_usage.
+    {
+        let existing: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM core_mdm.entity_types WHERE tenant_id = $1",
+        )
+        .bind(tenant_id)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+
+        let max_domains: i64 = match state.license_service.get_license(tenant_id).await {
+            Ok(Some(l)) => l.max_domains as i64,
+            _           => 1, // default essentials limit when no license row exists
+        };
+
+        if max_domains != -1 && existing >= max_domains {
+            return (
+                StatusCode::PAYMENT_REQUIRED,
+                Json(json!({
+                    "success": false,
+                    "error": format!(
+                        "Domain quota exceeded ({}/{}).  Upgrade your plan to create more entity types.",
+                        existing, max_domains,
+                    )
+                })),
+            )
+                .into_response();
+        }
+
+        // Notify at 80%/95% proximity (fire-and-forget).
+        if max_domains > 0 {
+            let ns  = std::sync::Arc::clone(&state.notification_service);
+            let tid = tenant_id;
+            tokio::spawn(async move {
+                ns.check_and_notify_domain_quota(tid, existing, max_domains).await.ok();
+            });
+        }
+    }
 
     let description             = body.get("description").and_then(|v| v.as_str()).map(str::to_owned);
     let icon                    = body.get("icon").and_then(|v| v.as_str()).map(str::to_owned);
@@ -202,8 +222,23 @@ pub async fn create_entity_type(
 
     match row {
         Ok(r) => {
+            let entity_type_id = r.get::<Uuid, _>("id");
+            let actor_id = headers
+                .get("x-user-id")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            state.audit_service.log_background(AuditEvent {
+                tenant_id:     tenant_id,
+                event_type:    "entity_type.created".to_string(),
+                actor_id,
+                resource_type: "entity_type".to_string(),
+                resource_id:   entity_type_id.to_string(),
+                metadata:      json!({ "name": name, "code": code }),
+                before:        None,
+                after:         None,
+            });
             let data = json!({
-                "id":                      r.get::<Uuid, _>("id").to_string(),
+                "id":                      entity_type_id.to_string(),
                 "tenant_id":               r.get::<Uuid, _>("tenant_id").to_string(),
                 "name":                    r.get::<String, _>("name"),
                 "code":                    r.get::<String, _>("code"),
@@ -238,9 +273,11 @@ pub async fn create_entity_type(
 // ── PATCH /entity-types/:id ───────────────────────────────────────────────────
 
 pub async fn update_entity_type(
-    State(state): State<Arc<AppState>>,
-    Path(id):     Path<Uuid>,
-    Json(body):   Json<serde_json::Value>,
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    headers:               HeaderMap,
+    Path(id):              Path<Uuid>,
+    Json(body):            Json<serde_json::Value>,
 ) -> impl IntoResponse {
     // Build SET clause dynamically from whichever fields are present.
     // We always touch updated_at so the RETURNING row reflects the change.
@@ -288,17 +325,21 @@ pub async fn update_entity_type(
             .into_response();
     }
 
+    // tenant_id bound after all dynamic SET fields; its placeholder is idx+1.
+    let tenant_param = idx + 1;
+
     let sql = format!(
         r#"
         UPDATE core_mdm.entity_type_configs
         SET {}
-        WHERE id = $1 AND is_system = false
+        WHERE id = $1 AND tenant_id = ${} AND is_system = false
         RETURNING
             id, tenant_id, name, code, description, icon, color,
             seq_prefix, seq_format, default_match_threshold,
             is_system, is_active, created_at, updated_at
         "#,
-        set_clauses.join(", ")
+        set_clauses.join(", "),
+        tenant_param,
     );
 
     // Bind parameters in the same order they were added.
@@ -312,9 +353,25 @@ pub async fn update_entity_type(
     if let Some(v) = &seq_format              { query = query.bind(v); }
     if let Some(v) = default_match_threshold  { query = query.bind(v); }
     if let Some(v) = is_active               { query = query.bind(v); }
+    // Scopes update to the caller's tenant — prevents cross-tenant writes.
+    query = query.bind(tenant_ctx.tenant_id);
 
     match query.fetch_optional(&state.db).await {
         Ok(Some(r)) => {
+            let actor_id = headers
+                .get("x-user-id")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            state.audit_service.log_background(AuditEvent {
+                tenant_id:     tenant_ctx.tenant_id,
+                event_type:    "entity_type.updated".to_string(),
+                actor_id,
+                resource_type: "entity_type".to_string(),
+                resource_id:   id.to_string(),
+                metadata:      json!({ "fields": body }),
+                before:        None,
+                after:         None,
+            });
             let data = json!({
                 "id":                      r.get::<Uuid, _>("id").to_string(),
                 "tenant_id":               r.get::<Uuid, _>("tenant_id").to_string(),
@@ -356,26 +413,45 @@ pub async fn update_entity_type(
 // ── DELETE /entity-types/:id ──────────────────────────────────────────────────
 
 pub async fn delete_entity_type(
-    State(state): State<Arc<AppState>>,
-    Path(id):     Path<Uuid>,
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    headers:               HeaderMap,
+    Path(id):              Path<Uuid>,
 ) -> impl IntoResponse {
     let result = sqlx::query(
         r#"
         DELETE FROM core_mdm.entity_type_configs
-        WHERE id = $1 AND is_system = false
+        WHERE id = $1 AND tenant_id = $2 AND is_system = false
         RETURNING id
         "#,
     )
     .bind(id)
+    .bind(tenant_ctx.tenant_id)
     .fetch_optional(&state.db)
     .await;
 
     match result {
-        Ok(Some(_)) => (
-            StatusCode::OK,
-            Json(json!({ "success": true, "data": { "id": id.to_string() } })),
-        )
-            .into_response(),
+        Ok(Some(_)) => {
+            let actor_id = headers
+                .get("x-user-id")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            state.audit_service.log_background(AuditEvent {
+                tenant_id:     tenant_ctx.tenant_id,
+                event_type:    "entity_type.deleted".to_string(),
+                actor_id,
+                resource_type: "entity_type".to_string(),
+                resource_id:   id.to_string(),
+                metadata:      json!({}),
+                before:        None,
+                after:         None,
+            });
+            (
+                StatusCode::OK,
+                Json(json!({ "success": true, "data": { "id": id.to_string() } })),
+            )
+                .into_response()
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({ "success": false, "error": "entity type not found or is a system type" })),
@@ -395,35 +471,32 @@ pub async fn delete_entity_type(
 // ── GET /entity-types/:code/attributes?tenant_id=... ─────────────────────────
 
 pub async fn list_attributes(
-    State(state):   State<Arc<AppState>>,
-    Path(code):     Path<String>,
-    Query(params):  Query<HashMap<String, String>>,
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    Path(code):            Path<String>,
 ) -> impl IntoResponse {
-    let tenant_id = match params
-        .get("tenant_id")
-        .and_then(|s| Uuid::parse_str(s).ok())
-    {
-        Some(id) => id,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "success": false, "error": "tenant_id query param is required" })),
-            )
-                .into_response();
-        }
-    };
+    let tenant_id = tenant_ctx.tenant_id;
 
     let rows = sqlx::query(
         r#"
         SELECT
-            a.id, a.tenant_id, a.entity_type_code, a.attribute_key,
-            a.display_name, a.description, a.data_type,
-            a.is_required, a.is_pii, a.is_searchable, a.is_system,
-            a.display_order, a.enum_values, a.default_value, a.validation_regex,
-            a.created_at, a.updated_at
+            a.schema_id  AS id,
+            a.tenant_id,
+            a.entity_type AS entity_type_code,
+            a.attribute_key,
+            a.display_name,
+            a.data_type,
+            a.is_required,
+            a.is_pii,
+            a.is_searchable,
+            a.is_system,
+            a.display_order,
+            a.enum_values,
+            a.default_value,
+            a.created_at
         FROM core_mdm.attribute_schemas a
         WHERE a.tenant_id = $1
-          AND a.entity_type_code = $2
+          AND a.entity_type = $2
         ORDER BY a.display_order ASC, a.attribute_key ASC
         "#,
     )
@@ -448,7 +521,6 @@ pub async fn list_attributes(
                         "entity_type_code": r.get::<String, _>("entity_type_code"),
                         "attribute_key":    r.get::<String, _>("attribute_key"),
                         "display_name":     r.get::<String, _>("display_name"),
-                        "description":      r.get::<Option<String>, _>("description"),
                         "data_type":        r.get::<String, _>("data_type"),
                         "is_required":      r.get::<bool, _>("is_required"),
                         "is_pii":           r.get::<bool, _>("is_pii"),
@@ -457,9 +529,7 @@ pub async fn list_attributes(
                         "display_order":    r.get::<i32, _>("display_order"),
                         "enum_values":      enum_values,
                         "default_value":    r.get::<Option<String>, _>("default_value"),
-                        "validation_regex": r.get::<Option<String>, _>("validation_regex"),
                         "created_at":       r.get::<chrono::DateTime<chrono::Utc>, _>("created_at").to_rfc3339(),
-                        "updated_at":       r.get::<chrono::DateTime<chrono::Utc>, _>("updated_at").to_rfc3339(),
                     })
                 })
                 .collect();
@@ -484,24 +554,13 @@ pub async fn list_attributes(
 // ── POST /entity-types/:code/attributes ──────────────────────────────────────
 
 pub async fn create_attribute(
-    State(state): State<Arc<AppState>>,
-    Path(code):   Path<String>,
-    Json(body):   Json<serde_json::Value>,
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    headers:               HeaderMap,
+    Path(code):            Path<String>,
+    Json(body):            Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let tenant_id = match body
-        .get("tenant_id")
-        .and_then(|v| v.as_str())
-        .and_then(|s| Uuid::parse_str(s).ok())
-    {
-        Some(id) => id,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "success": false, "error": "tenant_id is required" })),
-            )
-                .into_response();
-        }
-    };
+    let tenant_id = tenant_ctx.tenant_id;
 
     let attribute_key = match body.get("attribute_key").and_then(|v| v.as_str()) {
         Some(s) => s.to_owned(),
@@ -531,34 +590,41 @@ pub async fn create_attribute(
         .unwrap_or("text")
         .to_owned();
 
-    let description     = body.get("description").and_then(|v| v.as_str()).map(str::to_owned);
-    let is_required     = body.get("is_required").and_then(|v| v.as_bool()).unwrap_or(false);
-    let is_pii          = body.get("is_pii").and_then(|v| v.as_bool()).unwrap_or(false);
-    let is_searchable   = body.get("is_searchable").and_then(|v| v.as_bool()).unwrap_or(true);
-    let display_order   = body.get("display_order").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-    let default_value   = body.get("default_value").and_then(|v| v.as_str()).map(str::to_owned);
-    let validation_regex = body.get("validation_regex").and_then(|v| v.as_str()).map(str::to_owned);
-    let enum_values     = body.get("enum_values").cloned();
+    let is_required   = body.get("is_required").and_then(|v| v.as_bool()).unwrap_or(false);
+    let is_pii        = body.get("is_pii").and_then(|v| v.as_bool()).unwrap_or(false);
+    let is_searchable = body.get("is_searchable").and_then(|v| v.as_bool()).unwrap_or(true);
+    let display_order = body.get("display_order").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let default_value = body.get("default_value").and_then(|v| v.as_str()).map(str::to_owned);
+    let enum_values   = body.get("enum_values").cloned();
 
     let row = sqlx::query(
         r#"
         INSERT INTO core_mdm.attribute_schemas
-            (tenant_id, entity_type_code, attribute_key, display_name, description,
+            (tenant_id, entity_type, attribute_key, display_name,
              data_type, is_required, is_pii, is_searchable, display_order,
-             enum_values, default_value, validation_regex)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             enum_values, default_value)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING
-            id, tenant_id, entity_type_code, attribute_key, display_name, description,
-            data_type, is_required, is_pii, is_searchable, is_system,
-            display_order, enum_values, default_value, validation_regex,
-            created_at, updated_at
+            schema_id  AS id,
+            tenant_id,
+            entity_type AS entity_type_code,
+            attribute_key,
+            display_name,
+            data_type,
+            is_required,
+            is_pii,
+            is_searchable,
+            is_system,
+            display_order,
+            enum_values,
+            default_value,
+            created_at
         "#,
     )
     .bind(tenant_id)
     .bind(&code)
     .bind(&attribute_key)
     .bind(&display_name)
-    .bind(&description)
     .bind(&data_type)
     .bind(is_required)
     .bind(is_pii)
@@ -566,24 +632,37 @@ pub async fn create_attribute(
     .bind(display_order)
     .bind(enum_values.map(sqlx::types::Json))
     .bind(&default_value)
-    .bind(&validation_regex)
     .fetch_one(&state.db)
     .await;
 
     match row {
         Ok(r) => {
+            let attr_id = r.get::<Uuid, _>("id");
+            let actor_id = headers
+                .get("x-user-id")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            state.audit_service.log_background(AuditEvent {
+                tenant_id:     tenant_ctx.tenant_id,
+                event_type:    "attribute.created".to_string(),
+                actor_id,
+                resource_type: "attribute".to_string(),
+                resource_id:   attr_id.to_string(),
+                metadata:      json!({ "entity_type": code, "attribute_key": attribute_key }),
+                before:        None,
+                after:         None,
+            });
             let enum_values: Option<serde_json::Value> = r
                 .try_get::<sqlx::types::Json<serde_json::Value>, _>("enum_values")
                 .ok()
                 .map(|j| j.0);
 
             let data = json!({
-                "id":               r.get::<Uuid, _>("id").to_string(),
+                "id":               attr_id.to_string(),
                 "tenant_id":        r.get::<Uuid, _>("tenant_id").to_string(),
                 "entity_type_code": r.get::<String, _>("entity_type_code"),
                 "attribute_key":    r.get::<String, _>("attribute_key"),
                 "display_name":     r.get::<String, _>("display_name"),
-                "description":      r.get::<Option<String>, _>("description"),
                 "data_type":        r.get::<String, _>("data_type"),
                 "is_required":      r.get::<bool, _>("is_required"),
                 "is_pii":           r.get::<bool, _>("is_pii"),
@@ -592,9 +671,7 @@ pub async fn create_attribute(
                 "display_order":    r.get::<i32, _>("display_order"),
                 "enum_values":      enum_values,
                 "default_value":    r.get::<Option<String>, _>("default_value"),
-                "validation_regex": r.get::<Option<String>, _>("validation_regex"),
                 "created_at":       r.get::<chrono::DateTime<chrono::Utc>, _>("created_at").to_rfc3339(),
-                "updated_at":       r.get::<chrono::DateTime<chrono::Utc>, _>("updated_at").to_rfc3339(),
             });
             (
                 StatusCode::CREATED,
@@ -617,28 +694,48 @@ pub async fn create_attribute(
 
 pub async fn delete_attribute(
     State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    headers:               HeaderMap,
     Path((code, attr_id)): Path<(String, Uuid)>,
 ) -> impl IntoResponse {
     let result = sqlx::query(
         r#"
         DELETE FROM core_mdm.attribute_schemas
-        WHERE id = $1
-          AND entity_type_code = $2
+        WHERE schema_id = $1
+          AND entity_type = $2
+          AND tenant_id = $3
           AND is_system = false
-        RETURNING id
+        RETURNING schema_id AS id
         "#,
     )
     .bind(attr_id)
     .bind(&code)
+    .bind(tenant_ctx.tenant_id)
     .fetch_optional(&state.db)
     .await;
 
     match result {
-        Ok(Some(_)) => (
-            StatusCode::OK,
-            Json(json!({ "success": true, "data": { "id": attr_id.to_string() } })),
-        )
-            .into_response(),
+        Ok(Some(_)) => {
+            let actor_id = headers
+                .get("x-user-id")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| Uuid::parse_str(s).ok());
+            state.audit_service.log_background(AuditEvent {
+                tenant_id:     tenant_ctx.tenant_id,
+                event_type:    "attribute.deleted".to_string(),
+                actor_id,
+                resource_type: "attribute".to_string(),
+                resource_id:   attr_id.to_string(),
+                metadata:      json!({ "entity_type": code }),
+                before:        None,
+                after:         None,
+            });
+            (
+                StatusCode::OK,
+                Json(json!({ "success": true, "data": { "id": attr_id.to_string() } })),
+            )
+                .into_response()
+        }
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({ "success": false, "error": "attribute not found or is a system attribute" })),
@@ -658,9 +755,10 @@ pub async fn delete_attribute(
 // ── PUT /entity-types/:code/attributes/order ──────────────────────────────────
 
 pub async fn reorder_attributes(
-    State(state): State<Arc<AppState>>,
-    Path(code):   Path<String>,
-    Json(body):   Json<Vec<serde_json::Value>>,
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    Path(code):            Path<String>,
+    Json(body):            Json<Vec<serde_json::Value>>,
 ) -> impl IntoResponse {
     if body.is_empty() {
         return (
@@ -713,13 +811,14 @@ pub async fn reorder_attributes(
         if let Err(e) = sqlx::query(
             r#"
             UPDATE core_mdm.attribute_schemas
-            SET display_order = $1, updated_at = NOW()
-            WHERE id = $2 AND entity_type_code = $3
+            SET display_order = $1
+            WHERE schema_id = $2 AND entity_type = $3 AND tenant_id = $4
             "#,
         )
         .bind(display_order)
         .bind(attr_id)
         .bind(&code)
+        .bind(tenant_ctx.tenant_id)
         .execute(&mut *tx)
         .await
         {
@@ -748,31 +847,22 @@ pub async fn reorder_attributes(
         .into_response()
 }
 
-// ── GET /entity-types/:code/next-sequence?tenant_id=...&period_key=global ────
+// ── GET /entity-types/:code/next-sequence?period_key=global ─────────────────
+
+#[derive(Deserialize)]
+pub struct NextSequenceParams {
+    pub period_key: Option<String>,
+}
 
 pub async fn next_sequence(
-    State(state):  State<Arc<AppState>>,
-    Path(code):    Path<String>,
-    Query(params): Query<HashMap<String, String>>,
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    Path(code):            Path<String>,
+    Query(params):         Query<NextSequenceParams>,
 ) -> impl IntoResponse {
-    let tenant_id = match params
-        .get("tenant_id")
-        .and_then(|s| Uuid::parse_str(s).ok())
-    {
-        Some(id) => id,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "success": false, "error": "tenant_id query param is required" })),
-            )
-                .into_response();
-        }
-    };
+    let tenant_id = tenant_ctx.tenant_id;
 
-    let period_key = params
-        .get("period_key")
-        .cloned()
-        .unwrap_or_else(|| "global".to_owned());
+    let period_key = params.period_key.unwrap_or_else(|| "global".to_owned());
 
     // Fetch the entity type config to get seq_prefix and seq_format.
     let config_row = sqlx::query(

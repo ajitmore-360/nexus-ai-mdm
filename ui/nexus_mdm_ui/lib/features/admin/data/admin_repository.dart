@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../../core/network/api_client.dart' hide ApiException;
 import '../../../shared/models/api_responses.dart';
@@ -27,9 +28,9 @@ class TenantModel {
 
   factory TenantModel.fromJson(Map<String, dynamic> json) {
     return TenantModel(
-      id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      subdomain: json['subdomain'] as String? ?? '',
+      id: (json['tenant_id'] ?? json['id']) as String? ?? '',
+      name: (json['display_name'] ?? json['name']) as String? ?? '',
+      subdomain: (json['tenant_code'] ?? json['subdomain']) as String? ?? '',
       plan: json['plan'] as String? ?? '',
       maxUsers: json['max_users'] as int? ?? 0,
       maxEntities: json['max_entities'] as int? ?? 0,
@@ -77,10 +78,10 @@ class TenantUserModel {
 
   factory TenantUserModel.fromJson(Map<String, dynamic> json) {
     return TenantUserModel(
-      id: json['id'] as String? ?? '',
+      id: (json['user_id'] ?? json['id']) as String? ?? '',
       tenantId: json['tenant_id'] as String? ?? '',
       email: json['email'] as String? ?? '',
-      fullName: json['full_name'] as String? ?? '',
+      fullName: (json['display_name'] ?? json['full_name']) as String? ?? '',
       role: json['role'] as String? ?? '',
       status: json['status'] as String? ?? '',
       lastLoginAt: json['last_login_at'] != null
@@ -113,7 +114,7 @@ class AdminRepository {
       final response = await _apiClient.get<Map<String, dynamic>>('/admin/tenants');
       final data = response.data;
       if (data == null) return const Failure(ApiException(message: 'Empty response'));
-      final items = (data['items'] as List<dynamic>? ?? [])
+      final items = (data['data'] as List<dynamic>? ?? [])
           .map((e) => TenantModel.fromJson(e as Map<String, dynamic>))
           .toList();
       return Success(items);
@@ -122,7 +123,7 @@ class AdminRepository {
         debugPrint('[AdminRepository] listTenants error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 
@@ -148,13 +149,14 @@ class AdminRepository {
       );
       final data = response.data;
       if (data == null) return const Failure(ApiException(message: 'Empty response'));
-      return Success(TenantModel.fromJson(data));
+      final payload = (data['data'] as Map<String, dynamic>?) ?? data;
+      return Success(TenantModel.fromJson(payload));
     } catch (e) {
       assert(() {
         debugPrint('[AdminRepository] createTenant error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 
@@ -181,7 +183,7 @@ class AdminRepository {
         debugPrint('[AdminRepository] createAdminUser error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 
@@ -193,7 +195,7 @@ class AdminRepository {
       );
       final data = response.data;
       if (data == null) return const Failure(ApiException(message: 'Empty response'));
-      final items = (data['items'] as List<dynamic>? ?? [])
+      final items = (data['data'] as List<dynamic>? ?? [])
           .map((e) => TenantUserModel.fromJson(e as Map<String, dynamic>))
           .toList();
       return Success(items);
@@ -202,39 +204,49 @@ class AdminRepository {
         debugPrint('[AdminRepository] listUsers error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 
-  Future<ApiResult<bool>> inviteUser({
+  /// Returns the invite token on success. The token must be shared with the
+  /// invited user — no email is sent automatically.
+  Future<ApiResult<String>> inviteUser({
     required String tenantId,
     required String email,
     required String fullName,
     required String role,
+    String? targetTenantId,
+    List<String>? entityTypeAssignments,
   }) async {
     try {
-      await _apiClient.post<Map<String, dynamic>>(
+      final response = await _apiClient.post<Map<String, dynamic>>(
         '/admin/users/invite',
         data: {
-          'tenant_id': tenantId,
-          'email': email,
-          'full_name': fullName,
-          'role': role,
+          'email':        email,
+          'display_name': fullName,
+          'role':         role,
+          if (targetTenantId != null && targetTenantId.isNotEmpty)
+            'target_tenant_id': targetTenantId,
+          if (entityTypeAssignments != null && entityTypeAssignments.isNotEmpty)
+            'entity_type_assignments': entityTypeAssignments,
         },
       );
-      return const Success(true);
+      final token = ((response.data?['data']) as Map<String, dynamic>?)?['invite_token']
+              as String? ??
+          '';
+      return Success(token);
     } catch (e) {
       assert(() {
         debugPrint('[AdminRepository] inviteUser error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 
   Future<ApiResult<bool>> updateUserRole(String userId, String role) async {
     try {
-      await _apiClient.put<Map<String, dynamic>>(
+      await _apiClient.patch<Map<String, dynamic>>(
         '/admin/users/$userId/role',
         data: {'role': role},
       );
@@ -244,7 +256,30 @@ class AdminRepository {
         debugPrint('[AdminRepository] updateUserRole error: $e');
         return true;
       }());
-      return Failure(ApiException(message: e.toString()));
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
+    }
+  }
+
+  Future<ApiResult<bool>> updateTenantLicense(
+    String tenantId, {
+    required String tier,
+    String? notes,
+  }) async {
+    try {
+      await _apiClient.post<Map<String, dynamic>>(
+        '/admin/tenants/$tenantId/license',
+        data: {
+          'tier': tier,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        },
+      );
+      return const Success(true);
+    } catch (e) {
+      assert(() {
+        debugPrint('[AdminRepository] updateTenantLicense error: $e');
+        return true;
+      }());
+      return Failure(e is DioException ? ApiException.fromDioException(e) : ApiException(message: e.toString()));
     }
   }
 }

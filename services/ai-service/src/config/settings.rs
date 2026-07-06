@@ -15,10 +15,20 @@ pub struct Settings {
     pub llm_timeout_secs: u64,
     pub llm_temperature:  f32,
     pub llm_max_tokens:   u32,
+    /// Context window size passed to Ollama. Smaller = faster prompt eval.
+    /// 4096 covers all MDM copilot queries; use 8192 only if long doc RAG is needed.
+    pub llm_num_ctx:      u32,
+    /// CPU threads for Ollama inference. 0 = let Ollama auto-detect (numcpu/2).
+    /// Set to host physical core count for maximum throughput on CPU-only deployments.
+    pub llm_num_threads:  u32,
 
     // RAG
-    pub rag_top_k:        usize,
-    pub rag_min_score:    f32,
+    pub rag_top_k:             usize,
+    pub rag_min_score:         f32,
+    /// Maximum characters per retrieved document's content before truncation.
+    pub rag_max_doc_chars:     usize,
+    /// Maximum total characters for the full assembled RAG context string.
+    pub rag_max_context_chars: usize,
 
     // Semantic matching
     pub semantic_match_timeout_secs: u64,
@@ -37,16 +47,24 @@ impl Settings {
 
             ollama_url: std::env::var("OLLAMA_URL")
                 .unwrap_or_else(|_| "http://localhost:11434".to_string()),
+            // llama3.2 only ships in 1b and 3b; there is no 8b variant.
             llm_model: std::env::var("LLM_MODEL")
-                .unwrap_or_else(|_| "llama3.2:8b".to_string()),
+                .unwrap_or_else(|_| "llama3.2:3b".to_string()),
             embed_model: std::env::var("EMBED_MODEL")
                 .unwrap_or_else(|_| "nomic-embed-text".to_string()),
-            llm_timeout_secs: env_u64("LLM_TIMEOUT_SECS", 60),
+            // 120s — CPU-only generation takes 25-35s; 60s timed out under load.
+            llm_timeout_secs: env_u64("LLM_TIMEOUT_SECS", 120),
             llm_temperature:  env_f32("LLM_TEMPERATURE", 0.2),
-            llm_max_tokens:   env_u32("LLM_MAX_TOKENS", 2048),
+            // 512 tokens is generous for MDM copilot answers (~350 words).
+            // 2048 allowed 4x the needed length and multiplied wall-clock time.
+            llm_max_tokens:   env_u32("LLM_MAX_TOKENS", 512),
+            llm_num_ctx:      env_u32("LLM_NUM_CTX", 4096),
+            llm_num_threads:  env_u32("LLM_NUM_THREADS", 0),
 
-            rag_top_k:     env_usize("RAG_TOP_K", 5),
-            rag_min_score: env_f32("RAG_MIN_SCORE", 0.70),
+            rag_top_k:             env_usize("RAG_TOP_K", 5),
+            rag_min_score:         env_f32("RAG_MIN_SCORE", 0.70),
+            rag_max_doc_chars:     env_usize("RAG_MAX_DOC_CHARS", 2_000),
+            rag_max_context_chars: env_usize("RAG_MAX_CONTEXT_CHARS", 8_000),
 
             semantic_match_timeout_secs: env_u64("SEMANTIC_MATCH_TIMEOUT_SECS", 30),
         })

@@ -9,7 +9,8 @@ use axum::{
 };
 use serde_json::json;
 
-use nexus_auth::{validate_token, JwtConfig};
+use nexus_auth::{validate_token, JwtConfig, TokenPurpose};
+use uuid::Uuid;
 
 use crate::state::AppState;
 
@@ -26,7 +27,7 @@ use crate::state::AppState;
 /// Legacy API bearer token is still supported when `JWT_SECRET` is absent
 /// and `API_BEARER_TOKEN` is set (for CLI tooling / service-to-service calls).
 pub async fn auth_middleware(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     mut request:  Request<axum::body::Body>,
     next:         Next,
 ) -> Response {
@@ -66,6 +67,25 @@ pub async fn auth_middleware(
     if let Ok(jwt_cfg) = JwtConfig::from_env() {
         match validate_token(&jwt_cfg, raw_token) {
             Ok(claims) => {
+                // Reject tokens that have been explicitly revoked (e.g. via logout).
+                // Fail-open on Redis errors so a Redis outage never locks out all users.
+                if let Some(blocklist) = &state.token_blocklist {
+                    match blocklist.is_revoked(claims.nxs_jti).await {
+                        Ok(true) => {
+                            return (
+                                StatusCode::UNAUTHORIZED,
+                                Json(json!({
+                                    "success": false,
+                                    "error":   "token has been revoked"
+                                })),
+                            ).into_response();
+                        }
+                        Err(e) => {
+                            tracing::warn!(error=%e, "Redis JTI blocklist check failed; allowing request");
+                        }
+                        Ok(false) => {}
+                    }
+                }
                 // Inject claims so downstream handlers can use them
                 request.extensions_mut().insert(claims);
                 return next.run(request).await;
@@ -89,9 +109,33 @@ pub async fn auth_middleware(
     }
 
     // ── 3b. Legacy API bearer token fallback ─────────────────────────────
-    // Used by CLI tools and service-to-service calls with a static token.
+    // Used for service-to-service calls from trusted internal services only.
+    // The client-supplied x-tenant-id header is still validated against JWT
+    // in tenant_middleware when JWT claims are present.  On this path there
+    // are no JWT claims, so tenant isolation relies on network-level trust
+    // (K8s NetworkPolicy / VPC) — document this in your threat model.
     let expected_bearer = env::var("API_BEARER_TOKEN").unwrap_or_default();
     if !expected_bearer.is_empty() && raw_token == expected_bearer {
+        // Inject a synthetic service identity so downstream middleware and
+        // RBAC guards can distinguish service-to-service calls from real users.
+        // This grants Steward-level access — enough for internal service calls
+        // but not SuperAdmin or platform-admin operations.
+        let service_claims = nexus_auth::Claims {
+            sub:           "service-account".to_string(),
+            iss:           "nexus-ai-mdm".to_string(),
+            exp:           i64::MAX,
+            iat:           0,
+            nxs_purpose:   TokenPurpose::Access,
+            nxs_tenant_id: Uuid::nil(), // overridden by tenant_middleware from x-tenant-id header
+            nxs_email:     "service@internal.nexus".to_string(),
+            nxs_role:      nexus_auth::Role::Steward,
+            nxs_jti:       Uuid::nil(),
+        };
+        request.extensions_mut().insert(service_claims);
+        tracing::info!(
+            path = %request.uri().path(),
+            "service-to-service request via API_BEARER_TOKEN"
+        );
         return next.run(request).await;
     }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import '../../../../core/auth/auth_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/source_systems_repository.dart';
@@ -20,11 +21,16 @@ class _SourceSystemsPageState extends State<SourceSystemsPage> {
   String? _error;
   final Set<String> _testingIds = {};
 
-  static const _tenantId = '';
+  String _tenantId = '';
 
   @override
   void initState() {
     super.initState();
+    _initTenantAndLoad();
+  }
+
+  Future<void> _initTenantAndLoad() async {
+    _tenantId = await AuthManager.getTenantId() ?? '';
     _load();
   }
 
@@ -411,17 +417,42 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
   final _nameCtrl = TextEditingController();
   final _codeCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  String _connectorType = 'REST_API';
-  String _syncMode = 'pull';
+  String _connectorType = 'rest_api';
+  String _syncMode = 'manual';
   double _trustWeight = 0.7;
   bool _submitting = false;
+
+  /// Per-connector credential controllers, rebuilt when connector type changes.
+  Map<String, TextEditingController> _configControllers = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _rebuildConfigControllers('rest_api');
+  }
+
+  void _rebuildConfigControllers(String type) {
+    for (final c in _configControllers.values) { c.dispose(); }
+    final fields = _ConfigField.forConnector(type);
+    _configControllers = { for (final f in fields) f.key: TextEditingController() };
+  }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _codeCtrl.dispose();
     _descCtrl.dispose();
+    for (final c in _configControllers.values) { c.dispose(); }
     super.dispose();
+  }
+
+  Map<String, dynamic> _buildConnectionConfig() {
+    final config = <String, dynamic>{};
+    for (final entry in _configControllers.entries) {
+      final v = entry.value.text.trim();
+      if (v.isNotEmpty) config[entry.key] = v;
+    }
+    return config;
   }
 
   Future<void> _submit() async {
@@ -438,6 +469,7 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
       priority: 1,
       entityTypes: const [],
       syncMode: _syncMode,
+      connectionConfig: _buildConnectionConfig(),
     );
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -456,16 +488,18 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
   }
 
   String _connectorIcon(String type) {
-    switch (type) {
-      case 'SALESFORCE': return '☁️';
-      case 'SAP': return '🏭';
-      case 'ORACLE': return '🔶';
-      case 'HUBSPOT': return '🔶';
-      case 'JDBC': return '🗄️';
-      case 'S3': return '🪣';
-      case 'KAFKA': return '📨';
-      default: return '🔌';
-    }
+    return switch (type) {
+      'salesforce' => '☁️',
+      'sap'        => '🏭',
+      'oracle'     => '🔶',
+      'hubspot'    => '🧡',
+      'jdbc'       => '🗄️',
+      's3'         => '🪣',
+      'kafka'      => '📨',
+      'csv'        => '📄',
+      'database'   => '🐘',
+      _            => '🔌',
+    };
   }
 
   @override
@@ -477,7 +511,10 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
         side: const BorderSide(color: AppColors.divider),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 500),
+        constraints: BoxConstraints(
+          maxWidth: 500,
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Column(
@@ -500,7 +537,9 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                 ],
               ),
               const SizedBox(height: 20),
-              Form(
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Form(
                 key: _formKey,
                 child: Column(
                   children: [
@@ -538,18 +577,14 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                       label: 'CONNECTOR TYPE',
                       value: _connectorType,
                       items: const [
-                        'REST_API',
-                        'SALESFORCE',
-                        'SAP',
-                        'ORACLE',
-                        'HUBSPOT',
-                        'JDBC',
-                        'S3',
-                        'KAFKA',
-                        'MANUAL',
+                        'rest_api', 'salesforce', 'sap', 'oracle',
+                        'hubspot', 'jdbc', 's3', 'kafka',
+                        'csv', 'database', 'manual', 'custom',
                       ],
-                      onChanged: (v) =>
-                          setState(() => _connectorType = v!),
+                      onChanged: (v) => setState(() {
+                        _connectorType = v!;
+                        _rebuildConfigControllers(v);
+                      }),
                     ),
                     const SizedBox(height: 14),
                     AdminFormField(
@@ -561,9 +596,40 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                     AdminDropdownField<String>(
                       label: 'SYNC MODE',
                       value: _syncMode,
-                      items: const ['pull', 'push', 'realtime', 'manual'],
+                      items: const ['manual', 'scheduled', 'realtime'],
                       onChanged: (v) => setState(() => _syncMode = v!),
                     ),
+                    // ── Connector-specific credential fields ───────────────
+                    if (_ConfigField.forConnector(_connectorType).isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      Row(children: [
+                        const Expanded(child: Divider(color: AppColors.divider)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text('CONNECTION CREDENTIALS',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.mutedText, letterSpacing: 0.8,
+                            )),
+                        ),
+                        const Expanded(child: Divider(color: AppColors.divider)),
+                      ]),
+                      const SizedBox(height: 12),
+                      ..._ConfigField.forConnector(_connectorType).map((f) =>
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: AdminFormField(
+                            label: f.label,
+                            controller: _configControllers[f.key]!,
+                            hint: f.hint,
+                            obscureText: f.secret,
+                            maxLines: f.multiline ? 4 : 1,
+                            validator: f.required
+                                ? (v) => (v == null || v.isEmpty) ? 'Required' : null
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -614,6 +680,8 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                   ],
                 ),
               ),
+                ),
+              ),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -638,6 +706,104 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Connection config field definition + per-connector field lists
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ConfigField {
+  final String key;
+  final String label;
+  final String hint;
+  final bool secret;
+  final bool required;
+  final bool multiline;
+
+  const _ConfigField({
+    required this.key,
+    required this.label,
+    required this.hint,
+    this.secret = false,
+    this.required = false,
+    this.multiline = false,
+  });
+
+  static const Map<String, List<_ConfigField>> _byConnector = {
+    'rest_api': [
+      _ConfigField(key: 'base_url',      label: 'BASE URL',          hint: 'https://api.example.com', required: true),
+      _ConfigField(key: 'api_key',        label: 'API KEY',           hint: 'sk-...', secret: true),
+      _ConfigField(key: 'bearer_token',   label: 'BEARER TOKEN',      hint: 'token value', secret: true),
+      _ConfigField(key: 'timeout_secs',   label: 'TIMEOUT (seconds)', hint: '30'),
+    ],
+    'salesforce': [
+      _ConfigField(key: 'instance_url',     label: 'INSTANCE URL',     hint: 'https://myorg.my.salesforce.com', required: true),
+      _ConfigField(key: 'consumer_key',     label: 'CONSUMER KEY',     hint: 'Connected app key', required: true, secret: true),
+      _ConfigField(key: 'consumer_secret',  label: 'CONSUMER SECRET',  hint: '...', required: true, secret: true),
+      _ConfigField(key: 'username',         label: 'USERNAME',         hint: 'admin@company.com'),
+      _ConfigField(key: 'password',         label: 'PASSWORD',         hint: '...', secret: true),
+    ],
+    'sap': [
+      _ConfigField(key: 'host',          label: 'HOST',          hint: 'sap.company.com', required: true),
+      _ConfigField(key: 'client',        label: 'CLIENT ID',     hint: '100', required: true),
+      _ConfigField(key: 'system_number', label: 'SYSTEM NUMBER', hint: '00'),
+      _ConfigField(key: 'username',      label: 'USERNAME',      hint: 'RFCUSER', required: true),
+      _ConfigField(key: 'password',      label: 'PASSWORD',      hint: '...', required: true, secret: true),
+    ],
+    'oracle': [
+      _ConfigField(key: 'host',         label: 'HOST',         hint: 'oracle.company.com', required: true),
+      _ConfigField(key: 'port',         label: 'PORT',         hint: '1521'),
+      _ConfigField(key: 'service_name', label: 'SERVICE NAME', hint: 'ORCL', required: true),
+      _ConfigField(key: 'username',     label: 'USERNAME',     hint: 'scott', required: true),
+      _ConfigField(key: 'password',     label: 'PASSWORD',     hint: '...', required: true, secret: true),
+    ],
+    'hubspot': [
+      _ConfigField(key: 'api_key',   label: 'PRIVATE APP TOKEN', hint: 'pat-na1-...', required: true, secret: true),
+      _ConfigField(key: 'portal_id', label: 'PORTAL ID',         hint: '12345678'),
+    ],
+    'jdbc': [
+      _ConfigField(key: 'url',          label: 'JDBC URL',      hint: 'jdbc:postgresql://host:5432/db', required: true),
+      _ConfigField(key: 'driver_class', label: 'DRIVER CLASS',  hint: 'org.postgresql.Driver'),
+      _ConfigField(key: 'username',     label: 'USERNAME',      hint: 'dbuser', required: true),
+      _ConfigField(key: 'password',     label: 'PASSWORD',      hint: '...', required: true, secret: true),
+    ],
+    's3': [
+      _ConfigField(key: 'bucket',            label: 'BUCKET NAME',       hint: 'my-data-bucket', required: true),
+      _ConfigField(key: 'region',            label: 'AWS REGION',        hint: 'us-east-1', required: true),
+      _ConfigField(key: 'access_key_id',     label: 'ACCESS KEY ID',     hint: 'AKIA...', required: true, secret: true),
+      _ConfigField(key: 'secret_access_key', label: 'SECRET ACCESS KEY', hint: '...', required: true, secret: true),
+      _ConfigField(key: 'prefix',            label: 'KEY PREFIX',        hint: 'data/exports/'),
+    ],
+    'kafka': [
+      _ConfigField(key: 'bootstrap_servers', label: 'BOOTSTRAP SERVERS', hint: 'broker1:9092,broker2:9092', required: true),
+      _ConfigField(key: 'topic',             label: 'TOPIC',             hint: 'entity.updates', required: true),
+      _ConfigField(key: 'group_id',          label: 'CONSUMER GROUP',    hint: 'nexus-mdm'),
+      _ConfigField(key: 'sasl_username',     label: 'SASL USERNAME',     hint: 'kafka-user', secret: true),
+      _ConfigField(key: 'sasl_password',     label: 'SASL PASSWORD',     hint: '...', secret: true),
+    ],
+    'csv': [
+      _ConfigField(key: 'file_url',   label: 'FILE URL / PATH', hint: 'https://... or /mnt/data/', required: true),
+      _ConfigField(key: 'delimiter',  label: 'DELIMITER',       hint: ','),
+      _ConfigField(key: 'encoding',   label: 'ENCODING',        hint: 'UTF-8'),
+      _ConfigField(key: 'has_header', label: 'HAS HEADER ROW',  hint: 'true'),
+    ],
+    'database': [
+      _ConfigField(key: 'host',     label: 'HOST',          hint: 'db.company.com', required: true),
+      _ConfigField(key: 'port',     label: 'PORT',          hint: '5432'),
+      _ConfigField(key: 'database', label: 'DATABASE NAME', hint: 'production', required: true),
+      _ConfigField(key: 'username', label: 'USERNAME',      hint: 'readonly_user', required: true),
+      _ConfigField(key: 'password', label: 'PASSWORD',      hint: '...', required: true, secret: true),
+      _ConfigField(key: 'db_type',  label: 'DB TYPE',       hint: 'postgresql'),
+    ],
+    'custom': [
+      _ConfigField(key: 'config_json', label: 'CONFIGURATION JSON',
+          hint: '{"key": "value"}', multiline: true),
+    ],
+    'manual': [],
+  };
+
+  static List<_ConfigField> forConnector(String type) =>
+      _byConnector[type] ?? [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

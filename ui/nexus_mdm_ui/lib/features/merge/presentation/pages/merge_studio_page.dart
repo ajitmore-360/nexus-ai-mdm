@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../core/auth/auth_manager.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/models/entity.dart';
+import '../../../../shared/models/api_responses.dart';
+import '../../../entities/data/entity_repository.dart' show EntityRepository;
 
 // ──────────────────────────────────────────────
 // Domain models
@@ -84,73 +87,81 @@ class MergeStudioPage extends StatefulWidget {
 class _MergeStudioPageState extends State<MergeStudioPage> {
   bool _isExecuting = false;
   bool _aiApplied = true;
+  bool _isLoading = true;
 
-  static const _attributes = [
-    _MergeAttribute(
-      key: 'legal_name',
-      label: 'Legal Name',
-      sourceValue: 'Michael A. Rodriguez',
-      candidateValue: 'M. Rodriguez Jr.',
-      aiSuggestion: _WinnerSide.source,
-      aiReason: _ReasonBadge.trustedSource,
-    ),
-    _MergeAttribute(
-      key: 'email',
-      label: 'Email',
-      sourceValue: 'mrodriguez@company.com',
-      candidateValue: 'michael.r@company.com',
-      aiSuggestion: _WinnerSide.source,
-      aiReason: _ReasonBadge.trustedSource,
-    ),
-    _MergeAttribute(
-      key: 'phone',
-      label: 'Phone',
-      sourceValue: '+1-555-0147',
-      candidateValue: '+1 (555) 0147',
-      aiSuggestion: _WinnerSide.source,
-      aiReason: _ReasonBadge.mostRecent,
-    ),
-    _MergeAttribute(
-      key: 'address',
-      label: 'Address',
-      sourceValue: '350 Mission St, SF, CA',
-      candidateValue: '350 Mission Street, San Francisco, CA 94105',
-      aiSuggestion: _WinnerSide.candidate,
-      aiReason: _ReasonBadge.longest,
-    ),
-    _MergeAttribute(
-      key: 'tax_id',
-      label: 'Tax ID',
-      sourceValue: '92-1847365',
-      candidateValue: '92-1847365',
-      aiSuggestion: _WinnerSide.source,
-      aiReason: _ReasonBadge.trustedSource,
-    ),
-    _MergeAttribute(
-      key: 'revenue',
-      label: 'Revenue (USD)',
-      sourceValue: '\$4,200,000',
-      candidateValue: '\$3,800,000',
-      aiSuggestion: _WinnerSide.source,
-      aiReason: _ReasonBadge.mostRecent,
-    ),
-    _MergeAttribute(
-      key: 'employees',
-      label: 'Employees',
-      sourceValue: '248',
-      candidateValue: '231',
-      aiSuggestion: _WinnerSide.source,
-      aiReason: _ReasonBadge.mostRecent,
-    ),
-  ];
+  List<_MergeAttribute> _attributes = [];
+  Map<String, _WinnerSide> _selections = {};
+  Map<String, _ReasonBadge> _reasons = {};
 
-  late Map<String, _WinnerSide> _selections;
-  late Map<String, _ReasonBadge> _reasons;
+  CanonicalEntity? _sourceEntity;
+  CanonicalEntity? _candidateEntity;
+
+  late final EntityRepository _repo;
 
   @override
   void initState() {
     super.initState();
-    _applyAiSuggestions();
+    _repo = EntityRepository(ApiClient());
+    _loadEntities();
+  }
+
+  Future<void> _loadEntities() async {
+    final results = await Future.wait([
+      _repo.getEntity(widget.sourceId),
+      _repo.getEntity(widget.candidateId),
+    ]);
+    if (!mounted) return;
+
+    CanonicalEntity? src, cand;
+    if (results[0] case Success<CanonicalEntity>(:final data)) src = data;
+    if (results[1] case Success<CanonicalEntity>(:final data)) cand = data;
+
+    setState(() {
+      _sourceEntity = src;
+      _candidateEntity = cand;
+      _attributes = _buildAttributes(src, cand);
+      _isLoading = false;
+      _applyAiSuggestions();
+    });
+  }
+
+  List<_MergeAttribute> _buildAttributes(
+      CanonicalEntity? src, CanonicalEntity? cand) {
+    final srcAttrs = src?.attributes ?? {};
+    final candAttrs = cand?.attributes ?? {};
+    final allKeys = {...srcAttrs.keys, ...candAttrs.keys};
+
+    return allKeys.map((key) {
+      final s = srcAttrs[key];
+      final c = candAttrs[key];
+      final srcVal = s?.value?.toString() ?? '—';
+      final candVal = c?.value?.toString() ?? '—';
+      final srcConf = s?.confidence ?? 0.0;
+      final candConf = c?.confidence ?? 0.0;
+
+      _WinnerSide suggestion;
+      _ReasonBadge reason;
+      if (srcConf >= candConf) {
+        suggestion = _WinnerSide.source;
+        reason = srcConf > 0.9 ? _ReasonBadge.trustedSource : _ReasonBadge.mostRecent;
+      } else if (candVal.length > srcVal.length && candConf > 0) {
+        suggestion = _WinnerSide.candidate;
+        reason = _ReasonBadge.longest;
+      } else {
+        suggestion = _WinnerSide.candidate;
+        reason = _ReasonBadge.mostRecent;
+      }
+
+      return _MergeAttribute(
+        key: key,
+        label: s?.displayName ?? c?.displayName ?? key,
+        sourceValue: srcVal,
+        candidateValue: candVal,
+        aiSuggestion: suggestion,
+        aiReason: reason,
+      );
+    }).toList()
+      ..sort((a, b) => a.label.compareTo(b.label));
   }
 
   void _applyAiSuggestions() {
@@ -180,22 +191,26 @@ class _MergeStudioPageState extends State<MergeStudioPage> {
       body: Column(
         children: [
           _buildHeader(),
-          _buildAiBanner(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildAttributeTable(),
-                  const SizedBox(height: 24),
-                  _buildGoldenPreview(),
-                  const SizedBox(height: 24),
-                ],
+          if (_isLoading)
+            const Expanded(child: Center(child: CircularProgressIndicator()))
+          else ...[
+            _buildAiBanner(),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildAttributeTable(),
+                    const SizedBox(height: 24),
+                    _buildGoldenPreview(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
             ),
-          ),
-          _buildBottomBar(),
+            _buildBottomBar(),
+          ],
         ],
       ),
     );
@@ -337,14 +352,16 @@ class _MergeStudioPageState extends State<MergeStudioPage> {
                 ),
                 Expanded(
                   child: Text(
-                    'SOURCE (Salesforce)',
+                    'SOURCE${_sourceEntity != null ? ' (${_sourceEntity!.displayName})' : ''}',
                     style: AppTextStyles.tableHeader.copyWith(color: AppColors.info),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Expanded(
                   child: Text(
-                    'CANDIDATE (SAP)',
+                    'CANDIDATE${_candidateEntity != null ? ' (${_candidateEntity!.displayName})' : ''}',
                     style: AppTextStyles.tableHeader.copyWith(color: AppColors.warning),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 SizedBox(
@@ -628,9 +645,7 @@ class _MergeStudioPageState extends State<MergeStudioPage> {
     setState(() => _isExecuting = true);
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final tenantId = prefs.getString(AppConstants.storageTenantId) ??
-          '00000000-0000-0000-0000-000000000001';
+      final tenantId = await AuthManager.getTenantId() ?? '';
 
       final survivorshipRules = <String, dynamic>{
         for (final a in _attributes)

@@ -23,15 +23,26 @@ class EntityLoadMoreRequested extends EntityEvent {
   const EntityLoadMoreRequested();
 }
 
-/// User tapped a type or status filter chip.
+/// User tapped a type, status, or source filter chip, or changed sort order.
 class EntityFilterChanged extends EntityEvent {
   final String? type;
   final String? status;
+  final String? sourceSystem;
+  /// Column to sort by: 'created_at' | 'updated_at' | 'trust_score' | 'entity_type' | 'status'
+  final String? sortBy;
+  /// Sort direction: 'asc' or 'desc'.
+  final String? sortDir;
 
-  const EntityFilterChanged({this.type, this.status});
+  const EntityFilterChanged({
+    this.type,
+    this.status,
+    this.sourceSystem,
+    this.sortBy,
+    this.sortDir,
+  });
 
   @override
-  List<Object?> get props => [type, status];
+  List<Object?> get props => [type, status, sourceSystem, sortBy, sortDir];
 }
 
 /// User triggered pull-to-refresh or tapped retry.

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/admin_repository.dart';
 import '../../../../shared/models/api_responses.dart';
 import '../widgets/admin_form_widgets.dart';
-import 'tenant_create_page.dart';
 
 class TenantsPage extends StatefulWidget {
   const TenantsPage({super.key});
@@ -99,11 +99,7 @@ class _TenantsPageState extends State<TenantsPage> {
   }
 
   void _openCreateDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierColor: AppColors.overlay,
-      builder: (_) => TenantCreateDialog(onCreated: (_) => _load()),
-    );
+    context.go('/dashboard/admin/tenants/create');
   }
 
   Widget _buildError() {
@@ -172,7 +168,9 @@ class _TenantsPageState extends State<TenantsPage> {
   }
 
   Widget _buildTableRow(TenantModel t, int index) {
-    return Container(
+    return InkWell(
+      onTap: () => context.go('/dashboard/admin/tenants/${t.id}'),
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         border: index < _tenants.length - 1
@@ -187,9 +185,16 @@ class _TenantsPageState extends State<TenantsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(t.name,
-                    style: AppTextStyles.tableCell
-                        .copyWith(fontWeight: FontWeight.w600)),
+                Row(
+                  children: [
+                    Text(t.name,
+                        style: AppTextStyles.tableCell
+                            .copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.chevron_right_rounded,
+                        size: 14, color: AppColors.mutedText),
+                  ],
+                ),
                 Text(t.id,
                     style: AppTextStyles.bodySmall.copyWith(fontSize: 11)),
               ],
@@ -218,6 +223,7 @@ class _TenantsPageState extends State<TenantsPage> {
               child: Text(t.region, style: AppTextStyles.tableCell)),
         ],
       ),
+    ),
     );
   }
 }

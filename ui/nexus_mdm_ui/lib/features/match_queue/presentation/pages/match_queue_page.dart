@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../../../core/auth/auth_manager.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../shared/models/match_candidate.dart';
+import '../../../../shared/models/api_responses.dart';
 import '../../../../shared/widgets/ai_badge.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../shared/widgets/status_badge.dart';
+import '../../data/match_queue_repository.dart';
+import '../../../admin/data/entity_type_repository.dart';
 
 class MatchQueuePage extends StatefulWidget {
   final String? reviewId;
@@ -25,16 +29,41 @@ class MatchQueuePage extends StatefulWidget {
 class _MatchQueuePageState extends State<MatchQueuePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late final MatchQueueRepository _repo;
+
+  late final EntityTypeRepository _entityTypeRepo;
   bool _isLoading = true;
-  List<MatchCandidate> _allCandidates = [];
+  List<ReviewItem> _allItems = [];
+  QueueMetrics? _metrics;
   final Set<String> _selectedIds = {};
   String _activeTab = 'all';
+  String? _selectedDomain; // null means "All"
+  List<String> _domainOptions = [];
+  List<String>? _stewardEntityTypes; // null = no restriction
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    _loadCandidates();
+    final api = ApiClient();
+    _repo = MatchQueueRepository(client: api);
+    _entityTypeRepo = EntityTypeRepository(api);
+    _initStewardScopeAndLoad();
+  }
+
+  Future<void> _initStewardScopeAndLoad() async {
+    final role = await AuthManager.getUserRole();
+    if (role?.toLowerCase() == 'steward') {
+      final types = await AuthManager.getAssignedEntityTypes();
+      if (mounted) {
+        setState(() {
+          _stewardEntityTypes = types;
+          if (types.length == 1) _selectedDomain = types.first;
+        });
+      }
+    }
+    _loadEntityTypes();
+    _loadData();
   }
 
   @override
@@ -43,37 +72,118 @@ class _MatchQueuePageState extends State<MatchQueuePage>
     super.dispose();
   }
 
-  Future<void> _loadCandidates() async {
-    await Future.delayed(const Duration(milliseconds: 700));
+  // ---------------------------------------------------------------------------
+  // Data loading
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadEntityTypes() async {
+    final tenantId = await _resolveTenantId();
+    final result = await _entityTypeRepo.listEntityTypes(tenantId);
     if (!mounted) return;
+    if (result case Success<List<EntityTypeModel>>(:final data)) {
+      var options = data.map((e) => e.code).toList();
+      if (_stewardEntityTypes != null && _stewardEntityTypes!.isNotEmpty) {
+        final allowed = _stewardEntityTypes!.map((t) => t.toLowerCase()).toSet();
+        options = options
+            .where((o) => allowed.contains(o.toLowerCase()))
+            .toList();
+      }
+      setState(() => _domainOptions = options);
+    }
+  }
+
+  Future<void> _loadData() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    final tenantId = await _resolveTenantId();
+
+    // Enforce steward scope: if no domain explicitly chosen and steward has
+    // exactly one type, pass it so the backend never returns out-of-scope items.
+    final effectiveDomain = _selectedDomain ??
+        (_stewardEntityTypes?.length == 1
+            ? _stewardEntityTypes!.first
+            : null);
+
+    // Fire both calls in parallel.
+    final results = await Future.wait([
+      _repo.getQueueMetrics(tenantId: tenantId),
+      _repo.listQueue(
+        tenantId: tenantId,
+        entityType: effectiveDomain,
+      ),
+    ]);
+
+    if (!mounted) return;
+
+    final metricsResult = results[0] as ApiResult<QueueMetrics>;
+    final queueResult = results[1] as ApiResult<List<ReviewItem>>;
+
     setState(() {
       _isLoading = false;
-      _allCandidates = MatchCandidate.demoList;
+      if (metricsResult case Success<QueueMetrics>(:final data)) {
+        _metrics = data;
+      }
+      if (queueResult case Success<List<ReviewItem>>(:final data)) {
+        _allItems = data;
+      } else if (queueResult case Failure<List<ReviewItem>>()) {
+        // Keep list empty; no crash.
+        _allItems = [];
+      }
     });
   }
 
-  List<MatchCandidate> get _filteredCandidates {
+  Future<String> _resolveTenantId() async {
+    try {
+      final id = await AuthManager.getTenantId();
+      if (id != null && id.isNotEmpty) return id;
+    } catch (_) {}
+    return 'default';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Derived lists
+  // ---------------------------------------------------------------------------
+
+  List<ReviewItem> get _filteredItems {
+    // Safety net for multi-type stewards when domain is "All":
+    // backend has no multi-type param so we filter client-side.
+    var items = _allItems;
+    if (_stewardEntityTypes != null &&
+        _stewardEntityTypes!.length > 1 &&
+        _selectedDomain == null) {
+      final allowed =
+          _stewardEntityTypes!.map((t) => t.toLowerCase()).toSet();
+      items = items
+          .where((c) => allowed.contains(c.entityType.toLowerCase()))
+          .toList();
+    }
+
     switch (_activeTab) {
       case 'critical':
-        return _allCandidates
-            .where((c) => c.priority == MatchPriority.critical)
+        return items
+            .where((c) => c.priority.toLowerCase() == 'critical')
             .toList();
       case 'high':
-        return _allCandidates
-            .where((c) => c.priority == MatchPriority.high)
+        return items
+            .where((c) => c.priority.toLowerCase() == 'high')
             .toList();
       case 'normal':
-        return _allCandidates
+        return items
             .where((c) =>
-                c.priority == MatchPriority.normal ||
-                c.priority == MatchPriority.low)
+                c.priority.toLowerCase() == 'normal' ||
+                c.priority.toLowerCase() == 'low')
             .toList();
       default:
-        return _allCandidates
-            .where((c) => c.decision == MatchDecision.pending)
-            .toList();
+        return List<ReviewItem>.from(items);
     }
   }
+
+  int get _pendingCount => _metrics?.pendingTotal ?? _allItems.length;
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -82,24 +192,29 @@ class _MatchQueuePageState extends State<MatchQueuePage>
       body: Column(
         children: [
           _buildHeader(),
+          if (_metrics != null) _buildMetricsBanner(),
           _buildTabBar(),
           if (_selectedIds.isNotEmpty) _buildBulkActionBar(),
           Expanded(
             child: _isLoading
                 ? _buildLoadingState()
-                : _filteredCandidates.isEmpty
+                : _filteredItems.isEmpty
                     ? const EmptyState(
                         icon: Icons.check_circle_outline_rounded,
                         title: 'Queue is clear!',
                         description:
                             'All match candidates have been reviewed. Great work!',
                       )
-                    : _buildCandidateList(),
+                    : _buildItemList(),
           ),
         ],
       ),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Header
+  // ---------------------------------------------------------------------------
 
   Widget _buildHeader() {
     return Container(
@@ -110,7 +225,7 @@ class _MatchQueuePageState extends State<MatchQueuePage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${_allCandidates.where((c) => c.isPending).length} pending reviews',
+                '$_pendingCount pending reviews',
                 style: AppTextStyles.headlineSmall,
               ).animate().fadeIn(duration: 400.ms),
               const SizedBox(height: 4),
@@ -121,10 +236,13 @@ class _MatchQueuePageState extends State<MatchQueuePage>
             ],
           ),
           const Spacer(),
+          // Domain dropdown
+          _buildDomainDropdown(),
+          const SizedBox(width: 8),
           OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: _loadData,
             icon: const Icon(Icons.filter_list_rounded, size: 16),
-            label: const Text('Filter'),
+            label: const Text('Refresh'),
           ).animate(delay: 200.ms).fadeIn(),
           const SizedBox(width: 8),
           ElevatedButton.icon(
@@ -140,15 +258,176 @@ class _MatchQueuePageState extends State<MatchQueuePage>
     );
   }
 
+  Widget _buildDomainDropdown() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: _selectedDomain != null
+            ? AppColors.primary.withValues(alpha: 0.12)
+            : AppColors.elevatedCard,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: _selectedDomain != null
+              ? AppColors.primary.withValues(alpha: 0.4)
+              : AppColors.divider,
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          value: _selectedDomain,
+          hint: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              'Domain',
+              style: AppTextStyles.labelMedium
+                  .copyWith(color: AppColors.secondaryText),
+            ),
+          ),
+          dropdownColor: AppColors.elevatedCard,
+          borderRadius: BorderRadius.circular(8),
+          icon: Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: _selectedDomain != null
+                  ? AppColors.primary
+                  : AppColors.secondaryText,
+            ),
+          ),
+          onChanged: (value) {
+            setState(() {
+              _selectedDomain = value;
+              _selectedIds.clear();
+            });
+            _loadData();
+          },
+          items: [
+            DropdownMenuItem<String?>(
+              value: null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text('All Domains',
+                    style: AppTextStyles.labelMedium
+                        .copyWith(color: AppColors.primaryText)),
+              ),
+            ),
+            ..._domainOptions.map(
+              (domain) => DropdownMenuItem<String?>(
+                value: domain,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(domain,
+                      style: AppTextStyles.labelMedium
+                          .copyWith(color: AppColors.primaryText)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate(delay: 150.ms).fadeIn();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Metrics banner
+  // ---------------------------------------------------------------------------
+
+  Widget _buildMetricsBanner() {
+    final m = _metrics!;
+    final hasSla = m.slaBreached > 0;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.elevatedCard,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: hasSla
+              ? AppColors.error.withValues(alpha: 0.3)
+              : AppColors.divider,
+        ),
+      ),
+      child: Row(
+        children: [
+          _metricChip(
+            label: 'Pending',
+            value: '${m.pendingTotal}',
+            color: AppColors.primary,
+          ),
+          const SizedBox(width: 16),
+          _metricChip(
+            label: 'Avg Age',
+            value: '${m.avgAgeHours.toStringAsFixed(1)}h',
+            color: AppColors.secondaryText,
+          ),
+          if (hasSla) ...[
+            const SizedBox(width: 16),
+            _metricChip(
+              label: 'SLA Breached',
+              value: '${m.slaBreached}',
+              color: AppColors.error,
+              icon: Icons.warning_amber_rounded,
+            ),
+          ],
+          const Spacer(),
+          ...m.pendingByPriority.entries
+              .where((e) => e.value > 0)
+              .map((e) => Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: _metricChip(
+                      label: _capitalized(e.key),
+                      value: '${e.value}',
+                      color: _priorityColor(e.key),
+                    ),
+                  )),
+        ],
+      ),
+    ).animate(delay: 50.ms).fadeIn(duration: 350.ms);
+  }
+
+  Widget _metricChip({
+    required String label,
+    required String value,
+    required Color color,
+    IconData? icon,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+        ],
+        Text(
+          '$label: ',
+          style: AppTextStyles.labelSmall
+              .copyWith(color: AppColors.secondaryText),
+        ),
+        Text(
+          value,
+          style: AppTextStyles.labelMedium.copyWith(
+            color: color,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab bar
+  // ---------------------------------------------------------------------------
+
   Widget _buildTabBar() {
     final counts = [
-      _allCandidates.where((c) => c.isPending).length,
-      _allCandidates.where((c) => c.priority == MatchPriority.critical).length,
-      _allCandidates.where((c) => c.priority == MatchPriority.high).length,
-      _allCandidates
+      _allItems.length,
+      _allItems.where((c) => c.priority.toLowerCase() == 'critical').length,
+      _allItems.where((c) => c.priority.toLowerCase() == 'high').length,
+      _allItems
           .where((c) =>
-              c.priority == MatchPriority.normal ||
-              c.priority == MatchPriority.low)
+              c.priority.toLowerCase() == 'normal' ||
+              c.priority.toLowerCase() == 'low')
           .length,
     ];
     final tabs = [
@@ -174,12 +453,12 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: isActive
-                      ? AppColors.primary.withValues(alpha:0.12)
+                      ? AppColors.primary.withValues(alpha: 0.12)
                       : AppColors.elevatedCard,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isActive
-                        ? AppColors.primary.withValues(alpha:0.4)
+                        ? AppColors.primary.withValues(alpha: 0.4)
                         : AppColors.divider,
                   ),
                 ),
@@ -200,7 +479,7 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: isActive
-                              ? AppColors.primary.withValues(alpha:0.2)
+                              ? AppColors.primary.withValues(alpha: 0.2)
                               : AppColors.cardSurface,
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -224,20 +503,25 @@ class _MatchQueuePageState extends State<MatchQueuePage>
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Bulk action bar
+  // ---------------------------------------------------------------------------
+
   Widget _buildBulkActionBar() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha:0.1),
+        color: AppColors.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.primary.withValues(alpha:0.3)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           Text(
             '${_selectedIds.length} selected',
-            style: AppTextStyles.labelMedium.copyWith(color: AppColors.primary),
+            style:
+                AppTextStyles.labelMedium.copyWith(color: AppColors.primary),
           ),
           const SizedBox(width: 16),
           ElevatedButton.icon(
@@ -245,7 +529,8 @@ class _MatchQueuePageState extends State<MatchQueuePage>
             icon: const Icon(Icons.check, size: 14),
             label: const Text('Merge All'),
             style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               textStyle: AppTextStyles.buttonSmall,
             ),
           ),
@@ -255,7 +540,8 @@ class _MatchQueuePageState extends State<MatchQueuePage>
             icon: const Icon(Icons.close, size: 14),
             label: const Text('Reject All'),
             style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               textStyle: AppTextStyles.buttonSmall,
               foregroundColor: AppColors.error,
               side: const BorderSide(color: AppColors.error),
@@ -271,6 +557,10 @@ class _MatchQueuePageState extends State<MatchQueuePage>
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // List
+  // ---------------------------------------------------------------------------
+
   Widget _buildLoadingState() {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -280,35 +570,41 @@ class _MatchQueuePageState extends State<MatchQueuePage>
     );
   }
 
-  Widget _buildCandidateList() {
-    final candidates = _filteredCandidates;
+  Widget _buildItemList() {
+    final items = _filteredItems;
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      itemCount: candidates.length,
+      itemCount: items.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, i) =>
-          _buildMatchCard(candidates[i], i).animate(
-            delay: (i * 80).ms,
-          ).fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0, duration: 400.ms),
+      itemBuilder: (context, i) => _buildMatchCard(items[i], i)
+          .animate(delay: (i * 80).ms)
+          .fadeIn(duration: 400.ms)
+          .slideY(begin: 0.05, end: 0, duration: 400.ms),
     );
   }
 
-  Widget _buildMatchCard(MatchCandidate candidate, int index) {
-    final isSelected = _selectedIds.contains(candidate.id);
+  // ---------------------------------------------------------------------------
+  // Match card
+  // ---------------------------------------------------------------------------
+
+  Widget _buildMatchCard(ReviewItem item, int index) {
+    final isSelected = _selectedIds.contains(item.candidateId);
+    final priority = item.priority.toLowerCase();
+    final slaBreached = item.isSlaBreached;
 
     return GestureDetector(
-      onTap: () => _showMatchDetail(candidate),
+      onTap: () => _showMatchDetail(item),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primary.withValues(alpha:0.06)
+              ? AppColors.primary.withValues(alpha: 0.06)
               : AppColors.cardSurface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
-                ? AppColors.primary.withValues(alpha:0.4)
-                : _getPriorityBorderColor(candidate.priority),
+                ? AppColors.primary.withValues(alpha: 0.4)
+                : _getPriorityBorderColor(priority),
             width: isSelected ? 1.5 : 1,
           ),
         ),
@@ -317,7 +613,7 @@ class _MatchQueuePageState extends State<MatchQueuePage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // Header row
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -326,9 +622,9 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                     onChanged: (v) {
                       setState(() {
                         if (v == true) {
-                          _selectedIds.add(candidate.id);
+                          _selectedIds.add(item.candidateId);
                         } else {
-                          _selectedIds.remove(candidate.id);
+                          _selectedIds.remove(item.candidateId);
                         }
                       });
                     },
@@ -340,34 +636,61 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                       children: [
                         Row(
                           children: [
-                            PriorityBadge(priority: candidate.priorityDisplayName),
+                            PriorityBadge(
+                              priority: _capitalized(item.priority),
+                            ),
                             const SizedBox(width: 8),
-                            if (candidate.hasAiRecommendation) ...[
+                            // SLA breach badge
+                            if (slaBreached)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.error
+                                      .withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: AppColors.error
+                                        .withValues(alpha: 0.5),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.warning_amber_rounded,
+                                        size: 10, color: AppColors.error),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      'SLA',
+                                      style: AppTextStyles.badgeLabel
+                                          .copyWith(color: AppColors.error),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (item.aiExplanation != null) ...[
+                              const SizedBox(width: 8),
                               AiBadge(
                                 label: 'AI',
-                                confidence: candidate.aiConfidence,
+                                confidence: item.overallScore,
                                 compact: false,
                               ),
-                              const SizedBox(width: 8),
                             ],
                             const Spacer(),
                             Text(
-                              candidate.createdAt.difference(DateTime.now()).inHours.abs() < 24
-                                  ? '${DateTime.now().difference(candidate.createdAt).inHours}h ago'
-                                  : '${DateTime.now().difference(candidate.createdAt).inDays}d ago',
+                              _timeAgo(item.createdAt),
                               style: AppTextStyles.timestamp,
                             ),
                           ],
                         ),
                         const SizedBox(height: 12),
-
-                        // Entity names
+                        // Entity chips
                         Row(
                           children: [
                             Expanded(
                               child: _buildEntityChip(
-                                candidate.sourceEntityName,
-                                candidate.sourceEntityId,
+                                item.sourceEntityName,
+                                item.requestId,
                                 Icons.hub_rounded,
                               ),
                             ),
@@ -382,8 +705,8 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                             ),
                             Expanded(
                               child: _buildEntityChip(
-                                candidate.targetEntityName,
-                                candidate.targetEntityId,
+                                item.targetEntityName,
+                                item.candidateId,
                                 Icons.hub_outlined,
                               ),
                             ),
@@ -413,22 +736,22 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                           ),
                         ),
                         FractionallySizedBox(
-                          widthFactor: candidate.overallScore.clamp(0.0, 1.0),
+                          widthFactor: item.overallScore.clamp(0.0, 1.0),
                           child: Container(
                             height: 6,
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
-                                  _getScoreColor(candidate.overallScore)
-                                      .withValues(alpha:0.7),
-                                  _getScoreColor(candidate.overallScore),
+                                  _getScoreColor(item.overallScore)
+                                      .withValues(alpha: 0.7),
+                                  _getScoreColor(item.overallScore),
                                 ],
                               ),
                               borderRadius: BorderRadius.circular(3),
                               boxShadow: [
                                 BoxShadow(
-                                  color: _getScoreColor(candidate.overallScore)
-                                      .withValues(alpha:0.4),
+                                  color: _getScoreColor(item.overallScore)
+                                      .withValues(alpha: 0.4),
                                   blurRadius: 4,
                                 ),
                               ],
@@ -440,9 +763,9 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    '${(candidate.overallScore * 100).round()}%',
+                    '${(item.overallScore * 100).round()}%',
                     style: AppTextStyles.labelMedium.copyWith(
-                      color: _getScoreColor(candidate.overallScore),
+                      color: _getScoreColor(item.overallScore),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -451,64 +774,66 @@ class _MatchQueuePageState extends State<MatchQueuePage>
 
               const SizedBox(height: 12),
 
-              // Field matches summary
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: candidate.fieldMatches.take(4).map((field) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _getFieldMatchColor(field.similarity)
-                          .withValues(alpha:0.08),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: _getFieldMatchColor(field.similarity)
-                            .withValues(alpha:0.3),
+              // Field match chips
+              if (item.fieldMatches.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: item.fieldMatches.take(4).map((fm) {
+                    final isExact = fm.score >= 0.999;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _getFieldMatchColor(fm.score)
+                            .withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: _getFieldMatchColor(fm.score)
+                              .withValues(alpha: 0.3),
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          field.isExact
-                              ? Icons.check_circle
-                              : Icons.check_circle_outline,
-                          size: 12,
-                          color: _getFieldMatchColor(field.similarity),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          field.displayName,
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: _getFieldMatchColor(field.similarity),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isExact
+                                ? Icons.check_circle
+                                : Icons.check_circle_outline,
+                            size: 12,
+                            color: _getFieldMatchColor(fm.score),
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${(field.similarity * 100).round()}%',
-                          style: AppTextStyles.badgeLabel.copyWith(
-                            color: _getFieldMatchColor(field.similarity),
+                          const SizedBox(width: 4),
+                          Text(
+                            _capitalized(fm.field),
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: _getFieldMatchColor(fm.score),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${(fm.score * 100).round()}%',
+                            style: AppTextStyles.badgeLabel.copyWith(
+                              color: _getFieldMatchColor(fm.score),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
 
-              const SizedBox(height: 12),
+              if (item.fieldMatches.isNotEmpty) const SizedBox(height: 12),
 
-              // AI explanation (if available)
-              if (candidate.aiExplanation != null)
+              // AI explanation
+              if (item.aiExplanation != null)
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.aiPurple.withValues(alpha:0.06),
+                    color: AppColors.aiPurple.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: AppColors.aiPurple.withValues(alpha:0.2)),
+                        color: AppColors.aiPurple.withValues(alpha: 0.2)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -518,7 +843,7 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          candidate.aiExplanation!,
+                          item.aiExplanation!,
                           style: AppTextStyles.bodySmall.copyWith(
                             color: AppColors.secondaryText,
                             fontStyle: FontStyle.italic,
@@ -531,19 +856,23 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                   ),
                 ),
 
-              const SizedBox(height: 16),
+              if (item.aiExplanation != null) const SizedBox(height: 12),
+
+              const SizedBox(height: 4),
 
               // Action buttons
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => _approveCandidate(candidate),
-                      icon: const Icon(Icons.merge_type_rounded, size: 16),
+                      onPressed: () => _approveItem(item),
+                      icon:
+                          const Icon(Icons.merge_type_rounded, size: 16),
                       label: const Text('Merge'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 10),
                         textStyle: AppTextStyles.buttonSmall,
                       ),
                     ),
@@ -551,20 +880,21 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                   const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _rejectCandidate(candidate),
+                      onPressed: () => _rejectItem(item),
                       icon: const Icon(Icons.close, size: 16),
                       label: const Text('Not a Dup'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.error,
                         side: const BorderSide(color: AppColors.error),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 10),
                         textStyle: AppTextStyles.buttonSmall,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
-                    onPressed: () {},
+                    onPressed: () => _deferItem(item),
                     icon: const Icon(Icons.schedule_rounded, size: 16),
                     label: const Text('Defer'),
                     style: OutlinedButton.styleFrom(
@@ -575,7 +905,7 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    onPressed: () => _showMatchDetail(candidate),
+                    onPressed: () => _showMatchDetail(item),
                     icon: const Icon(Icons.open_in_new_rounded, size: 16),
                     tooltip: 'View full detail',
                     style: IconButton.styleFrom(
@@ -609,7 +939,7 @@ class _MatchQueuePageState extends State<MatchQueuePage>
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha:0.12),
+              color: AppColors.primary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Icon(icon, size: 15, color: AppColors.primary),
@@ -637,14 +967,29 @@ class _MatchQueuePageState extends State<MatchQueuePage>
     );
   }
 
-  Color _getPriorityBorderColor(MatchPriority priority) {
+  // ---------------------------------------------------------------------------
+  // Color helpers
+  // ---------------------------------------------------------------------------
+
+  Color _getPriorityBorderColor(String priority) {
     switch (priority) {
-      case MatchPriority.critical:
-        return AppColors.error.withValues(alpha:0.3);
-      case MatchPriority.high:
-        return AppColors.warning.withValues(alpha:0.3);
+      case 'critical':
+        return AppColors.error.withValues(alpha: 0.3);
+      case 'high':
+        return AppColors.warning.withValues(alpha: 0.3);
       default:
         return AppColors.divider;
+    }
+  }
+
+  Color _priorityColor(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'critical':
+        return AppColors.error;
+      case 'high':
+        return AppColors.warning;
+      default:
+        return AppColors.secondaryText;
     }
   }
 
@@ -660,88 +1005,236 @@ class _MatchQueuePageState extends State<MatchQueuePage>
     return AppColors.error;
   }
 
-  void _approveCandidate(MatchCandidate candidate) {
+  // ---------------------------------------------------------------------------
+  // Action handlers
+  // ---------------------------------------------------------------------------
+
+  Future<void> _approveItem(ReviewItem item) async {
+    // Optimistic remove
     setState(() {
-      _allCandidates = _allCandidates.where((c) => c.id != candidate.id).toList();
-      _selectedIds.remove(candidate.id);
+      _allItems = _allItems.where((c) => c.candidateId != item.candidateId).toList();
+      _selectedIds.remove(item.candidateId);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${candidate.sourceEntityName} merged with ${candidate.targetEntityName}',
-        ),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () {
-            setState(() => _allCandidates.add(candidate));
-          },
-        ),
-      ),
+
+    final tenantId = await _resolveTenantId();
+    final result = await _repo.approve(
+      tenantId: tenantId,
+      requestId: item.requestId,
+      candidateId: item.candidateId,
     );
+
+    if (!mounted) return;
+
+    switch (result) {
+      case Success():
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${item.sourceEntityName} merged with ${item.targetEntityName}',
+            ),
+            action: SnackBarAction(
+              label: 'Undo',
+              onPressed: () => setState(() => _allItems.add(item)),
+            ),
+          ),
+        );
+      case Failure(:final exception):
+        // Revert
+        setState(() => _allItems.add(item));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Merge failed: ${exception.message}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+    }
   }
 
-  void _rejectCandidate(MatchCandidate candidate) {
+  Future<void> _rejectItem(ReviewItem item) async {
+    // Optimistic remove
     setState(() {
-      _allCandidates = _allCandidates.where((c) => c.id != candidate.id).toList();
-      _selectedIds.remove(candidate.id);
+      _allItems = _allItems.where((c) => c.candidateId != item.candidateId).toList();
+      _selectedIds.remove(item.candidateId);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Marked as not a duplicate'),
-        backgroundColor: AppColors.elevatedCard,
-      ),
+
+    final tenantId = await _resolveTenantId();
+    final result = await _repo.reject(
+      tenantId: tenantId,
+      requestId: item.requestId,
+      candidateId: item.candidateId,
     );
+
+    if (!mounted) return;
+
+    switch (result) {
+      case Success():
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Marked as not a duplicate'),
+            backgroundColor: AppColors.elevatedCard,
+          ),
+        );
+      case Failure(:final exception):
+        setState(() => _allItems.add(item));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Reject failed: ${exception.message}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+    }
   }
 
-  void _bulkApprove() {
-    final selected = _selectedIds.toList();
+  Future<void> _deferItem(ReviewItem item) async {
+    final tenantId = await _resolveTenantId();
+    final result = await _repo.defer(
+      tenantId: tenantId,
+      requestId: item.requestId,
+      candidateId: item.candidateId,
+    );
+
+    if (!mounted) return;
+
+    switch (result) {
+      case Success():
+        setState(() {
+          _allItems = _allItems
+              .where((c) => c.candidateId != item.candidateId)
+              .toList();
+          _selectedIds.remove(item.candidateId);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('${item.sourceEntityName} deferred for later review'),
+          ),
+        );
+      case Failure(:final exception):
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Defer failed: ${exception.message}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+    }
+  }
+
+  Future<void> _bulkApprove() async {
+    if (_selectedIds.isEmpty) return;
+    final ids = _selectedIds.toList();
+    final removed = _allItems
+        .where((c) => _selectedIds.contains(c.candidateId))
+        .toList();
+
+    // Optimistic update
     setState(() {
-      _allCandidates = _allCandidates
-          .where((c) => !_selectedIds.contains(c.id))
+      _allItems = _allItems
+          .where((c) => !_selectedIds.contains(c.candidateId))
           .toList();
       _selectedIds.clear();
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${selected.length} matches merged successfully'),
-      ),
-    );
+
+    final tenantId = await _resolveTenantId();
+    final result =
+        await _repo.bulkApprove(tenantId: tenantId, candidateIds: ids);
+
+    if (!mounted) return;
+
+    switch (result) {
+      case Success():
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${ids.length} matches merged successfully'),
+          ),
+        );
+      case Failure(:final exception):
+        // Revert
+        setState(() => _allItems.addAll(removed));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bulk merge failed: ${exception.message}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+    }
   }
 
-  void _bulkReject() {
-    final selected = _selectedIds.toList();
+  Future<void> _bulkReject() async {
+    if (_selectedIds.isEmpty) return;
+    final ids = _selectedIds.toList();
+    final removed = _allItems
+        .where((c) => _selectedIds.contains(c.candidateId))
+        .toList();
+
     setState(() {
-      _allCandidates = _allCandidates
-          .where((c) => !_selectedIds.contains(c.id))
+      _allItems = _allItems
+          .where((c) => !_selectedIds.contains(c.candidateId))
           .toList();
       _selectedIds.clear();
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${selected.length} candidates marked as not duplicates'),
-        backgroundColor: AppColors.elevatedCard,
-      ),
-    );
+
+    final tenantId = await _resolveTenantId();
+    final result =
+        await _repo.bulkReject(tenantId: tenantId, candidateIds: ids);
+
+    if (!mounted) return;
+
+    switch (result) {
+      case Success():
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('${ids.length} candidates marked as not duplicates'),
+            backgroundColor: AppColors.elevatedCard,
+          ),
+        );
+      case Failure(:final exception):
+        setState(() => _allItems.addAll(removed));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bulk reject failed: ${exception.message}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+    }
   }
 
-  void _showMatchDetail(MatchCandidate candidate) {
+  void _showMatchDetail(ReviewItem item) {
     showDialog(
       context: context,
-      builder: (context) => _MatchDetailDialog(candidate: candidate),
+      builder: (context) => _ReviewItemDetailDialog(item: item),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Utility
+  // ---------------------------------------------------------------------------
+
+  String _capitalized(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 }
 
-class _MatchDetailDialog extends StatelessWidget {
-  final MatchCandidate candidate;
+// ---------------------------------------------------------------------------
+// Detail dialog (adapted for ReviewItem)
+// ---------------------------------------------------------------------------
 
-  const _MatchDetailDialog({required this.candidate});
+class _ReviewItemDetailDialog extends StatelessWidget {
+  final ReviewItem item;
+
+  const _ReviewItemDetailDialog({required this.item});
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 600),
+        constraints:
+            const BoxConstraints(maxWidth: 720, maxHeight: 600),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -760,82 +1253,99 @@ class _MatchDetailDialog extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                '${candidate.sourceEntityName} ↔ ${candidate.targetEntityName}',
+                '${item.sourceEntityName} ↔ ${item.targetEntityName}',
                 style: AppTextStyles.headlineSmall,
               ),
               const SizedBox(height: 6),
               Text(
-                'Overall score: ${(candidate.overallScore * 100).round()}% · ${candidate.matchAlgorithm}',
+                'Overall score: ${(item.overallScore * 100).round()}%'
+                '${item.entityType.isNotEmpty ? " \xb7 ${item.entityType}" : ""}',
                 style: AppTextStyles.bodySmall,
               ),
               const SizedBox(height: 20),
               Expanded(
-                child: ListView(
-                  children: candidate.fieldMatches.map((field) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppColors.navyBackground,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.divider),
+                child: item.fieldMatches.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No field-level breakdown available.',
+                          style: AppTextStyles.bodySmall,
                         ),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 100,
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  Text(field.displayName,
-                                      style: AppTextStyles.labelMedium),
-                                  Text(field.algorithm,
-                                      style: AppTextStyles.timestamp),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  Text(field.sourceValue.toString(),
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                          color: AppColors.primaryText)),
-                                  Text(field.targetValue.toString(),
-                                      style: AppTextStyles.bodySmall),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
+                      )
+                    : ListView(
+                        children:
+                            item.fieldMatches.map((fm) {
+                          return Padding(
+                            padding:
+                                const EdgeInsets.only(bottom: 12),
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: field.similarity >= 0.9
-                                    ? AppColors.primary.withValues(alpha:0.1)
-                                    : AppColors.warning.withValues(alpha:0.1),
-                                borderRadius: BorderRadius.circular(6),
+                                color: AppColors.navyBackground,
+                                borderRadius:
+                                    BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: AppColors.divider),
                               ),
-                              child: Text(
-                                '${(field.similarity * 100).round()}%',
-                                style: AppTextStyles.labelMedium.copyWith(
-                                  color: field.similarity >= 0.9
-                                      ? AppColors.primary
-                                      : AppColors.warning,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 100,
+                                    child: Text(
+                                      _cap(fm.field),
+                                      style:
+                                          AppTextStyles.labelMedium,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(fm.sourceValue,
+                                            style: AppTextStyles
+                                                .bodySmall
+                                                .copyWith(
+                                                    color: AppColors
+                                                        .primaryText)),
+                                        Text(fm.targetValue,
+                                            style: AppTextStyles
+                                                .bodySmall),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Container(
+                                    padding:
+                                        const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: fm.score >= 0.9
+                                          ? AppColors.primary
+                                              .withValues(alpha: 0.1)
+                                          : AppColors.warning
+                                              .withValues(alpha: 0.1),
+                                      borderRadius:
+                                          BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '${(fm.score * 100).round()}%',
+                                      style: AppTextStyles.labelMedium
+                                          .copyWith(
+                                        color: fm.score >= 0.9
+                                            ? AppColors.primary
+                                            : AppColors.warning,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
+                          );
+                        }).toList(),
                       ),
-                    );
-                  }).toList(),
-                ),
               ),
               const SizedBox(height: 16),
               Row(
@@ -850,14 +1360,16 @@ class _MatchDetailDialog extends StatelessWidget {
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
-                      side: const BorderSide(color: AppColors.error),
+                      side:
+                          const BorderSide(color: AppColors.error),
                     ),
                     child: const Text('Not a Duplicate'),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.merge_type_rounded, size: 16),
+                    icon: const Icon(Icons.merge_type_rounded,
+                        size: 16),
                     label: const Text('Confirm Merge'),
                   ),
                 ],
@@ -868,7 +1380,14 @@ class _MatchDetailDialog extends StatelessWidget {
       ),
     );
   }
+
+  String _cap(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 }
+
+// ---------------------------------------------------------------------------
+// Shimmer placeholder
+// ---------------------------------------------------------------------------
 
 class _MatchCardShimmer extends StatelessWidget {
   const _MatchCardShimmer();

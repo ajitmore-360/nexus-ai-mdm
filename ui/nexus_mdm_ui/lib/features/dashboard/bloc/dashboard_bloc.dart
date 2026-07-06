@@ -1,26 +1,50 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../data/dashboard_repository.dart';
+import '../../../core/auth/auth_manager.dart';
+import '../../../core/network/websocket_client.dart';
 import '../../../shared/models/api_responses.dart';
 import '../../../shared/models/dashboard_stats.dart';
 import '../../../shared/models/activity_item.dart';
 import 'dashboard_event.dart';
 import 'dashboard_state.dart';
 
+/// Event types that should trigger a silent dashboard data refresh.
+const _refreshOnEvents = {
+  'entity.ingested',
+  'match.approved',
+  'match.rejected',
+  'match.bulk_approved',
+  'match.bulk_rejected',
+};
+
 class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   final DashboardRepository _repository;
+  final WebSocketClient _ws;
   Timer? _autoRefreshTimer;
+  StreamSubscription<Map<String, dynamic>>? _wsSub;
 
-  // Demo tenant ID used when no tenant is in prefs.
-  static const String _defaultTenantId =
-      '00000000-0000-0000-0000-000000000001';
   static const Duration _autoRefreshInterval = Duration(seconds: 60);
 
-  DashboardBloc(this._repository) : super(const DashboardInitial()) {
+  DashboardBloc(this._repository, {WebSocketClient? wsClient})
+      : _ws = wsClient ?? WebSocketClient(),
+        super(const DashboardInitial()) {
     on<DashboardLoadRequested>(_onLoad);
     on<DashboardRefreshRequested>(_onRefresh);
     on<DashboardPeriodChanged>(_onPeriodChanged);
     on<DashboardAutoRefresh>(_onAutoRefresh);
+    on<DashboardRealtimeUpdate>(_onRealtimeUpdate);
+  }
+
+  void _subscribeWs() {
+    _wsSub?.cancel();
+    _wsSub = _ws.messages.listen((msg) {
+      final type = msg['type'] as String? ?? '';
+      if (_refreshOnEvents.contains(type) && !isClosed) {
+        add(DashboardRealtimeUpdate(type));
+      }
+    });
+    _ws.connect();
   }
 
   // ── Handlers ─────────────────────────────────
@@ -32,6 +56,17 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     emit(const DashboardLoading());
     await _fetch(emit, period: '7d');
     _startAutoRefresh();
+    _subscribeWs();
+  }
+
+  Future<void> _onRealtimeUpdate(
+    DashboardRealtimeUpdate event,
+    Emitter<DashboardState> emit,
+  ) async {
+    if (state is! DashboardLoaded && state is! DashboardOffline) return;
+    final currentPeriod =
+        state is DashboardLoaded ? (state as DashboardLoaded).period : '7d';
+    await _fetch(emit, period: currentPeriod, silent: true);
   }
 
   Future<void> _onRefresh(
@@ -71,9 +106,10 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     bool silent = false,
   }) async {
     try {
-      final statsResult = await _repository.getStats(_defaultTenantId);
+      final tenantId = await AuthManager.getTenantId() ?? '';
+      final statsResult = await _repository.getStats(tenantId);
       final activityResult =
-          await _repository.getActivityFeed(_defaultTenantId);
+          await _repository.getActivityFeed(tenantId);
 
       DashboardStats stats;
       List<ActivityItem> activities;
@@ -84,7 +120,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         case Success<DashboardStats>(:final data):
           stats = data;
         case Failure<DashboardStats>(:final exception):
-          stats = DashboardStats.demo;
+          stats = DashboardStats.empty;
           hadError = true;
           errorMsg = exception.message;
       }
@@ -93,7 +129,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         case Success<List<ActivityItem>>(:final data):
           activities = data;
         case Failure<List<ActivityItem>>(:final exception):
-          activities = ActivityItem.demoList;
+          activities = const [];
           hadError = true;
           if (errorMsg.isEmpty) errorMsg = exception.message;
       }
@@ -102,7 +138,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         emit(DashboardOffline(
           demoStats: stats,
           demoActivities: activities,
-          message: 'Could not reach server — showing demo data. $errorMsg',
+          message: 'Could not reach server. $errorMsg',
         ));
       } else {
         emit(DashboardLoaded(
@@ -114,8 +150,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     } catch (e) {
       if (!silent) {
         emit(DashboardOffline(
-          demoStats: DashboardStats.demo,
-          demoActivities: ActivityItem.demoList,
+          demoStats: DashboardStats.empty,
+          demoActivities: const [],
           message: 'Unexpected error: $e',
         ));
       }
@@ -137,6 +173,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   @override
   Future<void> close() {
     _autoRefreshTimer?.cancel();
+    _wsSub?.cancel();
+    _ws.disconnect();
     return super.close();
   }
 }

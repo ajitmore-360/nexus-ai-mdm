@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import '../../../../core/auth/auth_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/entity_type_repository.dart';
@@ -16,7 +17,7 @@ class AttributeSchemaPage extends StatefulWidget {
 class _AttributeSchemaPageState extends State<AttributeSchemaPage> {
   final _repo = GetIt.instance<EntityTypeRepository>();
 
-  static const _tenantId = '';
+  String _tenantId = '';
 
   List<EntityTypeModel> _entityTypes = [];
   String? _selectedCode;
@@ -38,6 +39,11 @@ class _AttributeSchemaPageState extends State<AttributeSchemaPage> {
   @override
   void initState() {
     super.initState();
+    _initTenantAndLoad();
+  }
+
+  Future<void> _initTenantAndLoad() async {
+    _tenantId = await AuthManager.getTenantId() ?? '';
     _loadEntityTypes();
   }
 

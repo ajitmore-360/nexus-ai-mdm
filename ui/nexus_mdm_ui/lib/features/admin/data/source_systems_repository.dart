@@ -92,7 +92,10 @@ class SourceSystemsRepository {
       );
       final data = response.data;
       if (data == null) return const Failure(ApiException(message: 'Empty response'));
-      final items = (data['items'] as List<dynamic>? ?? [])
+      if (data['success'] == false) {
+        return Failure(ApiException(message: data['error'] as String? ?? 'Request failed'));
+      }
+      final items = (data['data'] as List<dynamic>? ?? [])
           .map((e) => SourceSystemModel.fromJson(e as Map<String, dynamic>))
           .toList();
       return Success(items);
@@ -116,6 +119,7 @@ class SourceSystemsRepository {
     required int priority,
     required List<String> entityTypes,
     required String syncMode,
+    Map<String, dynamic> connectionConfig = const {},
   }) async {
     try {
       final response = await _apiClient.post<Map<String, dynamic>>(
@@ -131,11 +135,15 @@ class SourceSystemsRepository {
           'priority': priority,
           'entity_types': entityTypes,
           'sync_mode': syncMode,
+          'connection_config': connectionConfig,
         },
       );
       final data = response.data;
       if (data == null) return const Failure(ApiException(message: 'Empty response'));
-      return Success(SourceSystemModel.fromJson(data));
+      if (data['success'] == false) {
+        return Failure(ApiException(message: data['error'] as String? ?? 'Request failed'));
+      }
+      return Success(SourceSystemModel.fromJson(data['data'] as Map<String, dynamic>));
     } catch (e) {
       assert(() {
         debugPrint('[SourceSystemsRepository] createSourceSystem error: $e');

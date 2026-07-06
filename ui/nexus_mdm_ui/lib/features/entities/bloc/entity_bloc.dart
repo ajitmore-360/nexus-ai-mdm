@@ -15,6 +15,9 @@ class EntityBloc extends Bloc<EntityEvent, EntityState> {
   String _lastQuery = '';
   String? _lastType;
   String? _lastStatus;
+  String? _lastSourceSystem;
+  String _lastSortBy  = 'created_at';
+  String _lastSortDir = 'desc';
   int _currentPage = 1;
 
   // Debounce timer for search input.
@@ -79,8 +82,11 @@ class EntityBloc extends Bloc<EntityEvent, EntityState> {
     EntityFilterChanged event,
     Emitter<EntityState> emit,
   ) async {
-    _lastType = event.type;
-    _lastStatus = event.status;
+    _lastType         = event.type;
+    _lastStatus       = event.status;
+    _lastSourceSystem = event.sourceSystem;
+    if (event.sortBy  != null) _lastSortBy  = event.sortBy!;
+    if (event.sortDir != null) _lastSortDir = event.sortDir!;
     _currentPage = 1;
     emit(const EntityLoading());
     await _fetchPage(emit, page: 1, replace: true);
@@ -109,6 +115,9 @@ class EntityBloc extends Bloc<EntityEvent, EntityState> {
         search: _lastQuery.isEmpty ? null : _lastQuery,
         type: _lastType?.toLowerCase(),
         status: _lastStatus?.toLowerCase(),
+        sourceSystem: _lastSourceSystem,
+        sortBy: _lastSortBy,
+        sortDir: _lastSortDir,
       );
 
       switch (result) {
@@ -138,11 +147,7 @@ class EntityBloc extends Bloc<EntityEvent, EntityState> {
       }
     } catch (e) {
       if (replace) {
-        emit(EntityLoaded(
-          entities: CanonicalEntity.demoList,
-          hasMore: false,
-          total: CanonicalEntity.demoList.length,
-        ));
+        emit(EntityError(e.toString()));
       } else if (state is EntityLoaded) {
         emit((state as EntityLoaded).copyWith(isLoadingMore: false));
       }

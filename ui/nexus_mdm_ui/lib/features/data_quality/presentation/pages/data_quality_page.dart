@@ -2,27 +2,15 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:get_it/get_it.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/license/licensed_module.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_animations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../shared/widgets/license_gate.dart';
 import '../../../../shared/widgets/nexus_dialog.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// License manager (session-scoped; swap for SharedPreferences in prod)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _DqLicense {
-  static const _validKeys = {
-    'NXS-DQ-ENTERPRISE-2026',
-    'NXS-DQ-PRO-2026',
-    'NXS-DATA-QUALITY-PREMIUM',
-  };
-
-  static String? _key;
-  static bool get isValid => _key != null && _validKeys.contains(_key);
-  static void activate(String key) => _key = key.trim().toUpperCase();
-  static void revoke() => _key = null;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Domain models
@@ -135,6 +123,52 @@ class _Violation {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Visual builder domain models
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum _VisualBlockType { fieldCheck, formatCheck, rangeCheck, logicAnd, logicOr }
+
+extension _VisualBlockTypeX on _VisualBlockType {
+  String get label {
+    switch (this) {
+      case _VisualBlockType.fieldCheck:  return 'Field Check';
+      case _VisualBlockType.formatCheck: return 'Format Check';
+      case _VisualBlockType.rangeCheck:  return 'Range Check';
+      case _VisualBlockType.logicAnd:    return 'AND';
+      case _VisualBlockType.logicOr:     return 'OR';
+    }
+  }
+  IconData get icon {
+    switch (this) {
+      case _VisualBlockType.fieldCheck:  return Icons.text_fields_rounded;
+      case _VisualBlockType.formatCheck: return Icons.format_align_left_rounded;
+      case _VisualBlockType.rangeCheck:  return Icons.tune_rounded;
+      case _VisualBlockType.logicAnd:    return Icons.join_inner_rounded;
+      case _VisualBlockType.logicOr:     return Icons.call_split_rounded;
+    }
+  }
+  Color get color {
+    switch (this) {
+      case _VisualBlockType.fieldCheck:  return const Color(0xFF3B82F6);
+      case _VisualBlockType.formatCheck: return const Color(0xFF8B5CF6);
+      case _VisualBlockType.rangeCheck:  return const Color(0xFFFF6B35);
+      case _VisualBlockType.logicAnd:    return const Color(0xFF00C896);
+      case _VisualBlockType.logicOr:     return const Color(0xFFFFD700);
+    }
+  }
+  bool get isLogic =>
+      this == _VisualBlockType.logicAnd || this == _VisualBlockType.logicOr;
+}
+
+class _VisualBlock {
+  final String id;
+  final _VisualBlockType type;
+  String field = '';
+  String value = '';
+  _VisualBlock({required this.id, required this.type});
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Page
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -148,12 +182,11 @@ class DataQualityPage extends StatefulWidget {
 class _DataQualityPageState extends State<DataQualityPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
-  int _builderTab = 0; // 0=Manual, 1=AI
+  int _builderTab = 0; // 0=Visual, 1=Manual, 2=AI
 
-  // License
-  bool get _licensed => _DqLicense.isValid;
-  final _licKeyCtrl = TextEditingController();
-  String? _licError;
+  // Visual builder
+  final List<_VisualBlock> _canvasBlocks = [];
+  int _vbCounter = 0;
 
   // Rules
   late List<_QualityRule> _rules;
@@ -164,89 +197,99 @@ class _DataQualityPageState extends State<DataQualityPage>
   _QualityRule? _aiPreview;
 
   // Violations
-  late List<_Violation> _violations;
+  List<_Violation> _violations = [];
+
+  // Quality dimensions — loaded from API, fall back to defaults
+  List<(String, double, Color)> _dimensions = [
+    ('Completeness', 0.82, const Color(0xFF00C896)),
+    ('Accuracy',     0.77, const Color(0xFF3B82F6)),
+    ('Consistency',  0.91, const Color(0xFF8B5CF6)),
+    ('Uniqueness',   0.96, const Color(0xFFFF6B35)),
+    ('Timeliness',   0.88, const Color(0xFFFFD700)),
+    ('Validity',     0.74, const Color(0xFFFF4D6D)),
+  ];
 
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 3, vsync: this);
-    _rules = _defaultRules();
-    _violations = _defaultViolations();
+    _loadLiveData();
+  }
+
+  Future<void> _loadLiveData() async {
+    final client = GetIt.instance<ApiClient>();
+    // Load quality dimensions
+    try {
+      final dimResp = await client.get<Map<String, dynamic>>(
+        AppConstants.qualityDimensionsPath,
+      );
+      final dims = (dimResp.data?['dimensions'] as Map<String, dynamic>?) ?? {};
+      if (dims.isNotEmpty && mounted) {
+        setState(() {
+          _dimensions = [
+            ('Completeness', (dims['completeness'] as num?)?.toDouble() ?? 0.82, const Color(0xFF00C896)),
+            ('Accuracy',     (dims['accuracy']     as num?)?.toDouble() ?? 0.77, const Color(0xFF3B82F6)),
+            ('Consistency',  (dims['consistency']  as num?)?.toDouble() ?? 0.91, const Color(0xFF8B5CF6)),
+            ('Uniqueness',   (dims['uniqueness']   as num?)?.toDouble() ?? 0.96, const Color(0xFFFF6B35)),
+            ('Timeliness',   (dims['timeliness']   as num?)?.toDouble() ?? 0.88, const Color(0xFFFFD700)),
+            ('Validity',     (dims['validity']     as num?)?.toDouble() ?? 0.74, const Color(0xFFFF4D6D)),
+          ];
+        });
+      }
+    } catch (_) {}
+
+    // Load violations from anomaly scan
+    try {
+      final anomResp = await client.get<Map<String, dynamic>>(
+        AppConstants.aiAnomaliesPath,
+      );
+      final anomalies = (anomResp.data?['anomalies'] as List<dynamic>?) ?? [];
+      if (anomalies.isNotEmpty && mounted) {
+        final violations = anomalies.map((a) {
+          final map = a as Map<String, dynamic>;
+          final sev = switch ((map['severity'] as String?) ?? 'low') {
+            'critical' => _RuleSeverity.critical,
+            'high'     => _RuleSeverity.high,
+            'medium'   => _RuleSeverity.medium,
+            _          => _RuleSeverity.low,
+          };
+          return _Violation(
+            entityId:  'Tenant-wide',
+            entityType: (map['entity_type'] as String?) ?? 'All',
+            ruleName:  (map['category']    as String?) ?? 'Anomaly',
+            severity:  sev,
+            field:     (map['field_name']  as String?) ?? 'multiple',
+            message:   (map['description'] as String?) ?? '',
+            when:      _relativeTime(map['detected_at'] as String?),
+          );
+        }).toList();
+        if (mounted) setState(() => _violations = violations);
+      }
+    } catch (_) {
+      // violations stay as defaults
+    }
+  }
+
+  static String _relativeTime(String? iso) {
+    if (iso == null) return 'recently';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final diff = DateTime.now().difference(dt);
+      if (diff.inMinutes < 1)  return 'just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+      if (diff.inHours   < 24) return '${diff.inHours} hr ago';
+      return '${diff.inDays}d ago';
+    } catch (_) { return 'recently'; }
   }
 
   @override
   void dispose() {
     _tab.dispose();
-    _licKeyCtrl.dispose();
     _aiCtrl.dispose();
     super.dispose();
   }
 
-  // ── Default seed data ─────────────────────────────────────────────────────
-
-  static List<_QualityRule> _defaultRules() => [
-    _QualityRule(
-      id: 'r1', name: 'Customer Email Required', entityType: 'Customer',
-      dimension: 'Completeness',
-      conditions: [_Condition(field: 'email', operator: _ConditionOperator.isNotEmpty)],
-      action: _RuleAction.flag, severity: _RuleSeverity.critical, violations: 42,
-    ),
-    _QualityRule(
-      id: 'r2', name: 'Email Format Valid', entityType: 'Customer',
-      dimension: 'Validity',
-      conditions: [_Condition(field: 'email', operator: _ConditionOperator.matches, value: r'^[\w\.\+\-]+@[\w\-]+\.[a-z]{2,}$')],
-      action: _RuleAction.reject, severity: _RuleSeverity.high, violations: 18,
-    ),
-    _QualityRule(
-      id: 'r3', name: 'Vendor Tax ID Present', entityType: 'Vendor',
-      dimension: 'Completeness',
-      conditions: [_Condition(field: 'tax_number', operator: _ConditionOperator.isNotEmpty)],
-      action: _RuleAction.flag, severity: _RuleSeverity.critical, violations: 7,
-    ),
-    _QualityRule(
-      id: 'r4', name: 'Country Code Format', entityType: 'All',
-      dimension: 'Validity',
-      conditions: [_Condition(field: 'country', operator: _ConditionOperator.matches, value: r'^[A-Z]{2}$')],
-      action: _RuleAction.flag, severity: _RuleSeverity.medium, violations: 113,
-    ),
-    _QualityRule(
-      id: 'r5', name: 'Credit Limit Positive', entityType: 'Customer',
-      dimension: 'Accuracy',
-      conditions: [_Condition(field: 'credit_limit', operator: _ConditionOperator.greaterThan, value: '0')],
-      action: _RuleAction.quarantine, severity: _RuleSeverity.high, violations: 3,
-      isActive: false,
-    ),
-    _QualityRule(
-      id: 'r6', name: 'Material Number Format', entityType: 'Material',
-      dimension: 'Validity',
-      conditions: [_Condition(field: 'material_number', operator: _ConditionOperator.matches, value: r'^MAT-\d{6}$')],
-      action: _RuleAction.flag, severity: _RuleSeverity.medium, violations: 29,
-    ),
-  ];
-
-  static List<_Violation> _defaultViolations() => [
-    _Violation(entityId: 'CUST-001145', entityType: 'Customer', ruleName: 'Customer Email Required',
-        severity: _RuleSeverity.critical, field: 'email', message: 'Field is empty', when: '2 min ago'),
-    _Violation(entityId: 'CUST-000892', entityType: 'Customer', ruleName: 'Email Format Valid',
-        severity: _RuleSeverity.high, field: 'email', message: 'Value "user@" does not match pattern', when: '14 min ago'),
-    _Violation(entityId: 'CUST-001098', entityType: 'Customer', ruleName: 'Country Code Format',
-        severity: _RuleSeverity.medium, field: 'country', message: 'Value "United States" expected ISO-2', when: '23 min ago'),
-    _Violation(entityId: 'VEND-000312', entityType: 'Vendor', ruleName: 'Vendor Tax ID Present',
-        severity: _RuleSeverity.critical, field: 'tax_number', message: 'Field is empty', when: '1 hr ago'),
-    _Violation(entityId: 'MAT-000078', entityType: 'Material', ruleName: 'Material Number Format',
-        severity: _RuleSeverity.medium, field: 'material_number', message: '"MAT78" missing leading zeros', when: '2 hr ago'),
-  ];
-
   // ── Scores ────────────────────────────────────────────────────────────────
-
-  static const _dimensions = [
-    ('Completeness', 0.82, Color(0xFF00C896)),
-    ('Accuracy',     0.77, Color(0xFF3B82F6)),
-    ('Consistency',  0.91, Color(0xFF8B5CF6)),
-    ('Uniqueness',   0.96, Color(0xFFFF6B35)),
-    ('Timeliness',   0.88, Color(0xFFFFD700)),
-    ('Validity',     0.74, Color(0xFFFF4D6D)),
-  ];
 
   double get _overallScore =>
       _dimensions.fold(0.0, (s, d) => s + d.$2) / _dimensions.length;
@@ -255,159 +298,10 @@ class _DataQualityPageState extends State<DataQualityPage>
 
   @override
   Widget build(BuildContext context) {
-    if (!_licensed) return _buildLicenseGate();
-    return _buildMain();
-  }
-
-  // ── License gate ──────────────────────────────────────────────────────────
-
-  Widget _buildLicenseGate() {
-    return Scaffold(
-      backgroundColor: AppColors.navyBackground,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Container(
-            padding: const EdgeInsets.all(40),
-            decoration: BoxDecoration(
-              color: AppColors.cardSurface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.divider),
-              boxShadow: AppColors.glowShadow(color: AppColors.primary, intensity: 0.6),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.auroraGradient,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(Icons.health_and_safety_rounded,
-                      color: Colors.white, size: 32),
-                ),
-                const SizedBox(height: 20),
-                Text('Data Quality Engine',
-                    style: AppTextStyles.titleLarge.copyWith(fontSize: 22)),
-                const SizedBox(height: 8),
-                Text(
-                  'This module requires a Data Quality license.\nEnter your license key to unlock rule building,\nquality scoring, and violation management.',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.secondaryText),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 28),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.elevatedCard,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.divider),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        const Icon(Icons.info_outline,
-                            size: 14, color: AppColors.mutedText),
-                        const SizedBox(width: 6),
-                        Text('Demo keys:', style: AppTextStyles.labelSmall),
-                      ]),
-                      const SizedBox(height: 6),
-                      _demoKeyChip('NXS-DQ-ENTERPRISE-2026'),
-                      const SizedBox(height: 4),
-                      _demoKeyChip('NXS-DQ-PRO-2026'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _licKeyCtrl,
-                  onChanged: (_) => setState(() => _licError = null),
-                  style: AppTextStyles.inputText
-                      .copyWith(fontFamily: 'monospace', letterSpacing: 1.4),
-                  decoration: InputDecoration(
-                    hintText: 'NXS-DQ-XXXX-XXXX',
-                    hintStyle: AppTextStyles.inputHint,
-                    filled: true,
-                    fillColor: AppColors.inputFill,
-                    prefixIcon: const Icon(Icons.vpn_key_outlined,
-                        size: 18, color: AppColors.mutedText),
-                    errorText: _licError,
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.divider)),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.divider)),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                            color: AppColors.primary, width: 1.5)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _activateLicense,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Text('Activate License'),
-                  ),
-                ),
-              ],
-            ),
-          )
-              .animate()
-              .fadeIn(duration: AppAnimations.slow)
-              .scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1),
-                  curve: AppAnimations.spring),
-        ),
-      ),
+    return LicenseGuard(
+      module: LicensedModule.dataQuality,
+      child: _buildMain(),
     );
-  }
-
-  Widget _demoKeyChip(String key) {
-    return GestureDetector(
-      onTap: () {
-        _licKeyCtrl.text = key;
-        setState(() => _licError = null);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.content_copy_rounded,
-              size: 11, color: AppColors.primary),
-          const SizedBox(width: 5),
-          Text(key,
-              style: AppTextStyles.badgeLabel
-                  .copyWith(color: AppColors.primary, fontFamily: 'monospace')),
-        ]),
-      ),
-    );
-  }
-
-  void _activateLicense() {
-    final key = _licKeyCtrl.text.trim().toUpperCase();
-    _DqLicense.activate(key);
-    if (_DqLicense.isValid) {
-      setState(() {});
-    } else {
-      setState(() => _licError = 'Invalid license key — check and try again');
-    }
   }
 
   // ── Main dashboard ─────────────────────────────────────────────────────────
@@ -475,17 +369,6 @@ class _DataQualityPageState extends State<DataQualityPage>
             ],
           ),
           const Spacer(),
-          TextButton.icon(
-            onPressed: () {
-              setState(() => _DqLicense.revoke());
-            },
-            icon: const Icon(Icons.vpn_key_outlined,
-                size: 14, color: AppColors.mutedText),
-            label: Text('License',
-                style: AppTextStyles.buttonSmall
-                    .copyWith(color: AppColors.mutedText)),
-          ),
-          const SizedBox(width: 8),
           ElevatedButton.icon(
             onPressed: _runAllRules,
             icon: const Icon(Icons.play_arrow_rounded, size: 16),
@@ -792,11 +675,13 @@ class _DataQualityPageState extends State<DataQualityPage>
           color: AppColors.navyBackground,
           child: Row(
             children: [
-              _subTabBtn(0, Icons.drag_indicator_rounded, 'Manual Builder'),
+              _subTabBtn(0, Icons.account_tree_outlined, 'Visual Builder'),
               const SizedBox(width: 8),
-              _subTabBtn(1, Icons.auto_awesome_rounded, 'AI Rule Generator'),
+              _subTabBtn(1, Icons.drag_indicator_rounded, 'Manual Builder'),
+              const SizedBox(width: 8),
+              _subTabBtn(2, Icons.auto_awesome_rounded, 'AI Generator'),
               const Spacer(),
-              if (_builderTab == 0)
+              if (_builderTab == 1)
                 ElevatedButton.icon(
                   onPressed: _showNewRuleDialog,
                   icon: const Icon(Icons.add_rounded, size: 16),
@@ -808,13 +693,38 @@ class _DataQualityPageState extends State<DataQualityPage>
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   ),
                 ),
+              if (_builderTab == 0 && _canvasBlocks.isNotEmpty) ...[
+                OutlinedButton.icon(
+                  onPressed: () => setState(() => _canvasBlocks.clear()),
+                  icon: const Icon(Icons.clear_all_rounded, size: 16),
+                  label: const Text('Clear'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.secondaryText,
+                    side: const BorderSide(color: AppColors.divider),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: _buildRuleFromCanvas,
+                  icon: const Icon(Icons.check_rounded, size: 16),
+                  label: const Text('Save Rule'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
         Expanded(
           child: _builderTab == 0
-              ? _buildManualBuilder()
-              : _buildAiBuilder(),
+              ? _buildVisualBuilder()
+              : _builderTab == 1
+                  ? _buildManualBuilder()
+                  : _buildAiBuilder(),
         ),
       ],
     );
@@ -848,6 +758,278 @@ class _DataQualityPageState extends State<DataQualityPage>
             ),
           ),
         ]),
+      ),
+    );
+  }
+
+  // ── Visual drag-and-drop builder ─────────────────────────────────────────
+
+  Widget _buildVisualBuilder() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Palette panel
+        Container(
+          width: 200,
+          decoration: const BoxDecoration(
+            color: AppColors.cardSurface,
+            border: Border(right: BorderSide(color: AppColors.divider)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Text('Block Palette',
+                    style: AppTextStyles.labelMedium
+                        .copyWith(fontWeight: FontWeight.w600)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text('Drag to canvas →',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.mutedText)),
+              ),
+              const Divider(color: AppColors.divider, height: 1),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(12),
+                  children:
+                      _VisualBlockType.values.map(_buildPaletteBlock).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Canvas panel
+        Expanded(
+          child: DragTarget<_VisualBlockType>(
+            onAcceptWithDetails: (details) {
+              setState(() {
+                _canvasBlocks.add(_VisualBlock(
+                  id: 'vb_${_vbCounter++}',
+                  type: details.data,
+                ));
+              });
+            },
+            builder: (ctx, candidateData, _) {
+              final hovering = candidateData.isNotEmpty;
+              return AnimatedContainer(
+                duration: AppAnimations.fast,
+                decoration: BoxDecoration(
+                  color: hovering
+                      ? AppColors.primary.withValues(alpha: 0.04)
+                      : AppColors.navyBackground,
+                ),
+                child: _canvasBlocks.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.account_tree_outlined,
+                              size: 56,
+                              color: hovering
+                                  ? AppColors.primary
+                                  : AppColors.mutedText,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              hovering
+                                  ? 'Release to drop'
+                                  : 'Drag blocks from the palette',
+                              style: AppTextStyles.titleSmall.copyWith(
+                                color: hovering
+                                    ? AppColors.primary
+                                    : AppColors.mutedText,
+                              ),
+                            ),
+                            if (!hovering) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Combine Field Check, Format Check, Range Check\n'
+                                'and AND / OR logic blocks to build a quality rule',
+                                style: AppTextStyles.bodySmall,
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ],
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ..._canvasBlocks.asMap().entries.map((e) =>
+                                _CanvasBlockTile(
+                                  key: ValueKey(e.value.id),
+                                  block: e.value,
+                                  index: e.key,
+                                  onDelete: () => setState(
+                                      () => _canvasBlocks.removeAt(e.key)),
+                                )),
+                            // Drop zone at bottom of existing blocks
+                            DragTarget<_VisualBlockType>(
+                              onAcceptWithDetails: (details) {
+                                setState(() {
+                                  _canvasBlocks.add(_VisualBlock(
+                                    id: 'vb_${_vbCounter++}',
+                                    type: details.data,
+                                  ));
+                                });
+                              },
+                              builder: (ctx2, cd, _) => AnimatedContainer(
+                                duration: AppAnimations.fast,
+                                height: 48,
+                                margin: const EdgeInsets.only(top: 8),
+                                decoration: BoxDecoration(
+                                  color: cd.isNotEmpty
+                                      ? AppColors.primary.withValues(alpha: 0.08)
+                                      : AppColors.elevatedCard,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: cd.isNotEmpty
+                                        ? AppColors.primary
+                                        : AppColors.divider,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    cd.isNotEmpty
+                                        ? 'Release to drop'
+                                        : '+ Drop another block here',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: cd.isNotEmpty
+                                          ? AppColors.primary
+                                          : AppColors.mutedText,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaletteBlock(_VisualBlockType type) {
+    final widget = Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: type.color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: type.color.withValues(alpha: 0.25)),
+      ),
+      child: Row(children: [
+        Icon(type.icon, size: 15, color: type.color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(type.label,
+              style: AppTextStyles.labelSmall
+                  .copyWith(color: type.color, fontWeight: FontWeight.w600)),
+        ),
+        Icon(Icons.drag_handle_rounded,
+            size: 13, color: type.color.withValues(alpha: 0.5)),
+      ]),
+    );
+
+    return Draggable<_VisualBlockType>(
+      data: type,
+      feedback: Material(
+        color: Colors.transparent,
+        child: Container(
+          width: 176,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: type.color.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: type.color.withValues(alpha: 0.6)),
+            boxShadow: [
+              BoxShadow(
+                  color: type.color.withValues(alpha: 0.3), blurRadius: 10),
+            ],
+          ),
+          child: Row(children: [
+            Icon(type.icon, size: 15, color: type.color),
+            const SizedBox(width: 8),
+            Text(type.label,
+                style: AppTextStyles.labelSmall.copyWith(
+                    color: type.color, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.35, child: widget),
+      child: widget,
+    );
+  }
+
+  void _buildRuleFromCanvas() {
+    final conditions = _canvasBlocks
+        .where((b) => !b.type.isLogic && b.field.trim().isNotEmpty)
+        .map((b) {
+          _ConditionOperator op;
+          if (b.type == _VisualBlockType.formatCheck) {
+            op = _ConditionOperator.matches;
+          } else if (b.type == _VisualBlockType.rangeCheck) {
+            op = _ConditionOperator.greaterThan;
+          } else {
+            op = _ConditionOperator.isNotEmpty;
+          }
+          return _Condition(
+              field: b.field.trim(), operator: op, value: b.value.trim());
+        })
+        .toList();
+
+    if (conditions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Add at least one Field / Format / Range block with a field name'),
+          backgroundColor: AppColors.cardSurface,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final hasOr = _canvasBlocks.any((b) => b.type == _VisualBlockType.logicOr);
+    final rule = _QualityRule(
+      id: 'vis_${DateTime.now().millisecondsSinceEpoch}',
+      name: 'Visual Rule ${_rules.length + 1}',
+      entityType: 'All',
+      dimension: 'Validity',
+      conditions: conditions,
+      logicalOp: hasOr ? 'OR' : 'AND',
+      action: _RuleAction.flag,
+      severity: _RuleSeverity.medium,
+    );
+
+    setState(() {
+      _rules.insert(0, rule);
+      _canvasBlocks.clear();
+      _builderTab = 1; // jump to Manual Builder to show the new rule
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(children: [
+          const Icon(Icons.check_circle_outline_rounded,
+              color: AppColors.primary, size: 18),
+          const SizedBox(width: 10),
+          Text('Rule created — edit it in Manual Builder to refine.',
+              style: AppTextStyles.bodyMedium),
+        ]),
+        backgroundColor: AppColors.cardSurface,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -1194,7 +1376,7 @@ class _DataQualityPageState extends State<DataQualityPage>
                   _rules.insert(0, _aiPreview!);
                   _aiPreview = null;
                   _aiCtrl.clear();
-                  _builderTab = 0;
+                  _builderTab = 1; // show Manual Builder with new rule
                 });
               },
               style: ElevatedButton.styleFrom(
@@ -1221,14 +1403,45 @@ class _DataQualityPageState extends State<DataQualityPage>
       _aiGenerating = true;
       _aiPreview = null;
     });
-    // Simulate AI generation latency
-    await Future.delayed(const Duration(milliseconds: 1800));
-    if (!mounted) return;
+    // Parse structure locally — always succeeds
     final generated = _parseAiRule(prompt);
-    setState(() {
-      _aiGenerating = false;
-      _aiPreview = generated;
-    });
+    try {
+      final client = ApiClient();
+      final resp = await client.post<Map<String, dynamic>>(
+        '/v1/copilot',
+        data: {
+          'message': 'Generate a concise data quality rule name (max 5 words) '
+              'for this requirement: "$prompt". '
+              'Reply with ONLY the rule name, nothing else.',
+        },
+      );
+      if (!mounted) return;
+      final aiName = (resp.data?['answer'] as String? ?? '').trim();
+      final rule = aiName.isNotEmpty && aiName.length <= 60
+          ? _QualityRule(
+              id: generated.id,
+              name: aiName,
+              entityType: generated.entityType,
+              dimension: generated.dimension,
+              conditions: generated.conditions,
+              logicalOp: generated.logicalOp,
+              action: generated.action,
+              severity: generated.severity,
+              isActive: generated.isActive,
+              violations: generated.violations,
+            )
+          : generated;
+      setState(() {
+        _aiGenerating = false;
+        _aiPreview = rule;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _aiGenerating = false;
+        _aiPreview = generated;
+      });
+    }
   }
 
   _QualityRule _parseAiRule(String prompt) {
@@ -1782,6 +1995,141 @@ class _RuleEditorState extends State<_RuleEditor> {
           ),
       ]),
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canvas block tile (visual builder — manages its own TextEditingControllers)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CanvasBlockTile extends StatefulWidget {
+  final _VisualBlock block;
+  final int index;
+  final VoidCallback onDelete;
+  const _CanvasBlockTile({
+    required super.key,
+    required this.block,
+    required this.index,
+    required this.onDelete,
+  });
+
+  @override
+  State<_CanvasBlockTile> createState() => _CanvasBlockTileState();
+}
+
+class _CanvasBlockTileState extends State<_CanvasBlockTile> {
+  late final TextEditingController _fieldCtrl;
+  late final TextEditingController _valueCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _fieldCtrl = TextEditingController(text: widget.block.field);
+    _valueCtrl = TextEditingController(text: widget.block.value);
+  }
+
+  @override
+  void dispose() {
+    _fieldCtrl.dispose();
+    _valueCtrl.dispose();
+    super.dispose();
+  }
+
+  InputDecoration _deco(String hint) => InputDecoration(
+        hintText: hint,
+        hintStyle: AppTextStyles.inputHint,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        isDense: true,
+        filled: true,
+        fillColor: AppColors.inputFill,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: AppColors.divider)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: AppColors.divider)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide:
+                const BorderSide(color: AppColors.primary, width: 1.5)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final block = widget.block;
+    final type = block.type;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: type.color.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(children: [
+            Icon(type.icon, size: 15, color: type.color),
+            const SizedBox(width: 8),
+            Text(type.label,
+                style: AppTextStyles.labelMedium.copyWith(
+                    color: type.color, fontWeight: FontWeight.w600)),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.close_rounded, size: 14),
+              onPressed: widget.onDelete,
+              color: AppColors.mutedText,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+              tooltip: 'Remove block',
+            ),
+          ]),
+          // Logic blocks have no fields — just a label
+          if (!type.isLogic) ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: _fieldCtrl,
+                  onChanged: (v) => block.field = v,
+                  style: AppTextStyles.inputText
+                      .copyWith(fontSize: 12, fontFamily: 'monospace'),
+                  decoration: _deco('field name  (e.g. email)'),
+                ),
+              ),
+              if (type == _VisualBlockType.formatCheck ||
+                  type == _VisualBlockType.rangeCheck) ...[
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: type == _VisualBlockType.formatCheck ? 180 : 110,
+                  child: TextField(
+                    controller: _valueCtrl,
+                    onChanged: (v) => block.value = v,
+                    style: AppTextStyles.inputText.copyWith(
+                        fontSize: 12,
+                        fontFamily: type == _VisualBlockType.formatCheck
+                            ? 'monospace'
+                            : null),
+                    decoration: _deco(
+                      type == _VisualBlockType.formatCheck
+                          ? 'regex  (e.g. ^[A-Z]{2}\$)'
+                          : 'threshold value',
+                    ),
+                  ),
+                ),
+              ],
+            ]),
+          ],
+        ],
+      ),
+    )
+        .animate(delay: AppAnimations.stagger(widget.index))
+        .fadeIn()
+        .slideY(begin: 0.05, end: 0);
   }
 }
 

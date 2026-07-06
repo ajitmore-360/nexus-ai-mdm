@@ -462,6 +462,24 @@ pub struct CreateRuleRequest {
 
 //
 // ========================================
+// UPDATE RULE REQUEST
+// ========================================
+//
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateRuleRequest {
+    pub name:        Option<String>,
+    pub description: Option<String>,
+    pub rule_type:   Option<String>,
+    pub entity_type: Option<String>,
+    pub field_name:  Option<String>,
+    pub rego_policy: Option<String>,
+    pub priority:    Option<i32>,
+    pub status:      Option<String>,
+}
+
+//
+// ========================================
 // API RESPONSE WRAPPER
 // ========================================
 //

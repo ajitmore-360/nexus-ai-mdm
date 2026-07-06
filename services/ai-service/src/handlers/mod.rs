@@ -1,14 +1,16 @@
 use axum::{
     extract::State,
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, sse::{Event, KeepAlive, Sse}},
     Json,
 };
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 
 use crate::feedback::{StewardFeedback, WeightTuner};
+use crate::llm::sanitize_user_query;
 use crate::mcp::{McpRequest, route};
 use crate::state::AppState;
 
@@ -39,6 +41,103 @@ pub async fn copilot(
 }
 
 // =========================================================================
+// MCP COPILOT — STREAMING  (additive: /mcp/stream, existing /mcp/query unchanged)
+// =========================================================================
+
+/// SSE streaming handler for free-form copilot prompts.
+/// Tool calls are NOT supported on the streaming path; they still use /mcp/query.
+pub async fn copilot_stream(
+    State(state): State<AppState>,
+    Json(request): Json<McpRequest>,
+) -> axum::response::Response {
+    if request.tool.is_some() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "success": false, "error": "streaming is only available for free-form prompts, not tool calls" })),
+        ).into_response();
+    }
+
+    let raw_prompt = request.prompt.as_deref().unwrap_or("").trim();
+    if raw_prompt.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "success": false, "error": "'prompt' is required for streaming" })),
+        ).into_response();
+    }
+
+    let prompt = sanitize_user_query(raw_prompt);
+    if prompt.contains("redacted") {
+        // Track injection attempts per user (or tenant if no user_id).
+        let tracker_key = request.user_id
+            .map(|u| u.to_string())
+            .unwrap_or_else(|| request.tenant_id.to_string());
+        let rate_exceeded = state.record_injection_attempt(&tracker_key);
+        tracing::warn!(
+            tenant_id    = %request.tenant_id,
+            user_id      = ?request.user_id,
+            rate_exceeded = rate_exceeded,
+            "stream prompt injection attempt blocked"
+        );
+        if rate_exceeded {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({ "success": false, "error": "too many prompt injection attempts — access suspended for 60 seconds" })),
+            ).into_response();
+        }
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "success": false, "error": "prompt injection pattern detected" })),
+        ).into_response();
+    }
+
+    let tenant_name = state.tenant_name(request.tenant_id).await;
+
+    // Embed + retrieve + format prompt (fast; ~100-300ms)
+    let augmented_prompt = match state
+        .rag_pipeline
+        .build_prompt(request.tenant_id, &tenant_name, &prompt, None)
+        .await
+    {
+        Err(e) => {
+            tracing::error!(error=%e, "RAG build_prompt failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "success": false, "error": "failed to build RAG context" })),
+            ).into_response();
+        }
+        Ok(p) => p,
+    };
+
+    // Start the streaming LLM generation
+    let token_stream = match state.llm.generate_stream(&augmented_prompt).await {
+        Err(e) => {
+            tracing::error!(error=%e, "LLM generate_stream failed to start");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "success": false, "error": "failed to start LLM stream" })),
+            ).into_response();
+        }
+        Ok(s) => s,
+    };
+
+    // Convert token stream → SSE events.  Each event carries {"chunk":"<token>"}.
+    // The stream closes naturally when the LLM sends done:true.
+    let sse_stream = token_stream.map(|result| -> Result<Event, anyhow::Error> {
+        match result {
+            Ok(chunk) => {
+                let data = json!({ "chunk": chunk }).to_string();
+                Ok(Event::default().data(data))
+            }
+            Err(e) => Err(e),
+        }
+    });
+
+    Sse::new(sse_stream)
+        .keep_alive(KeepAlive::default())
+        .into_response()
+}
+
+// =========================================================================
 // SEMANTIC MATCH
 // =========================================================================
 
@@ -52,6 +151,7 @@ pub struct SemanticMatchRequest {
     pub entity_type:     String,
 }
 
+#[tracing::instrument(skip(state, req), fields(tenant_id = %req.tenant_id))]
 pub async fn semantic_match(
     State(state): State<AppState>,
     Json(req): Json<SemanticMatchRequest>,

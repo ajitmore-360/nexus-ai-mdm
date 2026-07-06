@@ -37,13 +37,6 @@ class EntityPage {
     );
   }
 
-  /// Demo fallback page wrapping [CanonicalEntity.demoList].
-  static EntityPage get demo => EntityPage(
-        items: CanonicalEntity.demoList,
-        page: 1,
-        pageSize: AppConstants.defaultPageSize,
-        totalCount: CanonicalEntity.demoList.length,
-      );
 }
 
 // ---------------------------------------------------------------------------
@@ -63,6 +56,8 @@ class EntityRepository {
     String? type,
     String? status,
     String? sourceSystem,
+    String sortBy  = 'created_at',
+    String sortDir = 'desc',
   }) async {
     try {
       final queryParams = <String, dynamic>{
@@ -72,6 +67,8 @@ class EntityRepository {
         if (type != null) 'type': type,
         if (status != null) 'status': status,
         if (sourceSystem != null) 'source_system': sourceSystem,
+        'sort_by':  sortBy,
+        'sort_dir': sortDir,
       };
 
       final response = await _apiClient.get<Map<String, dynamic>>(
@@ -133,6 +130,35 @@ class EntityRepository {
       }());
       return Failure(ApiException(message: e.toString()));
     }
+  }
+
+  /// Bulk-approves entities by ID. Returns the raw response map with
+  /// `succeeded`, `skipped`, and `failed` lists.
+  Future<Map<String, dynamic>> bulkApproveEntities(List<String> entityIds) async {
+    final response = await _apiClient.post<Map<String, dynamic>>(
+      '/v1/entities/bulk-approve',
+      data: {'entity_ids': entityIds},
+    );
+    final raw = response.data ?? {};
+    return (raw['data'] as Map<String, dynamic>?) ?? raw;
+  }
+
+  /// Bulk-rejects entities by ID. Returns the raw response map with
+  /// `succeeded`, `skipped`, and `failed` lists.
+  Future<Map<String, dynamic>> bulkRejectEntities(
+    List<String> entityIds, {
+    String? reviewerNotes,
+  }) async {
+    final response = await _apiClient.post<Map<String, dynamic>>(
+      '/v1/entities/bulk-reject',
+      data: {
+        'entity_ids':     entityIds,
+        if (reviewerNotes != null && reviewerNotes.isNotEmpty)
+          'reviewer_notes': reviewerNotes,
+      },
+    );
+    final raw = response.data ?? {};
+    return (raw['data'] as Map<String, dynamic>?) ?? raw;
   }
 
   /// Creates a new entity. Returns [CreateEntityResponse] on success.

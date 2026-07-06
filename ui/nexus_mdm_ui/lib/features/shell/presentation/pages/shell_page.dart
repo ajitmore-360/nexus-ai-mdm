@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/auth/auth_manager.dart';
+import '../../../../core/license/license_manager.dart';
+import '../../../../core/license/licensed_module.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/branding/branding_manager.dart';
 import '../../../../shared/widgets/nexus_logo.dart';
 import '../../../../shared/widgets/command_palette.dart';
 import '../../../../shared/models/user.dart';
@@ -15,18 +19,22 @@ User _userFromAuth({
   required String email,
   required String role,
   required String tenantId,
+  String id = '',
+  String tenantName = '',
 }) {
-  final userRole = UserRole.values.firstWhere(
-    (r) => r.name == role,
-    orElse: () => UserRole.viewer,
-  );
+  final userRole = role == 'super_admin'
+      ? UserRole.productAdmin
+      : UserRole.values.firstWhere(
+          (r) => r.name == role,
+          orElse: () => UserRole.viewer,
+        );
   return User(
-    id: '',
+    id: id,
     email: email,
     name: name.isNotEmpty ? name : email.split('@').first,
     role: userRole,
     tenantId: tenantId,
-    tenantName: '',
+    tenantName: tenantName,
     createdAt: DateTime(2024),
   );
 }
@@ -36,18 +44,23 @@ User _userFromAuth({
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _NavItem {
-  final String emoji;
+  final IconData icon;
   final String label;
   final String route;
-  final String? badge;
   final bool isAi;
+  /// If set, the item is hidden when the module is not licensed
+  /// (Product Admins always see every item regardless).
+  final LicensedModule? module;
+  /// Item-level role restriction (independent of the parent group's visibleTo).
+  final List<UserRole>? visibleTo;
 
   const _NavItem({
-    required this.emoji,
+    required this.icon,
     required this.label,
     required this.route,
-    this.badge,
     this.isAi = false,
+    this.module,
+    this.visibleTo,
   });
 }
 
@@ -79,64 +92,123 @@ class ShellPage extends StatefulWidget {
 
 class _ShellPageState extends State<ShellPage> {
   bool _isSidebarExpanded = true;
-  int _notificationCount = 5;
-  User _currentUser = User.demo;
+  int _notificationCount = 0;
+  int _matchQueueCount = 0;
+  User _currentUser = User(
+    id: '', email: '', name: 'Loading…', role: UserRole.viewer,
+    tenantId: '', tenantName: '', createdAt: DateTime(2024),
+  );
   bool _paletteOpen = false;
+  Set<LicensedModule> _activeModules = {};
 
   // ── Grouped nav definition ────────────────────────────────────────────────
 
   static const _navGroups = [
+    // ── Super Admin (productAdmin) only ───────────────────────────────────
+    _NavGroup(
+      label: 'PLATFORM ADMIN',
+      visibleTo: [UserRole.productAdmin],
+      items: [
+        _NavItem(icon: Icons.admin_panel_settings_outlined, label: 'Tenants',        route: '/dashboard/admin/tenants'),
+        _NavItem(icon: Icons.vpn_key_outlined,              label: 'License Manager', route: '/dashboard/admin/license'),
+        _NavItem(icon: Icons.monitor_heart_outlined,        label: 'System Health',   route: '/dashboard/admin/health'),
+      ],
+    ),
+
+    // ── All authenticated roles see their role-specific dashboard ────────────
     _NavGroup(
       label: 'OVERVIEW',
+      visibleTo: [UserRole.productAdmin, UserRole.admin, UserRole.businessAdmin, UserRole.steward, UserRole.viewer],
       items: [
-        _NavItem(emoji: '🏠', label: 'Dashboard', route: '/dashboard'),
+        _NavItem(icon: Icons.home_outlined, label: 'Dashboard', route: '/dashboard'),
       ],
     ),
-    _NavGroup(
-      label: 'PLATFORM',
-      // Visible only to admin (maps to superAdmin concept in this codebase)
-      visibleTo: [UserRole.admin],
-      items: [
-        _NavItem(emoji: '👑', label: 'Tenants', route: '/dashboard/admin/tenants'),
-        _NavItem(emoji: '🔧', label: 'System', route: '/dashboard/settings'),
-      ],
-    ),
+
+    // ── Org configuration ─────────────────────────────────────────────────────
+    // ITAdmin (productAdmin) can only manage users — not tenant data config.
+    // BusinessAdmin has access to all items in this group.
     _NavGroup(
       label: 'ORG SETUP',
-      visibleTo: [UserRole.admin, UserRole.steward],
+      visibleTo: [UserRole.productAdmin, UserRole.admin, UserRole.businessAdmin],
       items: [
-        _NavItem(emoji: '👥', label: 'Users & Roles', route: '/dashboard/org/users'),
-        _NavItem(emoji: '#️⃣', label: 'Entity Types', route: '/dashboard/org/entity-types'),
-        _NavItem(emoji: '🗂', label: 'Attributes', route: '/dashboard/org/attributes'),
-        _NavItem(emoji: '🔌', label: 'Source Systems', route: '/dashboard/org/sources'),
+        _NavItem(icon: Icons.people_outlined,               label: 'Users & Roles',   route: '/dashboard/org/users'),
+        _NavItem(icon: Icons.category_outlined,             label: 'Entity Types',    route: '/dashboard/org/entity-types',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+        _NavItem(icon: Icons.tune_outlined,                 label: 'Attributes',      route: '/dashboard/org/attributes',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+        _NavItem(icon: Icons.electrical_services_outlined,  label: 'Source Systems',  route: '/dashboard/org/sources',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+        _NavItem(icon: Icons.admin_panel_settings_outlined, label: 'Data Governance', route: '/dashboard/org/data-governance',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+        _NavItem(icon: Icons.policy_outlined,               label: 'Domain Policies', route: '/dashboard/org/domain-policies',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
       ],
     ),
+
+    // ── Data access: admin and stewards only — BusinessAdmin excluded ──────
     _NavGroup(
       label: 'ENTITIES',
+      visibleTo: [UserRole.admin, UserRole.steward, UserRole.viewer],
       items: [
-        _NavItem(emoji: '🔍', label: 'Browse & Search', route: '/dashboard/entities'),
-        _NavItem(emoji: '✨', label: 'Create Entity', route: '/dashboard/entities/create'),
-        _NavItem(emoji: '📥', label: 'Ingest Data', route: '/dashboard/entities/ingest'),
+        _NavItem(icon: Icons.search_outlined,    label: 'Browse & Search', route: '/dashboard/entities'),
+        _NavItem(icon: Icons.add_circle_outline, label: 'Create Entity',   route: '/dashboard/entities/create',
+            visibleTo: [UserRole.admin, UserRole.steward]),
+        _NavItem(icon: Icons.upload_outlined,    label: 'Ingest Data',     route: '/dashboard/entities/ingest',
+            visibleTo: [UserRole.admin, UserRole.steward]),
       ],
     ),
     _NavGroup(
       label: 'MDM WORKFLOW',
+      visibleTo: [UserRole.admin, UserRole.steward],
       items: [
-        _NavItem(emoji: '🎯', label: 'Match Queue', route: '/dashboard/match-queue', badge: '12'),
-        _NavItem(emoji: '🔀', label: 'Merge Studio', route: '/dashboard/merge/select/select'),
-        _NavItem(emoji: '⭐', label: 'Golden Records', route: '/dashboard/golden-records'),
-        _NavItem(emoji: '📡', label: 'Distribution', route: '/dashboard/distribution'),
-        _NavItem(emoji: '🔔', label: 'Notifications', route: '/dashboard/notifications', badge: '5'),
+        _NavItem(icon: Icons.gps_fixed_outlined,      label: 'Match Queue',       route: '/dashboard/match-queue'),
+        _NavItem(icon: Icons.merge_outlined,           label: 'Merge Studio',      route: '/dashboard/merge'),
+        _NavItem(icon: Icons.star_outline,             label: 'Golden Records',    route: '/dashboard/golden-records'),
+        _NavItem(icon: Icons.tune_outlined,            label: 'Matching Rules',    route: '/dashboard/matching-rules',
+            visibleTo: [UserRole.admin]),
+        _NavItem(icon: Icons.satellite_alt_outlined,   label: 'Distribution',      route: '/dashboard/distribution',
+            module: LicensedModule.distribution,
+            visibleTo: [UserRole.admin]),
+        _NavItem(icon: Icons.pending_actions_outlined, label: 'Pending Approvals', route: '/dashboard/pending-approvals'),
+        _NavItem(icon: Icons.notifications_outlined,   label: 'Notifications',     route: '/dashboard/notifications'),
+      ],
+    ),
+    _NavGroup(
+      label: 'AI & INSIGHTS',
+      visibleTo: [UserRole.admin, UserRole.steward, UserRole.viewer],
+      items: [
+        _NavItem(icon: Icons.auto_awesome_outlined, label: 'AI Copilot',   route: '/dashboard/ai-copilot', isAi: true,
+            module: LicensedModule.aiCopilot),
+        _NavItem(icon: Icons.verified_outlined,     label: 'Data Quality', route: '/dashboard/data-quality',
+            module: LicensedModule.dataQuality),
+        _NavItem(icon: Icons.account_tree_outlined, label: 'Lineage',      route: '/dashboard/lineage',
+            module: LicensedModule.lineage),
+        _NavItem(icon: Icons.analytics_outlined,    label: 'Analytics',    route: '/dashboard/analytics',
+            module: LicensedModule.analytics),
+      ],
+    ),
+
+    // ── Governance policy config: admin only ──────────────────────────────
+    _NavGroup(
+      label: 'GOVERNANCE',
+      visibleTo: [UserRole.admin],
+      items: [
+        _NavItem(icon: Icons.shield_outlined,     label: 'Policy Rules',   route: '/dashboard/governance',
+            module: LicensedModule.governance),
+        _NavItem(icon: Icons.merge_type_outlined, label: 'Survivorship',   route: '/dashboard/governance',
+            module: LicensedModule.governance),
+        _NavItem(icon: Icons.gpp_good_outlined,   label: 'GDPR / Consent', route: '/dashboard/governance',
+            module: LicensedModule.governance),
       ],
     ),
   ];
 
   static const _bottomNavItems = [
-    _NavItem(emoji: '🏠', label: 'Dashboard', route: '/dashboard'),
-    _NavItem(emoji: '🔍', label: 'Explorer', route: '/dashboard/entities'),
-    _NavItem(emoji: '🎯', label: 'Queue', route: '/dashboard/match-queue'),
-    _NavItem(emoji: '✨', label: 'AI', route: '/dashboard/ai-copilot', isAi: true),
-    _NavItem(emoji: '⚙️', label: 'Settings', route: '/dashboard/settings'),
+    _NavItem(icon: Icons.home_outlined, label: 'Dashboard', route: '/dashboard'),
+    _NavItem(icon: Icons.search_outlined, label: 'Explorer', route: '/dashboard/entities'),
+    _NavItem(icon: Icons.gps_fixed_outlined, label: 'Queue', route: '/dashboard/match-queue'),
+    _NavItem(icon: Icons.auto_awesome_outlined, label: 'AI', route: '/dashboard/ai-copilot', isAi: true),
+    _NavItem(icon: Icons.settings_outlined, label: 'Settings', route: '/dashboard/settings'),
   ];
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -145,22 +217,67 @@ class _ShellPageState extends State<ShellPage> {
   void initState() {
     super.initState();
     _loadCurrentUser();
+    _loadUnreadCount();
+    _loadMatchQueueCount();
     HardwareKeyboard.instance.addHandler(_onHardwareKey);
   }
 
+  Future<void> _loadUnreadCount() async {
+    try {
+      final resp = await ApiClient().get<Map<String, dynamic>>(
+        '${AppConstants.notificationsPath}/unread-count',
+      );
+      final count = resp.data?['unread_count'] as int? ?? 0;
+      if (mounted) setState(() => _notificationCount = count);
+    } catch (_) {}
+  }
+
+  Future<void> _loadMatchQueueCount() async {
+    try {
+      final resp = await ApiClient().get<Map<String, dynamic>>(
+        '${AppConstants.matchQueuePath}/queue-metrics',
+      );
+      final data = resp.data?['data'] as Map<String, dynamic>?;
+      final count = data?['pending_total'] as int? ?? 0;
+      if (mounted) setState(() => _matchQueueCount = count);
+    } catch (_) {}
+  }
+
+  /// Returns a live badge string for routes backed by real counts,
+  /// null if there is nothing to show.
+  String? _liveBadge(_NavItem item) {
+    if (item.route == '/dashboard/match-queue' && _matchQueueCount > 0) {
+      return _matchQueueCount > 99 ? '99+' : '$_matchQueueCount';
+    }
+    if (item.route == '/dashboard/notifications' && _notificationCount > 0) {
+      return _notificationCount > 9 ? '9+' : '$_notificationCount';
+    }
+    return null;
+  }
+
   Future<void> _loadCurrentUser() async {
-    final name     = await AuthManager.getUserName() ?? '';
-    final email    = await AuthManager.getUserEmail() ?? '';
-    final role     = await AuthManager.getUserRole() ?? 'viewer';
-    final tenantId = await AuthManager.getTenantId() ?? '';
+    final results = await Future.wait([
+      AuthManager.getUserName(),
+      AuthManager.getUserEmail(),
+      AuthManager.getUserRole(),
+      AuthManager.getTenantId(),
+      AuthManager.getUserId(),
+      AuthManager.getTenantName(),
+    ]);
+    final name       = results[0] ?? '';
+    final email      = results[1] ?? '';
+    final role       = results[2] ?? 'viewer';
+    final tenantId   = results[3] ?? '';
+    final userId     = results[4] ?? '';
+    final tenantName = results[5] ?? '';
+    final modules    = await LicenseManager.getActiveModules();
     if (!mounted) return;
     setState(() {
       _currentUser = _userFromAuth(
-        name: name,
-        email: email,
-        role: role,
-        tenantId: tenantId,
+        name: name, email: email, role: role, tenantId: tenantId,
+        id: userId, tenantName: tenantName,
       );
+      _activeModules = modules;
     });
   }
 
@@ -240,7 +357,7 @@ class _ShellPageState extends State<ShellPage> {
         padding: EdgeInsets.all(12),
         child: NexusLogo(size: 28, showText: false),
       ),
-      title: Text('Nexus AI MDM', style: AppTextStyles.titleMedium),
+      title: Text(BrandingManager.productName, style: AppTextStyles.titleMedium),
       actions: [
         _buildNotificationButton(),
         _buildUserAvatar(compact: true),
@@ -318,7 +435,7 @@ class _ShellPageState extends State<ShellPage> {
                 _buildNavItemWidget(
                   context,
                   const _NavItem(
-                    emoji: '⚙️',
+                    icon: Icons.settings_outlined,
                     label: 'Settings',
                     route: '/dashboard/settings',
                   ),
@@ -335,17 +452,34 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   List<Widget> _buildNavGroups(BuildContext context, String location) {
+    final isProductAdmin = _currentUser.isProductAdmin;
     final widgets = <Widget>[];
+
     for (final group in _navGroups) {
-      // Role-based visibility check
+      // Group-level role check
       if (group.visibleTo != null &&
           !group.visibleTo!.contains(_currentUser.role)) {
         continue;
       }
 
-      widgets.add(_buildGroupHeader(group.label));
+      // Filter items by item-level role and license
+      final visibleItems = group.items.where((item) {
+        if (item.visibleTo != null &&
+            !item.visibleTo!.contains(_currentUser.role)) {
+          return false;
+        }
+        if (item.module != null &&
+            !isProductAdmin &&
+            !_activeModules.contains(item.module)) {
+          return false;
+        }
+        return true;
+      }).toList();
 
-      for (final item in group.items) {
+      if (visibleItems.isEmpty) continue;
+
+      widgets.add(_buildGroupHeader(group.label));
+      for (final item in visibleItems) {
         final isActive = _isRouteActive(location, item.route);
         widgets.add(
           Padding(
@@ -354,7 +488,6 @@ class _ShellPageState extends State<ShellPage> {
           ),
         );
       }
-
       widgets.add(const SizedBox(height: 4));
     }
     return widgets;
@@ -392,7 +525,13 @@ class _ShellPageState extends State<ShellPage> {
       message: _isSidebarExpanded ? '' : item.label,
       preferBelow: false,
       child: InkWell(
-        onTap: () => context.go(item.route),
+        onTap: () {
+          if (item.route == '/dashboard/notifications') {
+            _showNotificationsPanel();
+          } else {
+            context.go(item.route);
+          }
+        },
         borderRadius: BorderRadius.circular(8),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
@@ -419,16 +558,12 @@ class _ShellPageState extends State<ShellPage> {
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    Text(
-                      item.emoji,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: isActive
-                            ? null
-                            : null, // emoji is self-colored
-                      ),
+                    Icon(
+                      item.icon,
+                      size: 18,
+                      color: isActive ? AppColors.primary : AppColors.secondaryText,
                     ),
-                    if (item.badge != null && !_isSidebarExpanded)
+                    if (_liveBadge(item) != null && !_isSidebarExpanded)
                       Positioned(
                         right: -6,
                         top: -6,
@@ -441,7 +576,7 @@ class _ShellPageState extends State<ShellPage> {
                             borderRadius: BorderRadius.circular(7),
                           ),
                           child: Text(
-                            item.badge!,
+                            _liveBadge(item)!,
                             style: AppTextStyles.badgeLabel.copyWith(
                               color: Colors.white,
                               fontSize: 8,
@@ -477,7 +612,7 @@ class _ShellPageState extends State<ShellPage> {
                   ),
                 ),
                 if (item.isAi) const _AiPulseDot(),
-                if (item.badge != null)
+                if (_liveBadge(item) != null)
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -486,7 +621,7 @@ class _ShellPageState extends State<ShellPage> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      item.badge!,
+                      _liveBadge(item)!,
                       style: AppTextStyles.badgeLabel.copyWith(
                         color: AppColors.error,
                       ),
@@ -807,7 +942,7 @@ class _ShellPageState extends State<ShellPage> {
         type: BottomNavigationBarType.fixed,
         items: _bottomNavItems
             .map((item) => BottomNavigationBarItem(
-                  icon: Text(item.emoji, style: const TextStyle(fontSize: 20)),
+                  icon: Icon(item.icon),
                   label: item.label,
                 ))
             .toList(),
@@ -819,15 +954,19 @@ class _ShellPageState extends State<ShellPage> {
 
   String _getPageTitle(String location) {
     if (location == '/dashboard') return 'Dashboard';
+    if (location.startsWith('/dashboard/admin/health')) return 'System Health';
     if (location.startsWith('/dashboard/admin/tenants')) return 'Tenants';
     if (location.startsWith('/dashboard/org/users')) return 'Users & Roles';
     if (location.startsWith('/dashboard/org/entity-types')) return 'Entity Types';
     if (location.startsWith('/dashboard/org/attributes')) return 'Attribute Schema';
     if (location.startsWith('/dashboard/org/sources')) return 'Source Systems';
+    if (location.startsWith('/dashboard/org/domain-policies')) return 'Domain Policies';
+    if (location.startsWith('/dashboard/org/data-governance')) return 'Data Governance';
     if (location.startsWith('/dashboard/entities/create')) return 'Create Entity';
     if (location.startsWith('/dashboard/entities/ingest')) return 'Ingest Data';
     if (location.startsWith('/dashboard/entities')) return 'Entity Explorer';
     if (location.startsWith('/dashboard/match-queue')) return 'Match Queue';
+    if (location.startsWith('/dashboard/matching-rules')) return 'Matching Rules';
     if (location.startsWith('/dashboard/merge')) return 'Merge Studio';
     if (location.startsWith('/dashboard/golden-records')) return 'Golden Records';
     if (location.startsWith('/dashboard/ai-copilot')) return 'AI Copilot';
@@ -838,13 +977,17 @@ class _ShellPageState extends State<ShellPage> {
     if (location.startsWith('/dashboard/distribution')) return 'Distribution Monitor';
     if (location.startsWith('/dashboard/notifications')) return 'Notifications';
     if (location.startsWith('/dashboard/settings')) return 'Settings';
-    return 'Nexus AI MDM';
+    return BrandingManager.productName;
   }
 
   void _showNotificationsPanel() {
     showNotificationCenter(
       context,
-      onDismiss: () => setState(() => _notificationCount = 0),
+      onDismiss: () {
+        // Re-fetch the live count after the panel closes — the user may have
+        // read some notifications but not all.
+        _loadUnreadCount();
+      },
     );
   }
 

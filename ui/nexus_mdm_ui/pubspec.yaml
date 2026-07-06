@@ -30,6 +30,10 @@ dependencies:
   shimmer: ^3.0.0
   lottie: ^3.1.0
 
+  # URL strategy — path-based URLs on Flutter Web (no # hash)
+  flutter_web_plugins:
+    sdk: flutter
+
   # Utils
   intl: ^0.19.0
   get_it: ^7.7.0
@@ -38,6 +42,10 @@ dependencies:
   # Security — encrypted storage for auth tokens
   # Uses Keychain (iOS/macOS), Keystore (Android), libsecret (Linux), DPAPI (Windows)
   flutter_secure_storage: ^9.2.2
+
+  # OAuth2 / OIDC PKCE — SSO login for Google, Azure AD, Okta
+  # Provides SHA-256 for PKCE code_challenge computation (S256 method).
+  crypto: ^3.0.0
 
 dev_dependencies:
   flutter_test:

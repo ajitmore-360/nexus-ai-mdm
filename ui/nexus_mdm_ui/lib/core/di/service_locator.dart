@@ -1,5 +1,7 @@
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../branding/branding_manager.dart';
+import '../license/license_manager.dart';
 import '../network/api_client.dart';
 import '../network/websocket_client.dart';
 import '../../features/entities/data/entity_repository.dart';
@@ -10,6 +12,7 @@ import '../../features/dashboard/data/dashboard_repository.dart';
 import '../../features/admin/data/admin_repository.dart';
 import '../../features/admin/data/entity_type_repository.dart';
 import '../../features/admin/data/source_systems_repository.dart';
+import '../../features/analytics/data/analytics_repository.dart';
 
 final GetIt sl = GetIt.instance;
 
@@ -24,6 +27,13 @@ Future<void> setupServiceLocator() async {
   if (!sl.isRegistered<ApiClient>()) {
     sl.registerLazySingleton<ApiClient>(() => ApiClient());
   }
+
+  // Static managers that need an ApiClient — safe to call multiple times
+  // (both are idempotent: they just replace the repository reference).
+  final client = sl<ApiClient>();
+  LicenseManager.init(client);
+  BrandingManager.init(client);
+
   if (!sl.isRegistered<WebSocketClient>()) {
     sl.registerLazySingleton<WebSocketClient>(() => WebSocketClient());
   }
@@ -58,5 +68,9 @@ Future<void> setupServiceLocator() async {
   if (!sl.isRegistered<SourceSystemsRepository>()) {
     sl.registerLazySingleton<SourceSystemsRepository>(
         () => SourceSystemsRepository(sl<ApiClient>()));
+  }
+  if (!sl.isRegistered<AnalyticsRepository>()) {
+    sl.registerLazySingleton<AnalyticsRepository>(
+        () => AnalyticsRepository(sl<ApiClient>()));
   }
 }

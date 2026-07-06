@@ -918,7 +918,7 @@ pub fn apply_survivorship(
 
         semantic_identity:
             Some(
-                format!( "entity_type={:?}",entities[0].entity_type)
+                format!("entity_type={}", entities[0].entity_type)
             ),
 
         vector_namespace:
@@ -1142,33 +1142,68 @@ fn evaluate_attribute(
         }
 
         SurvivorshipStrategy::AIRecommended => {
+            // Balanced quality composite: confidence + completeness + recency.
+            // Mimics what an AI reviewer prioritises without a live LLM call in
+            // the hot survivorship path (LLM rule suggestion is a separate advisory).
+            let conf = attribute.confidence.as_ref().map(|c| c.score).unwrap_or(0.0);
+            let comp = calculate_completeness(attribute);
+            let has_recency = attribute
+                .provenance.as_ref()
+                .and_then(|p| p.source.extracted_at)
+                .map(|_| 1.0_f32)
+                .unwrap_or(0.0);
 
-            score += 0.5;
+            let composite = conf * 0.50 + comp * 0.30 + has_recency * 0.20;
+            score += composite;
 
-            reasons.push(
-                "ai_recommended"
-                    .to_string()
-            );
+            reasons.push(format!(
+                "ai_composite(conf={:.2},complete={:.2},recency={:.2})={:.4}",
+                conf, comp, has_recency, composite
+            ));
         }
 
         SurvivorshipStrategy::SemanticSimilarity => {
+            // Favours attributes that carry more semantic information:
+            // longer, richer values with higher confidence.
+            let conf = attribute.confidence.as_ref().map(|c| c.score).unwrap_or(0.0);
+            let comp = calculate_completeness(attribute);
+            // Normalise value string length: cap richness signal at 1000 chars → 1.0.
+            let value_richness =
+                (attribute.value.to_string().len() as f32 / 1000.0).min(1.0);
 
-            score += 0.8;
+            let composite = value_richness * 0.40 + conf * 0.40 + comp * 0.20;
+            score += composite;
 
-            reasons.push(
-                "semantic_similarity"
-                    .to_string()
-            );
+            reasons.push(format!(
+                "semantic(richness={:.2},conf={:.2},complete={:.2})={:.4}",
+                value_richness, conf, comp, composite
+            ));
         }
 
         SurvivorshipStrategy::HybridWeighted => {
+            // Best-of-all-worlds composite: blends every quality dimension.
+            // This is the recommended default for entities with no explicit
+            // source priority configured.
+            let conf = attribute.confidence.as_ref().map(|c| c.score).unwrap_or(0.0);
+            let comp = calculate_completeness(attribute);
+            let value_richness =
+                (attribute.value.to_string().len() as f32 / 1000.0).min(1.0);
+            let has_recency = attribute
+                .provenance.as_ref()
+                .and_then(|p| p.source.extracted_at)
+                .map(|_| 1.0_f32)
+                .unwrap_or(0.0);
 
-            score += 1.2;
+            let composite = conf          * 0.35
+                          + comp          * 0.25
+                          + has_recency   * 0.20
+                          + value_richness * 0.20;
+            score += composite;
 
-            reasons.push(
-                "hybrid_weighted"
-                    .to_string()
-            );
+            reasons.push(format!(
+                "hybrid(conf={:.2},complete={:.2},recency={:.2},rich={:.2})={:.4}",
+                conf, comp, has_recency, value_richness, composite
+            ));
         }
 
         SurvivorshipStrategy::Custom(name) => {

@@ -21,7 +21,7 @@ use tower_http::trace::TraceLayer;
 use config::settings::PolicySettings;
 use engine::{GdprEngine, OpaClient, PolicyEvaluator};
 use handlers::{
-    create_rule, delete_rule, evaluate, evaluate_merge,
+    create_rule, delete_rule, update_rule, toggle_rule, evaluate, evaluate_merge,
     gdpr_access, gdpr_erasure, list_rules,
     list_consent, record_consent, withdraw_consent,
 };
@@ -87,7 +87,7 @@ async fn main() {
 
     let cors = CorsLayer::new()
         .allow_origin(allowed_origins)
-        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE, Method::OPTIONS])
         .allow_headers([CONTENT_TYPE, AUTHORIZATION, HeaderName::from_static("x-tenant-id"), HeaderName::from_static("x-request-id")])
         .allow_credentials(true);
 
@@ -97,7 +97,8 @@ async fn main() {
         .route("/policy/evaluate",                 post(evaluate))
         .route("/policy/evaluate/merge",           post(evaluate_merge))
         .route("/policy/rules",                    get(list_rules).post(create_rule))
-        .route("/policy/rules/:id",                delete(delete_rule))
+        .route("/policy/rules/:id",                delete(delete_rule).put(update_rule))
+        .route("/policy/rules/:id/toggle",         axum::routing::patch(toggle_rule))
         .route("/policy/gdpr/erasure",             post(gdpr_erasure))
         .route("/policy/gdpr/access",              post(gdpr_access))
         .route("/policy/consent",                  get(list_consent).post(record_consent))

@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 pub struct NotificationSettings {
     pub port:             u16,
     pub database_url:     String,
@@ -6,6 +5,8 @@ pub struct NotificationSettings {
     pub redis_key_prefix: String,
     /// Interval (seconds) for pruning stale client connections
     pub heartbeat_secs:   u64,
+    /// Optional SMTP host — if empty, email delivery is logged only
+    pub smtp_host:        String,
 }
 
 impl NotificationSettings {
@@ -19,6 +20,7 @@ impl NotificationSettings {
             redis_key_prefix: std::env::var("REDIS_KEY_PREFIX")
                                   .unwrap_or_else(|_| "nexus".to_string()),
             heartbeat_secs:   env_u64("NOTIFICATION_HEARTBEAT_SECS", 30),
+            smtp_host:        std::env::var("SMTP_HOST").unwrap_or_default(),
         })
     }
 }

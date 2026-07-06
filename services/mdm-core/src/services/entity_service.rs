@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -13,6 +14,7 @@ use contracts::mdm::distribution::{
 use contracts::mdm::entity::{EntityAttribute, EntitySourceSnapshot, EntityStatus};
 
 use database::{DbPool, PendingOutboxEvent, RequestContext, RequestContextFactory};
+use sqlx::Row;
 use nexus_redis::{EntityCache, TaskQueue, queue::task_types};
 use nexus_security::encryption::field_encryption::FieldEncryptionService;
 
@@ -65,8 +67,30 @@ impl EntityService {
         self
     }
 
+    /// Query `core_mdm.attribute_schemas` for all attribute keys the tenant has
+    /// explicitly marked `is_pii = true`. Keys are returned as lowercase so callers
+    /// can do case-insensitive membership checks. Returns an empty set on DB error
+    /// so the static-key fallback in `is_pii_attribute` still applies.
+    pub(crate) async fn load_schema_pii_keys(pool: &DbPool, tenant_id: Uuid) -> HashSet<String> {
+        match sqlx::query_scalar::<_, String>(
+            r#"SELECT attribute_key
+               FROM core_mdm.attribute_schemas
+               WHERE tenant_id = $1 AND is_pii = true"#,
+        )
+        .bind(tenant_id)
+        .fetch_all(pool)
+        .await
+        {
+            Ok(keys) => keys.into_iter().map(|k| k.to_lowercase()).collect(),
+            Err(e) => {
+                tracing::warn!(error=%e, %tenant_id, "failed to load schema PII keys; relying on static list");
+                HashSet::new()
+            }
+        }
+    }
+
     /// Returns true if the attribute key is a well-known PII field.
-    fn is_pii_attribute(key: &str) -> bool {
+    pub(crate) fn is_pii_attribute(key: &str) -> bool {
         const PII_KEYS: &[&str] = &[
             "email", "email_address",
             "phone", "phone_number", "mobile", "mobile_number", "cell_phone",
@@ -87,13 +111,17 @@ impl EntityService {
     }
 
     /// Encrypt plaintext string values for PII-tagged attributes.
+    /// Checks both the built-in static key list and `schema_pii_keys` (keys the
+    /// tenant declared `is_pii=true` in `core_mdm.attribute_schemas`).
     /// Returns a new attribute list — non-PII and already-encrypted attrs are unchanged.
-    fn encrypt_pii_attributes(
-        attrs: Vec<EntityAttribute>,
-        enc:   &FieldEncryptionService,
+    pub(crate) fn encrypt_pii_attributes(
+        attrs:           Vec<EntityAttribute>,
+        enc:             &FieldEncryptionService,
+        schema_pii_keys: &HashSet<String>,
     ) -> Vec<EntityAttribute> {
         attrs.into_iter().map(|mut attr| {
-            if !attr.encrypted && Self::is_pii_attribute(&attr.key) {
+            let key_lower = attr.key.to_lowercase();
+            if !attr.encrypted && (Self::is_pii_attribute(&attr.key) || schema_pii_keys.contains(&key_lower)) {
                 if let serde_json::Value::String(ref plain) = attr.value {
                     match enc.encrypt(plain) {
                         Ok(ciphertext) => {
@@ -104,10 +132,184 @@ impl EntityService {
                             tracing::warn!(key=%attr.key, error=%e, "PII encryption failed — storing plaintext");
                         }
                     }
+                } else if !matches!(attr.value, serde_json::Value::Null) {
+                    // Non-string PII (number, bool, array, object): serialise to the JSON
+                    // representation and encrypt it so no PII leaks through type mismatch.
+                    let json_str = attr.value.to_string();
+                    match enc.encrypt(&json_str) {
+                        Ok(ciphertext) => {
+                            tracing::warn!(
+                                key=%attr.key,
+                                "PII attribute has a non-string value — serialised to JSON before encryption"
+                            );
+                            attr.value     = serde_json::Value::String(ciphertext);
+                            attr.encrypted = true;
+                        }
+                        Err(e) => {
+                            tracing::warn!(key=%attr.key, error=%e, "PII encryption failed for non-string value");
+                        }
+                    }
                 }
             }
             attr
         }).collect()
+    }
+
+    /// Map the EntityType enum variant to the uppercase code stored in attribute_schemas.
+    fn entity_type_to_code(entity_type: &contracts::mdm::entity::EntityType) -> String {
+        use contracts::mdm::entity::EntityType as ET;
+        match entity_type {
+            ET::Customer      => "CUSTOMER".to_string(),
+            ET::Vendor        => "VENDOR".to_string(),
+            ET::Material      => "MATERIAL".to_string(),
+            ET::Product       => "PRODUCT".to_string(),
+            ET::Account       => "ACCOUNT".to_string(),
+            ET::Employee      => "EMPLOYEE".to_string(),
+            ET::Location      => "LOCATION".to_string(),
+            ET::Organization  => "ORGANIZATION".to_string(),
+            ET::Asset         => "ASSET".to_string(),
+            ET::ReferenceData => "REFERENCE_DATA".to_string(),
+            ET::Custom(code)  => code.to_uppercase(),
+        }
+    }
+
+    /// Validate entity attributes against the tenant's configured attribute schemas.
+    ///
+    /// If no schemas exist for this entity type, validation is a silent no-op —
+    /// the feature only activates once the tenant defines schemas via the admin UI.
+    async fn validate_attributes_against_schema(
+        &self,
+        tenant_id:   Uuid,
+        entity_type_code: &str,
+        attrs:       &[EntityAttribute],
+    ) -> Result<()> {
+        // Struct for the schema rows we need
+        struct SchemaRow {
+            attribute_key: String,
+            data_type:     String,
+            is_required:   bool,
+            min_length:    Option<i32>,
+            max_length:    Option<i32>,
+            enum_values:   Option<Vec<String>>,
+        }
+
+        let rows = sqlx::query(
+            r#"
+            SELECT attribute_key, data_type, is_required,
+                   (validation->>'min_length')::int AS min_length,
+                   (validation->>'max_length')::int AS max_length,
+                   CASE WHEN enum_values IS NULL THEN NULL
+                        ELSE ARRAY(SELECT jsonb_array_elements_text(enum_values))
+                   END AS enum_values
+            FROM core_mdm.attribute_schemas
+            WHERE tenant_id = $1
+              AND entity_type = $2
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(entity_type_code)
+        .fetch_all(&self.pool)
+        .await?;
+
+        if rows.is_empty() {
+            return Ok(());
+        }
+
+        let schemas: Vec<SchemaRow> = rows
+            .into_iter()
+            .map(|r| SchemaRow {
+                attribute_key: r.get::<String, _>("attribute_key"),
+                data_type:     r.get::<String, _>("data_type"),
+                is_required:   r.get::<bool, _>("is_required"),
+                min_length:    r.try_get::<Option<i32>, _>("min_length").unwrap_or(None),
+                max_length:    r.try_get::<Option<i32>, _>("max_length").unwrap_or(None),
+                enum_values:   r.try_get::<Option<Vec<String>>, _>("enum_values").unwrap_or(None),
+            })
+            .collect();
+
+        let attr_map: std::collections::HashMap<&str, &EntityAttribute> =
+            attrs.iter().map(|a| (a.key.as_str(), a)).collect();
+
+        let mut errors: Vec<String> = vec![];
+
+        for schema in &schemas {
+            match attr_map.get(schema.attribute_key.as_str()) {
+                None if schema.is_required => {
+                    errors.push(format!("'{}' is required", schema.attribute_key));
+                }
+                None => {} // optional absent — fine
+                Some(attr) => {
+                    let val_str = attr.value.as_str();
+
+                    if schema.is_required && (val_str.map(str::is_empty).unwrap_or(true)) {
+                        errors.push(format!("'{}' is required and must not be empty", schema.attribute_key));
+                        continue;
+                    }
+
+                    if let Some(v) = val_str {
+                        match schema.data_type.as_str() {
+                            "email" => {
+                                if !v.contains('@') || !v.contains('.') {
+                                    errors.push(format!("'{}' must be a valid email address", schema.attribute_key));
+                                }
+                            }
+                            "phone" => {
+                                let invalid = v.chars().any(|c| !c.is_ascii_digit() && !"+ -()".contains(c));
+                                if invalid {
+                                    errors.push(format!("'{}' must be a valid phone number", schema.attribute_key));
+                                }
+                            }
+                            "number" | "currency" => {
+                                if v.parse::<f64>().is_err() {
+                                    errors.push(format!("'{}' must be a number", schema.attribute_key));
+                                }
+                            }
+                            "boolean" => {
+                                if !["true", "false", "1", "0", "yes", "no"].contains(&v.to_lowercase().as_str()) {
+                                    errors.push(format!("'{}' must be a boolean value", schema.attribute_key));
+                                }
+                            }
+                            "enum" => {
+                                if let Some(allowed) = &schema.enum_values {
+                                    if !allowed.iter().any(|a| a.eq_ignore_ascii_case(v)) {
+                                        errors.push(format!(
+                                            "'{}' must be one of: {}",
+                                            schema.attribute_key,
+                                            allowed.join(", ")
+                                        ));
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+
+                        let char_count = v.chars().count() as i32;
+                        if let Some(min) = schema.min_length {
+                            if char_count < min {
+                                errors.push(format!(
+                                    "'{}' must be at least {} characters",
+                                    schema.attribute_key, min
+                                ));
+                            }
+                        }
+                        if let Some(max) = schema.max_length {
+                            if char_count > max {
+                                errors.push(format!(
+                                    "'{}' must not exceed {} characters",
+                                    schema.attribute_key, max
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!("attribute validation failed: {}", errors.join("; ")))
+        }
     }
 
     /// Decrypt encrypted attribute values back to plaintext.
@@ -175,10 +377,22 @@ impl EntityService {
             });
         }
 
+        // ── Attribute schema validation ──────────────────────────────────────
+        // Validates required fields and basic type constraints against
+        // core_mdm.attribute_schemas for this entity type.
+        // Fails fast before any transaction is opened.
+        let entity_type_code = Self::entity_type_to_code(&entity.entity_type);
+        self.validate_attributes_against_schema(
+            entity.tenant_id,
+            &entity_type_code,
+            &entity.attributes,
+        )
+        .await?;
+
         // ── Auto-assign business number ────────────────────────────────────────
         // If no business number is present, auto-generate one from the sequence.
         // This assigns CUST-000001, VEND-000001, PROD-000001, etc.
-        let entity_type_str = format!("{:?}", entity.entity_type);
+        let entity_type_str = entity.entity_type.to_string();
         let number_key = format!("{}_number", entity_type_str.to_lowercase());
 
         let needs_number = !entity.attributes.iter().any(|a| {
@@ -254,9 +468,10 @@ impl EntityService {
         // Encrypt PII attributes before writing to DB. The in-memory entity
         // retains plaintext for outbox events and cache — the security boundary
         // is the PostgreSQL database.
+        let schema_pii_keys = Self::load_schema_pii_keys(&self.pool, ctx.tenant_id).await;
         let db_entity = if let Some(enc) = &self.field_encryption {
             let mut e = entity.clone();
-            e.attributes = Self::encrypt_pii_attributes(e.attributes, enc);
+            e.attributes = Self::encrypt_pii_attributes(e.attributes, enc, &schema_pii_keys);
             e
         } else {
             entity.clone()

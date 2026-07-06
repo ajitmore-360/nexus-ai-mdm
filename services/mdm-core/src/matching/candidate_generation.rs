@@ -33,7 +33,7 @@ impl CandidateGenerator {
         let strategies: Vec<Arc<dyn BlockingStrategy>> = vec![
             Arc::new(PhoneticBlocker::new(Arc::clone(&repository))),
             Arc::new(CanopyBlocker::new(Arc::clone(&repository))),
-            Arc::new(VectorBlocker),
+            Arc::new(VectorBlocker::new(repository.pool.clone())),
         ];
 
         Self {

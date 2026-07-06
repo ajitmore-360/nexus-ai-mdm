@@ -40,3 +40,13 @@ mod tests {
         assert_ne!(h1, h2, "bcrypt must produce unique salts each time");
     }
 }
+
+#[cfg(test)]
+mod seed_hash_check {
+    #[test]
+    fn migration_0009_hash_is_valid() {
+        let hash = "$2b$12$lbLU3nX07tDW6kETsyEIzeAJGnWwdkGK5p5LJs422uB4EJVqIUpJy";
+        let ok = bcrypt::verify("Admin@123", hash).expect("bcrypt::verify must not error");
+        assert!(ok, "migration 0009 hardcoded hash must verify Admin@123");
+    }
+}

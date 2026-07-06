@@ -33,8 +33,12 @@ impl RagPipeline {
         question:    &str,
         doc_type:    Option<&str>,
     ) -> Result<RagAnswer> {
-        // 1. Embed query
-        let query_embedding = self.encoder.encode(question).await?;
+        // 1. Embed query + fetch live stats in parallel
+        let (query_embedding, live_stats) = tokio::join!(
+            self.encoder.encode(question),
+            self.retriever.fetch_live_stats(tenant_id),
+        );
+        let query_embedding = query_embedding?;
 
         // 2. Retrieve relevant docs
         let docs = self
@@ -42,9 +46,9 @@ impl RagPipeline {
             .retrieve(tenant_id, &query_embedding, doc_type)
             .await?;
 
-        // 3. Build augmented prompt
-        let context  = RagRetriever::format_context(&docs);
-        let prompt   = Prompts::copilot_rag(question, &context, tenant_name);
+        // 3. Build augmented prompt (RAG context + live counts)
+        let context = self.retriever.format_context(&docs);
+        let prompt  = Prompts::copilot_rag(question, &context, tenant_name, &live_stats);
 
         // 4. Generate
         let answer = self.llm.generate(&prompt).await?;
@@ -54,6 +58,28 @@ impl RagPipeline {
             source_docs: docs,
             question: question.to_string(),
         })
+    }
+
+    /// Build the RAG-augmented prompt without calling the LLM.
+    ///
+    /// Runs the embed → retrieve → format steps and returns the final prompt
+    /// string.  The streaming handler calls this first, then passes the prompt
+    /// to `OllamaClient::generate_stream()` directly.
+    pub async fn build_prompt(
+        &self,
+        tenant_id:   Uuid,
+        tenant_name: &str,
+        question:    &str,
+        doc_type:    Option<&str>,
+    ) -> Result<String> {
+        let (query_embedding, live_stats) = tokio::join!(
+            self.encoder.encode(question),
+            self.retriever.fetch_live_stats(tenant_id),
+        );
+        let query_embedding = query_embedding?;
+        let docs    = self.retriever.retrieve(tenant_id, &query_embedding, doc_type).await?;
+        let context = self.retriever.format_context(&docs);
+        Ok(Prompts::copilot_rag(question, &context, tenant_name, &live_stats))
     }
 
     /// Index a document (plain text) into the knowledge base.

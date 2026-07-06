@@ -38,6 +38,15 @@ services:
     profiles: ["disabled"]
   ollama-init:
     profiles: ["disabled"]
+  # Disable monitoring stack — depends on api-gateway which is also disabled
+  prometheus:
+    profiles: ["disabled"]
+  alertmanager:
+    profiles: ["disabled"]
+  grafana:
+    profiles: ["disabled"]
+  postgres-exporter:
+    profiles: ["disabled"]
 
   # Expose Ollama locally for direct llm calls from cargo run services
   ollama:
@@ -50,3 +59,13 @@ services:
   kafka-ui:
     ports:
       - "9000:8080"
+
+  # Mailhog — local SMTP test server for invite emails
+  # Web UI: http://localhost:8025  |  SMTP: localhost:1025
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: nexus-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI

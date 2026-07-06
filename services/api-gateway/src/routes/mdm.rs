@@ -28,6 +28,7 @@ pub async fn create_entity(
         "/entities",
         &headers,
         payload_json,
+        &state.cb_mdm,
     )
     .await
     {
@@ -59,6 +60,7 @@ pub async fn execute_match(
         "/match",
         &headers,
         payload_json,
+        &state.cb_mdm,
     )
     .await
     {

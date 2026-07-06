@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/models/api_responses.dart';
+import '../../../../shared/models/entity.dart';
+import '../../../entities/data/entity_repository.dart';
 import '../../data/match_repository.dart';
 
 // ──────────────────────────────────────────────
@@ -82,6 +85,8 @@ class _MatchReviewPageState extends State<MatchReviewPage>
   double _overallScore = 0.0;
   double _aiConfidence = 0.0;
   String _aiExplanation = 'Loading AI analysis…';
+  List<_FieldComparison> _fields = [];
+  bool _fieldsLoading = true;
 
   @override
   void initState() {
@@ -118,54 +123,86 @@ class _MatchReviewPageState extends State<MatchReviewPage>
           _aiExplanation = item.aiExplanation ??
               'AI analysis based on field-level similarity scores.';
         });
+        _loadFieldComparisons(item.sourceEntityId, item.candidateEntityId);
+      } else {
+        if (mounted) setState(() => _fieldsLoading = false);
       }
+    } else {
+      if (mounted) setState(() => _fieldsLoading = false);
     }
   }
 
-  static const _fields = [
-    _FieldComparison(
-      fieldName: 'Full Name',
-      sourceValue: 'Michael A. Rodriguez',
-      candidateValue: 'M. Rodriguez Jr.',
-      matchType: _MatchType.fuzzy,
-      score: 0.87,
-    ),
-    _FieldComparison(
-      fieldName: 'Email',
-      sourceValue: 'mrodriguez@company.com',
-      candidateValue: 'michael.r@company.com',
-      matchType: _MatchType.fuzzy,
-      score: 0.72,
-    ),
-    _FieldComparison(
-      fieldName: 'Phone',
-      sourceValue: '+1-555-0147',
-      candidateValue: '+1 (555) 0147',
-      matchType: _MatchType.exact,
-      score: 1.0,
-    ),
-    _FieldComparison(
-      fieldName: 'Address',
-      sourceValue: '350 Mission St, SF, CA',
-      candidateValue: '350 Mission Street, San Francisco, CA 94105',
-      matchType: _MatchType.fuzzy,
-      score: 0.91,
-    ),
-    _FieldComparison(
-      fieldName: 'Tax ID',
-      sourceValue: '92-1847365',
-      candidateValue: '92-1847365',
-      matchType: _MatchType.exact,
-      score: 1.0,
-    ),
-    _FieldComparison(
-      fieldName: 'Revenue (USD)',
-      sourceValue: '\$4,200,000',
-      candidateValue: '\$3,800,000',
-      matchType: _MatchType.conflict,
-      score: 0.38,
-    ),
-  ];
+  Future<void> _loadFieldComparisons(String sourceId, String candidateId) async {
+    final entityRepo = EntityRepository(ApiClient());
+    final results = await Future.wait([
+      entityRepo.getEntity(sourceId),
+      entityRepo.getEntity(candidateId),
+    ]);
+    if (!mounted) return;
+
+    CanonicalEntity? src, cand;
+    if (results[0] case Success<CanonicalEntity>(:final data)) src = data;
+    if (results[1] case Success<CanonicalEntity>(:final data)) cand = data;
+
+    final srcAttrs = src?.attributes ?? {};
+    final candAttrs = cand?.attributes ?? {};
+    final allKeys = {...srcAttrs.keys, ...candAttrs.keys};
+
+    final comparisons = allKeys.map((key) {
+      final s = srcAttrs[key];
+      final c = candAttrs[key];
+      final sv = s?.value?.toString() ?? '—';
+      final cv = c?.value?.toString() ?? '—';
+
+      _MatchType type;
+      double score;
+      if (sv == cv) {
+        type = _MatchType.exact;
+        score = 1.0;
+      } else if (sv == '—' || cv == '—') {
+        type = _MatchType.conflict;
+        score = 0.0;
+      } else {
+        // Simple similarity: length-overlap ratio
+        final shorter = sv.length < cv.length ? sv : cv;
+        final longer  = sv.length >= cv.length ? sv : cv;
+        final overlap = shorter.split('').where(longer.contains).length;
+        score = longer.isEmpty ? 0.0 : (overlap / longer.length).clamp(0.0, 1.0);
+        type = score >= 0.8 ? _MatchType.fuzzy : _MatchType.conflict;
+      }
+
+      return _FieldComparison(
+        fieldName: s?.displayName ?? c?.displayName ?? key,
+        sourceValue: sv,
+        candidateValue: cv,
+        matchType: type,
+        score: score,
+      );
+    }).toList()
+      ..sort((a, b) => b.score.compareTo(a.score));
+
+    setState(() {
+      _fields = comparisons;
+      // Update entity names now that we have real data
+      if (src != null) {
+        _source = _ReviewRecord(
+          entityName: src.displayName,
+          entityId: src.id,
+          sourceSystem: src.sourceSystems.firstOrNull ?? '—',
+          type: src.type.name,
+        );
+      }
+      if (cand != null) {
+        _candidate = _ReviewRecord(
+          entityName: cand.displayName,
+          entityId: cand.id,
+          sourceSystem: cand.sourceSystems.firstOrNull ?? '—',
+          type: cand.type.name,
+        );
+      }
+      _fieldsLoading = false;
+    });
+  }
 
   @override
   void dispose() {
@@ -352,11 +389,32 @@ class _MatchReviewPageState extends State<MatchReviewPage>
     ).animate(delay: 100.ms).fadeIn(duration: 400.ms).slideY(begin: -0.05, end: 0);
   }
 
-  void _triggerAiExplain() {
+  Future<void> _triggerAiExplain() async {
     setState(() => _isLoadingAi = true);
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _isLoadingAi = false);
-    });
+    final prompt =
+        'Briefly explain why "${_source.entityName}" (${_source.sourceSystem}) '
+        'and "${_candidate.entityName}" (${_candidate.sourceSystem}) are a '
+        '${(_overallScore * 100).toStringAsFixed(0)}% match. '
+        'Focus on the key matching factors in 2-3 sentences.';
+    try {
+      final client = ApiClient();
+      final resp = await client.post<Map<String, dynamic>>(
+        '/v1/copilot',
+        data: {'message': prompt},
+      );
+      if (!mounted) return;
+      final data = resp.data;
+      final answer = data?['answer'] as String? ??
+          data?['response'] as String? ??
+          _aiExplanation;
+      setState(() {
+        _aiExplanation = answer;
+        _isLoadingAi = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingAi = false);
+    }
   }
 
   // ── Main 2-Column Layout ─────────────────────
@@ -399,11 +457,17 @@ class _MatchReviewPageState extends State<MatchReviewPage>
         const SizedBox(height: 24),
 
         // Field comparisons
-        ..._fields.asMap().entries.map((e) {
-          final i = e.key;
-          final field = e.value;
-          return _buildFieldRow(field, i).animate(delay: (i * 60 + 200).ms).fadeIn(duration: 350.ms).slideX(begin: 0.02, end: 0);
-        }),
+        if (_fieldsLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          )
+        else
+          ..._fields.asMap().entries.map((e) {
+            final i = e.key;
+            final field = e.value;
+            return _buildFieldRow(field, i).animate(delay: (i * 60 + 200).ms).fadeIn(duration: 350.ms).slideX(begin: 0.02, end: 0);
+          }),
       ],
     );
   }

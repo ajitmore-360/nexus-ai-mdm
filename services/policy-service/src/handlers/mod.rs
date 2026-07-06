@@ -10,7 +10,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::models::{
-    ApiResponse, CreateRuleRequest, EvaluateMergeRequest,
+    ApiResponse, CreateRuleRequest, UpdateRuleRequest, EvaluateMergeRequest,
     GdprRequest, PolicyContext, PolicyOperation,
     RecordConsentRequest, WithdrawConsentQuery,
 };
@@ -105,8 +105,48 @@ pub async fn delete_rule(
     Query(q):      Query<TenantIdQuery>,
 ) -> Response {
     match state.rule_repo.delete_rule(rule_id, q.tenant_id).await {
-        Ok(deleted) => ok!(serde_json::json!({ "deleted": deleted })),
-        Err(e)      => err!(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        Ok(deleted) => {
+            // Remove the rule from OPA so it no longer affects evaluations.
+            state.evaluator.remove_from_opa(rule_id).await;
+            ok!(serde_json::json!({ "deleted": deleted }))
+        }
+        Err(e) => err!(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+// ── PUT /policy/rules/:id ─────────────────────────────────────────────────
+
+pub async fn update_rule(
+    State(state):  State<Arc<AppState>>,
+    Path(rule_id): Path<Uuid>,
+    Query(q):      Query<TenantIdQuery>,
+    Json(req):     Json<UpdateRuleRequest>,
+) -> Response {
+    match state.rule_repo.update_rule(rule_id, q.tenant_id, req).await {
+        Ok(Some(rule)) => ok!(rule),
+        Ok(None)       => err!(StatusCode::NOT_FOUND, "rule not found"),
+        Err(e)         => err!(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+// ── PATCH /policy/rules/:id/toggle ───────────────────────────────────────
+
+pub async fn toggle_rule(
+    State(state):  State<Arc<AppState>>,
+    Path(rule_id): Path<Uuid>,
+    Query(q):      Query<TenantIdQuery>,
+) -> Response {
+    match state.rule_repo.toggle_active(rule_id, q.tenant_id).await {
+        Ok(Some(status)) => {
+            // When a rule is deactivated remove it from OPA immediately so it
+            // stops influencing evaluations before the next DB query cycle.
+            if status == "inactive" {
+                state.evaluator.remove_from_opa(rule_id).await;
+            }
+            ok!(serde_json::json!({ "status": status }))
+        }
+        Ok(None) => err!(StatusCode::NOT_FOUND, "rule not found"),
+        Err(e)   => err!(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     }
 }
 

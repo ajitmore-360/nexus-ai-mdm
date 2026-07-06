@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../../core/network/api_client.dart' hide ApiException;
 import '../../../core/constants/app_constants.dart';
@@ -9,12 +11,71 @@ class CopilotRepository {
 
   CopilotRepository(this._apiClient);
 
-  /// Sends a chat message and streams the AI response character-by-character.
+  /// Sends a chat message and streams the AI response in real time using SSE.
   ///
-  /// Calls the copilot endpoint; on success it simulates streaming by yielding
-  /// the response text one character at a time with [AppConstants.aiResponseStreamDelayMs]
-  /// delay between each character. On error, yields an error message string.
+  /// Connects to /copilot/stream; Ollama tokens arrive as SSE events and are
+  /// yielded immediately.  Falls back to /copilot (simulated char-by-char) if
+  /// the streaming endpoint is unreachable or returns an error before any data.
   Stream<String> chat(String message, {List<Map<String, String>>? history}) async* {
+    bool anyYielded = false;
+    try {
+      final response = await _apiClient.post<ResponseBody>(
+        AppConstants.aiCopilotStreamPath,
+        data: {
+          'message': message,
+          if (history != null && history.isNotEmpty) 'history': history,
+        },
+        options: Options(
+          responseType: ResponseType.stream,
+          // 120s covers worst-case CPU-only generation; streaming means data
+          // arrives incrementally so this is effectively a per-chunk timeout.
+          receiveTimeout: const Duration(seconds: 120),
+        ),
+      );
+
+      final body = response.data;
+      if (body == null) throw Exception('empty SSE response body');
+
+      // SSE format: "data: {json}\n" lines; Ollama tokens arrive as
+      // {"chunk":"<token>"}.  [DONE] marks end-of-stream.
+      final lineStream = body.stream
+          .cast<List<int>>()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter());
+
+      await for (final line in lineStream) {
+        if (!line.startsWith('data: ')) continue;
+        final data = line.substring(6).trim();
+        if (data == '[DONE]') break;
+        try {
+          final json = jsonDecode(data) as Map<String, dynamic>;
+          final chunk = json['chunk'] as String? ?? '';
+          if (chunk.isNotEmpty) {
+            yield chunk;
+            anyYielded = true;
+          }
+        } catch (_) {
+          // skip malformed SSE line
+        }
+      }
+      return; // SSE completed
+    } catch (e) {
+      assert(() {
+        debugPrint('[CopilotRepository] SSE stream error: $e');
+        return true;
+      }());
+      if (anyYielded) return; // partial response already delivered — don't retry
+    }
+
+    // Fallback: full response from /copilot, simulated char-by-char
+    yield* _simulatedChat(message, history: history);
+  }
+
+  /// Full-response fallback — calls /copilot and simulates token streaming.
+  Stream<String> _simulatedChat(
+    String message, {
+    List<Map<String, String>>? history,
+  }) async* {
     try {
       final response = await _apiClient.post<Map<String, dynamic>>(
         AppConstants.aiCopilotPath,
@@ -29,7 +90,6 @@ class CopilotRepository {
           ? CopilotResponse.fromJson(data).answer
           : 'I received your query but got an empty response. Please try again.';
 
-      // Stream character-by-character to simulate token streaming
       for (int i = 0; i < fullText.length; i++) {
         yield fullText[i];
         await Future.delayed(
@@ -38,10 +98,9 @@ class CopilotRepository {
       }
     } catch (e) {
       assert(() {
-        debugPrint('[CopilotRepository] chat error: $e');
+        debugPrint('[CopilotRepository] _simulatedChat error: $e');
         return true;
       }());
-      // Yield a friendly error message streamed the same way
       const errorText = 'I\'m having trouble connecting to the AI service. '
           'Please check your connection and try again.';
       for (int i = 0; i < errorText.length; i++) {

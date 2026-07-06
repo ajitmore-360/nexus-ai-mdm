@@ -10,6 +10,7 @@ class AdminFormField extends StatelessWidget {
   final String? suffixText;
   final Widget? suffix;
   final bool obscureText;
+  final int? maxLines;
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
 
@@ -21,6 +22,7 @@ class AdminFormField extends StatelessWidget {
     this.suffixText,
     this.suffix,
     this.obscureText = false,
+    this.maxLines,
     this.keyboardType,
     this.validator,
   });
@@ -42,6 +44,7 @@ class AdminFormField extends StatelessWidget {
         TextFormField(
           controller: controller,
           obscureText: obscureText,
+          maxLines: obscureText ? 1 : (maxLines ?? 1),
           keyboardType: keyboardType,
           validator: validator,
           style: AppTextStyles.inputText,
@@ -220,7 +223,7 @@ class AdminStatusChip extends StatelessWidget {
   }
 }
 
-/// Role chip: Admin=violet, Steward=cyan, Analyst=amber, Viewer=muted.
+/// Role chip: Admin=violet, BusinessAdmin=indigo, Steward=cyan, Analyst=amber, Viewer=muted.
 class AdminRoleChip extends StatelessWidget {
   final String role;
   const AdminRoleChip({super.key, required this.role});
@@ -231,6 +234,8 @@ class AdminRoleChip extends StatelessWidget {
     Color color;
     if (r == 'admin') {
       color = AppColors.primary;
+    } else if (r == 'business_admin') {
+      color = const Color(0xFF6366F1); // indigo — distinct from admin violet
     } else if (r == 'steward') {
       color = AppColors.cyan;
     } else if (r == 'analyst') {
@@ -238,7 +243,11 @@ class AdminRoleChip extends StatelessWidget {
     } else {
       color = AppColors.mutedText;
     }
-    final label = role.isNotEmpty ? role[0].toUpperCase() + role.substring(1) : role;
+    final label = switch (r) {
+      'business_admin' => 'Business Admin',
+      'super_admin'    => 'Product Admin',
+      _                => role.isNotEmpty ? role[0].toUpperCase() + role.substring(1) : role,
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(

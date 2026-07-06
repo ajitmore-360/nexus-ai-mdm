@@ -14,20 +14,15 @@ use crate::matching::{
     policy::MatchingPolicy,
 };
 
-// ReviewEngine is a valid decision component — currently the Matcher uses
-// inline threshold checks; wiring ReviewEngine in is a planned improvement.
-#[allow(dead_code)]
 pub struct ReviewEngine {
     policy: Arc<MatchingPolicy>,
 }
 
 impl ReviewEngine {
-    #[allow(dead_code)]
     pub fn new(policy: Arc<MatchingPolicy>) -> Self {
         Self { policy }
     }
 
-    #[allow(dead_code)]
     pub fn evaluate(&self, result: &MatchEvaluationResult) -> MatchDecision {
         let score = result.breakdown.total_score;
 
@@ -46,7 +41,6 @@ impl ReviewEngine {
         MatchDecision::NoMatch
     }
 
-    #[allow(dead_code)]
     pub fn create_review_case(
         &self,
         source_entity_id: Uuid,
@@ -124,7 +118,6 @@ impl ReviewEngine {
         reasons.join("; ")
     }
 
-    #[allow(dead_code)]
     pub fn detect_ambiguous_candidates(&self, top_score: f32, second_score: f32) -> bool {
         (top_score - second_score).abs() < self.policy.ambiguity_delta
     }

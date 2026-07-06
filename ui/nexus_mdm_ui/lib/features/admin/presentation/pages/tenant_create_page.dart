@@ -1,21 +1,22 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/admin_repository.dart';
 import '../../../../shared/models/api_responses.dart';
 import '../widgets/admin_form_widgets.dart';
+import '../../../../core/validation/validators.dart';
 
-class TenantCreateDialog extends StatefulWidget {
-  final void Function(TenantModel tenant) onCreated;
-  const TenantCreateDialog({super.key, required this.onCreated});
+class TenantCreatePage extends StatefulWidget {
+  const TenantCreatePage({super.key});
 
   @override
-  State<TenantCreateDialog> createState() => _TenantCreateDialogState();
+  State<TenantCreatePage> createState() => _TenantCreatePageState();
 }
 
-class _TenantCreateDialogState extends State<TenantCreateDialog> {
+class _TenantCreatePageState extends State<TenantCreatePage> {
   final _repo = GetIt.instance<AdminRepository>();
 
   int _step = 1;
@@ -62,7 +63,7 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
   }
 
   Future<void> _goToStep2() async {
-    if (!_step1Key.currentState!.validate()) return;
+    if (_step1Key.currentState == null || !_step1Key.currentState!.validate()) return;
     setState(() => _submitting = true);
 
     final result = await _repo.createTenant(
@@ -86,22 +87,20 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           backgroundColor: AppColors.cardSurface,
           content: Text(exception.message,
-              style:
-                  AppTextStyles.bodyMedium.copyWith(color: AppColors.error)),
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error)),
         ));
     }
   }
 
   Future<void> _submitStep2() async {
-    if (!_step2Key.currentState!.validate()) return;
+    if (_step2Key.currentState == null || !_step2Key.currentState!.validate()) return;
     if (_createdTenant == null) return;
     setState(() => _submitting = true);
 
     final result = await _repo.createAdminUser(
       _createdTenant!.id,
       email: _emailCtrl.text.trim(),
-      fullName:
-          '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}',
+      fullName: '${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}',
       tempPassword: _passwordCtrl.text,
     );
     if (!mounted) return;
@@ -109,54 +108,53 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
 
     switch (result) {
       case Success():
-        widget.onCreated(_createdTenant!);
-        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           backgroundColor: AppColors.cardSurface,
           content: Text(
               'Tenant "${_createdTenant!.name}" created successfully.',
-              style: AppTextStyles.bodyMedium
-                  .copyWith(color: AppColors.success)),
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.success)),
         ));
+        context.go('/dashboard/admin/tenants');
       case Failure(:final exception):
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           backgroundColor: AppColors.cardSurface,
           content: Text(exception.message,
-              style:
-                  AppTextStyles.bodyMedium.copyWith(color: AppColors.error)),
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error)),
         ));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: AppColors.cardSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.divider),
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 8),
-              _buildStepIndicator(),
-              const SizedBox(height: 24),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: _step == 1
-                    ? _buildStep1()
-                    : _buildStep2(),
+    return Scaffold(
+      backgroundColor: AppColors.navyBackground,
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.cardSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.divider),
               ),
-              const SizedBox(height: 24),
-              _buildActions(),
-            ],
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 8),
+                  _buildStepIndicator(),
+                  const SizedBox(height: 24),
+                  if (_step == 1) _buildStep1(),
+                  if (_step == 2) _buildStep2(),
+                  const SizedBox(height: 24),
+                  _buildActions(),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -193,7 +191,7 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
         IconButton(
           icon: const Icon(Icons.close,
               size: 18, color: AppColors.secondaryText),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.go('/dashboard/admin/tenants'),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
         ),
@@ -204,22 +202,14 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
   Widget _buildStepIndicator() {
     return Row(
       children: [
-        _StepDot(
-            number: 1,
-            active: _step == 1,
-            done: _step > 1,
-            label: 'Tenant'),
+        _StepDot(number: 1, active: _step == 1, done: _step > 1, label: 'Tenant'),
         Expanded(
           child: Container(
             height: 1,
             color: _step > 1 ? AppColors.primary : AppColors.divider,
           ),
         ),
-        _StepDot(
-            number: 2,
-            active: _step == 2,
-            done: false,
-            label: 'Admin User'),
+        _StepDot(number: 2, active: _step == 2, done: false, label: 'Admin User'),
       ],
     );
   }
@@ -228,13 +218,13 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
     return Form(
       key: _step1Key,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           AdminFormField(
             label: 'TENANT NAME',
             controller: _nameCtrl,
             hint: 'Acme Corporation',
-            validator: (v) =>
-                (v == null || v.isEmpty) ? 'Required' : null,
+            validator: Validators.required('Tenant name'),
           ),
           const SizedBox(height: 16),
           AdminFormField(
@@ -242,13 +232,7 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
             controller: _subdomainCtrl,
             hint: 'acme',
             suffixText: '.nexusmdm.io',
-            validator: (v) {
-              if (v == null || v.isEmpty) return 'Required';
-              if (!RegExp(r'^[a-z0-9-]+$').hasMatch(v)) {
-                return 'Lowercase letters, numbers, hyphens only';
-              }
-              return null;
-            },
+            validator: Validators.subdomain,
           ),
           const SizedBox(height: 16),
           Row(
@@ -286,10 +270,7 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
                   label: 'MAX USERS',
                   controller: _maxUsersCtrl,
                   keyboardType: TextInputType.number,
-                  validator: (v) =>
-                      (v == null || int.tryParse(v) == null)
-                          ? 'Must be a number'
-                          : null,
+                  validator: Validators.number(min: 1, label: 'Max users'),
                 ),
               ),
               const SizedBox(width: 16),
@@ -298,10 +279,7 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
                   label: 'MAX ENTITIES',
                   controller: _maxEntitiesCtrl,
                   keyboardType: TextInputType.number,
-                  validator: (v) =>
-                      (v == null || int.tryParse(v) == null)
-                          ? 'Must be a number'
-                          : null,
+                  validator: Validators.number(min: 1, label: 'Max entities'),
                 ),
               ),
             ],
@@ -315,6 +293,7 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
     return Form(
       key: _step2Key,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -323,8 +302,7 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
                   label: 'FIRST NAME',
                   controller: _firstNameCtrl,
                   hint: 'Alex',
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Required' : null,
+                  validator: Validators.required('First name'),
                 ),
               ),
               const SizedBox(width: 16),
@@ -333,8 +311,7 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
                   label: 'LAST NAME',
                   controller: _lastNameCtrl,
                   hint: 'Chen',
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Required' : null,
+                  validator: Validators.required('Last name'),
                 ),
               ),
             ],
@@ -345,11 +322,7 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
             controller: _emailCtrl,
             hint: 'admin@acme.com',
             keyboardType: TextInputType.emailAddress,
-            validator: (v) {
-              if (v == null || v.isEmpty) return 'Required';
-              if (!v.contains('@')) return 'Enter a valid email';
-              return null;
-            },
+            validator: Validators.email,
           ),
           const SizedBox(height: 16),
           AdminFormField(
@@ -369,9 +342,8 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
                     .copyWith(color: AppColors.violetLight),
               ),
             ),
-            validator: (v) => (v == null || v.length < 8)
-                ? 'At least 8 characters'
-                : null,
+            validator: (v) =>
+                (v == null || v.length < 8) ? 'At least 8 characters' : null,
           ),
         ],
       ),
@@ -383,7 +355,7 @@ class _TenantCreateDialogState extends State<TenantCreateDialog> {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.go('/dashboard/admin/tenants'),
           child: Text('Cancel',
               style: AppTextStyles.buttonMedium
                   .copyWith(color: AppColors.secondaryText)),
@@ -455,9 +427,7 @@ class _StepDot extends StatelessWidget {
         const SizedBox(height: 4),
         Text(label,
             style: AppTextStyles.labelSmall.copyWith(
-                color: active
-                    ? AppColors.primaryText
-                    : AppColors.mutedText,
+                color: active ? AppColors.primaryText : AppColors.mutedText,
                 fontSize: 10)),
       ],
     );

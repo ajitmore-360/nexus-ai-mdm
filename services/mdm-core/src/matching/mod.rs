@@ -6,6 +6,8 @@ pub mod models;
 pub mod policy;
 pub mod review;
 pub mod scoring;
+pub mod semantic_client;
 
 pub use matcher::Matcher;
 pub use policy::MatchingPolicy;
+pub use semantic_client::SemanticClient;

@@ -4,6 +4,7 @@ pub mod handler;
 pub mod manager;
 pub mod message;
 pub mod session;
+pub mod subscriber;
 
 use std::sync::Arc;
 use std::time::Duration;

@@ -61,7 +61,10 @@ impl EnrichmentSettings {
             enable_experian: env_bool("ENABLE_EXPERIAN", true),
             enable_address_validation: env_bool("ENABLE_ADDRESS_VALIDATION", true),
 
-            mock_mode: env_bool("ENRICHMENT_MOCK_MODE", true),
+            // Default false so a K8s/bare-metal deployment without docker-compose
+            // does not silently return fake enrichment data.  Set
+            // ENRICHMENT_MOCK_MODE=true explicitly in dev/CI environments.
+            mock_mode: env_bool("ENRICHMENT_MOCK_MODE", false),
 
             dnb_api_key:      env::var("DNB_API_KEY").ok(),
             experian_api_key: env::var("EXPERIAN_API_KEY").ok(),

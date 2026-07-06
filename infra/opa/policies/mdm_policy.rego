@@ -17,24 +17,22 @@ default warnings = []
 
 # ── Field masking ─────────────────────────────────────────────────────────────
 
-# Mask SSN from non-admin users
+# SSN — visible only to admin and super_admin
 masked_fields[field] {
     field := "ssn"
-    input.user_role != "admin"
-    input.user_role != "compliance"
+    not input.user_role in {"admin", "super_admin"}
 }
 
-# Mask tax_id from viewer role
+# tax_id — masked for viewer only; all other roles can see it
 masked_fields[field] {
     field := "tax_id"
     input.user_role == "viewer"
 }
 
-# Mask bank_account from all non-admin roles on read
+# bank_account — visible only to admin and super_admin (all operations)
 masked_fields[field] {
     field := "bank_account"
-    input.operation == "read"
-    input.user_role != "admin"
+    not input.user_role in {"admin", "super_admin"}
 }
 
 # ── Required fields ───────────────────────────────────────────────────────────

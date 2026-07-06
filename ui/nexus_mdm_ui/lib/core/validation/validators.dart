@@ -175,6 +175,21 @@ class Validators {
     return null;
   }
 
+  // ── Subdomain ─────────────────────────────────────────────────────────────
+
+  static final _subdomainRe = RegExp(r'^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$');
+
+  /// Subdomains: lowercase letters, digits, hyphens; cannot start/end with hyphen.
+  static String? subdomain(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Subdomain is required';
+    final v = value.trim();
+    if (v.length < 2) return 'Subdomain must be at least 2 characters';
+    if (!_subdomainRe.hasMatch(v)) {
+      return 'Lowercase letters, numbers and hyphens only; cannot start or end with a hyphen';
+    }
+    return null;
+  }
+
   // ── Entity type ───────────────────────────────────────────────────────────
 
   static final _entityTypeRe = RegExp(r'^[a-zA-Z][a-zA-Z0-9_]{1,63}$');

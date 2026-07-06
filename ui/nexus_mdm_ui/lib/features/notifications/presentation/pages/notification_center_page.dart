@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:go_router/go_router.dart';
 import 'package:get_it/get_it.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/network/websocket_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -59,7 +62,6 @@ class _Notification {
   final String title;
   final String body;
   final String? entityId;
-  final String? entityName;
   final DateTime timestamp;
   bool isRead;
 
@@ -69,7 +71,6 @@ class _Notification {
     required this.title,
     required this.body,
     this.entityId,
-    this.entityName,
     required this.timestamp,
     this.isRead = false,
   });
@@ -197,6 +198,56 @@ class _NotificationCenterPanelState extends State<NotificationCenterPanel> {
     _msgSub = _wsClient.messages.listen(_onWsMessage);
     _stateListener = () { if (mounted) setState(() {}); };
     _wsClient.connectionState.addListener(_stateListener!);
+    _loadFromAuditLog();
+  }
+
+  Future<void> _loadFromAuditLog() async {
+    try {
+      final api = ApiClient();
+      final resp = await api.get<Map<String, dynamic>>(
+        AppConstants.auditEventsPath,
+        queryParameters: {'page_size': '20'},
+      );
+      if (!mounted) return;
+      final items = resp.data?['items'] as List<dynamic>? ?? [];
+      final loaded = items.map((e) {
+        final m = e as Map<String, dynamic>;
+        final eventType = m['event_type'] as String? ?? 'system';
+        final notifType = _notifTypeFromEvent(eventType);
+        final ts = m['timestamp'] as String?;
+        return _Notification(
+          id: m['event_id'] as String? ?? 'audit_${items.indexOf(e)}',
+          type: notifType,
+          title: eventType.replaceAll('_', ' ').replaceFirstMapped(
+              RegExp(r'^.'), (x) => x[0]!.toUpperCase()),
+          body: _bodyFromEvent(m),
+          entityId: (m['aggregate_id'] as String?),
+          timestamp: ts != null ? DateTime.tryParse(ts) ?? DateTime.now() : DateTime.now(),
+          isRead: true,
+        );
+      }).toList();
+      if (mounted) setState(() => _notifications.insertAll(0, loaded));
+    } catch (_) {}
+  }
+
+  static _NotifType _notifTypeFromEvent(String eventType) {
+    final e = eventType.toLowerCase();
+    if (e.contains('match') || e.contains('duplicate')) return _NotifType.match;
+    if (e.contains('merge') || e.contains('golden'))    return _NotifType.merge;
+    if (e.contains('quality') || e.contains('violat'))  return _NotifType.quality;
+    return _NotifType.system;
+  }
+
+  static String _bodyFromEvent(Map<String, dynamic> m) {
+    final eventType = (m['event_type'] as String? ?? '').toLowerCase();
+    final aggType = m['aggregate_type'] as String? ?? 'entity';
+    final aggId = m['aggregate_id'] as String? ?? '';
+    final short = aggId.length > 8 ? aggId.substring(0, 8) : aggId;
+    if (eventType.contains('match'))   return 'Match event on $aggType $short…';
+    if (eventType.contains('merge'))   return 'Merge on $aggType $short… completed';
+    if (eventType.contains('golden'))  return '$aggType $short… elevated to golden record';
+    if (eventType.contains('quality')) return 'Quality issue detected on $aggType $short…';
+    return '$aggType $short… — ${(m['event_type'] as String? ?? '').replaceAll('_', ' ')}';
   }
 
   @override
@@ -237,72 +288,7 @@ class _NotificationCenterPanelState extends State<NotificationCenterPanel> {
     if (mounted) setState(() => _notifications.insert(0, notif));
   }
 
-  final List<_Notification> _notifications = [
-    _Notification(
-      id: 'n1',
-      type: _NotifType.match,
-      title: 'High confidence match detected',
-      body: 'Michael Rodriguez ↔ M. Rodriguez Jr. — 93% match score',
-      entityId: 'ENT-003',
-      entityName: 'Michael Rodriguez',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
-    ),
-    _Notification(
-      id: 'n2',
-      type: _NotifType.merge,
-      title: 'Golden record created',
-      body: 'Alexandra Chen elevated to golden status from 3 source records',
-      entityId: 'ENT-012',
-      entityName: 'Alexandra Chen',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-    ),
-    _Notification(
-      id: 'n3',
-      type: _NotifType.quality,
-      title: 'Data quality alert',
-      body: '47 records missing email from Salesforce import batch SF-2024-Q4',
-      timestamp: DateTime.now().subtract(const Duration(hours: 1)),
-      isRead: true,
-    ),
-    _Notification(
-      id: 'n4',
-      type: _NotifType.system,
-      title: 'Bulk import completed',
-      body: '2,341 new entities ingested from SAP ERP connector',
-      timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-      isRead: true,
-    ),
-    _Notification(
-      id: 'n5',
-      type: _NotifType.match,
-      title: 'Review queue threshold reached',
-      body: 'Match queue has 50+ pending items — 12 marked critical priority',
-      timestamp: DateTime.now().subtract(const Duration(hours: 3)),
-    ),
-    _Notification(
-      id: 'n6',
-      type: _NotifType.merge,
-      title: 'AI analysis ready',
-      body: 'Weekly duplicate analysis report is ready for review',
-      timestamp: DateTime.now().subtract(const Duration(hours: 3, minutes: 30)),
-      isRead: true,
-    ),
-    _Notification(
-      id: 'n7',
-      type: _NotifType.quality,
-      title: 'Survivorship rule updated',
-      body: 'Rule "email_trusted_source" was modified by admin@nexus.io',
-      timestamp: DateTime.now().subtract(const Duration(hours: 5)),
-      isRead: true,
-    ),
-    _Notification(
-      id: 'n8',
-      type: _NotifType.system,
-      title: 'Connector health degraded',
-      body: 'Oracle ERP connector latency above threshold — p99 > 4 000 ms',
-      timestamp: DateTime.now().subtract(const Duration(hours: 8)),
-    ),
-  ];
+  final List<_Notification> _notifications = [];
 
   int get _unreadCount => _notifications.where((n) => !n.isRead).length;
 
@@ -601,7 +587,7 @@ class _NotificationCenterPanelState extends State<NotificationCenterPanel> {
                     if (notif.entityId != null) ...[
                       const SizedBox(height: 6),
                       GestureDetector(
-                        onTap: () {},
+                        onTap: () => context.go('/dashboard/entities/${notif.entityId}'),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -609,7 +595,7 @@ class _NotificationCenterPanelState extends State<NotificationCenterPanel> {
                                 size: 11, color: AppColors.primary),
                             const SizedBox(width: 4),
                             Text(
-                              notif.entityName ?? notif.entityId!,
+                              notif.entityId!,
                               style: AppTextStyles.labelSmall.copyWith(
                                 color: AppColors.primary,
                                 decoration: TextDecoration.underline,

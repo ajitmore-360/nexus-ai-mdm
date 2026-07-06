@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import '../auth/auth_manager.dart';
 import '../constants/app_constants.dart';
 import '../security/secure_storage.dart';
 
@@ -147,20 +148,25 @@ class _AuthInterceptor extends Interceptor {
   @override
   void onRequest(
       RequestOptions options, RequestInterceptorHandler handler) async {
+    // Auth token — read independently so a storage failure here does not
+    // prevent the tenant header from being set below.
     try {
-      final token    = await SecureStorage.read(AppConstants.storageAccessToken);
-      final tenantId = await SecureStorage.read(AppConstants.storageTenantId);
-
+      final token = await SecureStorage.read(AppConstants.storageAccessToken);
       if (token != null && token.isNotEmpty) {
         options.headers[AppConstants.authHeaderKey] =
             '${AppConstants.authHeaderPrefix}$token';
       }
+    } catch (_) {}
+
+    // Tenant ID — read from secure storage; omit header when absent so the
+    // backend correctly returns 401 rather than routing to the demo tenant.
+    try {
+      final tenantId = await AuthManager.getTenantId();
       if (tenantId != null && tenantId.isNotEmpty) {
         options.headers[AppConstants.tenantHeaderKey] = tenantId;
       }
-    } catch (_) {
-      // Secure storage unavailable — proceed without auth headers
-    }
+    } catch (_) {}
+
     handler.next(options);
   }
 
@@ -176,9 +182,16 @@ class _AuthInterceptor extends Interceptor {
             AppConstants.refreshTokenPath,
             data: {'refresh_token': refreshToken},
           );
-          final newToken = response.data['access_token'] as String?;
+          final data = response.data['data'] as Map<String, dynamic>?
+              ?? response.data as Map<String, dynamic>? ?? {};
+          final newToken    = data['access_token']  as String?;
+          final newRefresh  = data['refresh_token'] as String?;
           if (newToken != null) {
             await SecureStorage.write(AppConstants.storageAccessToken, newToken);
+            // Persist the rotated refresh token so the next silent refresh works.
+            if (newRefresh != null && newRefresh.isNotEmpty) {
+              await SecureStorage.write(AppConstants.storageRefreshToken, newRefresh);
+            }
             err.requestOptions.headers[AppConstants.authHeaderKey] =
                 '${AppConstants.authHeaderPrefix}$newToken';
             final clonedRequest = await Dio().fetch(err.requestOptions);
@@ -186,8 +199,10 @@ class _AuthInterceptor extends Interceptor {
           }
         }
       } catch (_) {
-        // Refresh failed — clear all auth tokens from secure storage
+        // Refresh failed — clear all auth tokens then kick user to login.
         await SecureStorage.clearAuth();
+        AuthManager.onUnauthorized?.call();
+        return; // don't propagate — the redirect will rebuild the widget tree
       }
     }
     handler.next(err);
@@ -198,10 +213,9 @@ class _LoggingInterceptor extends Interceptor {
   @override
   void onRequest(
       RequestOptions options, RequestInterceptorHandler handler) {
-    // In production, use a proper logger
     assert(() {
-      debugPrint(
-          '[API] ${options.method} ${options.path} ${options.queryParameters}');
+      debugPrint('[API] ${options.method} ${options.uri}');
+      debugPrint('[API HEADERS] ${options.headers}');
       return true;
     }());
     handler.next(options);

@@ -25,16 +25,20 @@ use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 
 use config::Settings;
 use database::{config::DatabaseConfig, connection::create_pool as create_db_pool};
-use embeddings::Encoder;
+use embeddings::{encoder::entity_to_text, Encoder};
 use feedback::FeedbackProcessor;
 use llm::OllamaClient;
 use matching::SemanticMatcher;
-use nexus_redis::{create_pool as create_redis_pool, EntityCache, RedisConfig};
+use nexus_redis::{
+    create_pool as create_redis_pool,
+    queue::{task_types, TaskQueue},
+    EntityCache, RedisConfig,
+};
 use rag::{RagPipeline, RagRetriever};
 use state::AppState;
 
 use handlers::{
-    copilot, embed, health, index_document, record_feedback,
+    copilot, copilot_stream, embed, health, index_document, record_feedback,
     recommend_weights, scan_anomalies, semantic_match,
 };
 
@@ -61,7 +65,8 @@ async fn main() {
     // ---- Redis -------------------------------------------------------------
     let redis_cfg   = RedisConfig::from_env();
     let redis_pool  = create_redis_pool(&redis_cfg).expect("failed to connect to Redis");
-    let _cache = EntityCache::new(redis_pool.clone(), &redis_cfg.key_prefix);
+    let _cache      = EntityCache::new(redis_pool.clone(), &redis_cfg.key_prefix);
+    let task_queue  = Arc::new(TaskQueue::new(redis_pool.clone(), &redis_cfg.key_prefix));
 
     // ---- LLM (Ollama) ------------------------------------------------------
     let llm = Arc::new(OllamaClient::new(
@@ -70,6 +75,8 @@ async fn main() {
         &settings.embed_model,
         settings.llm_temperature,
         settings.llm_max_tokens,
+        settings.llm_num_ctx,
+        settings.llm_num_threads,
         settings.llm_timeout(),
     ));
 
@@ -84,7 +91,7 @@ async fn main() {
     let encoder = Arc::new(Encoder::new((*llm).clone()));
 
     // ---- RAG pipeline -------------------------------------------------------
-    let retriever     = RagRetriever::new(pool.clone(), settings.rag_top_k, settings.rag_min_score);
+    let retriever     = RagRetriever::new(pool.clone(), settings.rag_top_k, settings.rag_min_score, settings.rag_max_doc_chars, settings.rag_max_context_chars);
     let rag_pipeline  = Arc::new(RagPipeline::new(
         Encoder::new((*llm).clone()),
         retriever,
@@ -97,6 +104,92 @@ async fn main() {
     // ---- Feedback processor ------------------------------------------------
     let feedback = Arc::new(FeedbackProcessor::new(pool.clone()));
 
+    // ---- Embedding consumer loop ------------------------------------------
+    // Dequeues entity.embed tasks produced by mdm-core on entity create/patch
+    // and upserts the resulting vector into ai.entity_embeddings so that vector
+    // blocking, semantic search, and survivorship ranking have live data.
+    {
+        let embed_encoder = Arc::clone(&encoder);
+        let embed_pool    = pool.clone();
+        let embed_queue   = Arc::clone(&task_queue);
+        let embed_model   = settings.embed_model.clone();
+
+        tokio::spawn(async move {
+            tracing::info!("Embedding consumer loop started");
+            loop {
+                match embed_queue.dequeue(task_types::ENTITY_EMBED).await {
+                    Ok(Some(task)) => {
+                        let entity_id_str = task.payload
+                            .get("entity_id").and_then(|v| v.as_str()).unwrap_or("");
+                        let tenant_id_str = task.payload
+                            .get("tenant_id").and_then(|v| v.as_str()).unwrap_or("");
+                        let attrs = task.payload
+                            .get("attributes").cloned().unwrap_or(serde_json::Value::Null);
+
+                        let (entity_id, tenant_id) = match (
+                            uuid::Uuid::parse_str(entity_id_str),
+                            uuid::Uuid::parse_str(tenant_id_str),
+                        ) {
+                            (Ok(eid), Ok(tid)) => (eid, tid),
+                            _ => {
+                                tracing::warn!(task_id=%task.task_id, "embed task: invalid uuid(s); skipping");
+                                continue;
+                            }
+                        };
+
+                        let text = entity_to_text(&attrs);
+                        if text.is_empty() {
+                            tracing::debug!(%entity_id, "embed task: empty attribute text; skipping");
+                            continue;
+                        }
+
+                        match embed_encoder.encode(&text).await {
+                            Ok(vector) if !vector.is_empty() => {
+                                // Format as PostgreSQL vector literal: [0.1,0.2,...]
+                                let vec_lit = format!(
+                                    "[{}]",
+                                    vector.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(",")
+                                );
+                                let result = sqlx::query(
+                                    r#"
+                                    INSERT INTO ai.entity_embeddings
+                                        (tenant_id, entity_id, embedding_model, embedding)
+                                    VALUES ($1, $2, $3, $4::vector)
+                                    ON CONFLICT (tenant_id, entity_id, embedding_model)
+                                    DO UPDATE SET
+                                        embedding    = EXCLUDED.embedding,
+                                        generated_at = NOW()
+                                    "#,
+                                )
+                                .bind(tenant_id)
+                                .bind(entity_id)
+                                .bind(&embed_model)
+                                .bind(&vec_lit)
+                                .execute(&embed_pool)
+                                .await;
+
+                                match result {
+                                    Ok(_)  => tracing::info!(%entity_id, "entity embedded successfully"),
+                                    Err(e) => tracing::warn!(error=%e, %entity_id, "failed to upsert embedding"),
+                                }
+                            }
+                            Ok(_)  => tracing::warn!(%entity_id, "encoder returned empty vector"),
+                            Err(e) => tracing::warn!(error=%e, %entity_id, "encoder failed"),
+                        }
+                    }
+                    Ok(None) => {
+                        // Queue empty — poll again after a short back-off.
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    }
+                    Err(e) => {
+                        tracing::warn!(error=%e, "embed queue: dequeue failed; retrying in 2s");
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    }
+                }
+            }
+        });
+    }
+
     // ---- App state ---------------------------------------------------------
     let state = AppState {
         pool,
@@ -105,6 +198,7 @@ async fn main() {
         rag_pipeline,
         semantic_matcher,
         feedback,
+        injection_tracker: Arc::new(dashmap::DashMap::new()),
     };
 
     // ---- CORS ---------------------------------------------------------------
@@ -145,6 +239,7 @@ async fn main() {
         }))
         // MCP copilot
         .route("/mcp/query",       post(copilot))
+        .route("/mcp/stream",      post(copilot_stream))
         // Semantic matching
         .route("/match/semantic",  post(semantic_match))
         // Embeddings

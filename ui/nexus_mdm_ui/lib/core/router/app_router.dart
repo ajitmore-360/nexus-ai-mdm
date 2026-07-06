@@ -3,6 +3,9 @@ import 'package:go_router/go_router.dart';
 import '../../core/auth/auth_manager.dart';
 import '../../features/auth/presentation/pages/splash_page.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/auth/presentation/pages/activate_page.dart';
+import '../../features/auth/presentation/pages/forgot_password_page.dart';
+import '../../features/auth/presentation/pages/reset_password_page.dart';
 import '../../features/shell/presentation/pages/shell_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/entities/presentation/pages/entity_explorer_page.dart';
@@ -22,10 +25,20 @@ import '../../features/golden_records/presentation/pages/golden_records_page.dar
 import '../../features/distribution/presentation/pages/distribution_monitor_page.dart';
 import '../../shared/models/entity.dart';
 import '../../features/admin/presentation/pages/tenants_page.dart';
+import '../../features/admin/presentation/pages/tenant_create_page.dart';
+import '../../features/admin/presentation/pages/tenant_detail_page.dart';
 import '../../features/admin/presentation/pages/users_page.dart';
 import '../../features/admin/presentation/pages/entity_types_page.dart';
 import '../../features/admin/presentation/pages/attribute_schema_page.dart';
 import '../../features/admin/presentation/pages/source_systems_page.dart';
+import '../../features/admin/presentation/pages/license_page.dart';
+import '../../features/admin/presentation/pages/system_health_page.dart';
+import '../../features/ingest/presentation/pages/ingest_data_page.dart';
+import '../../features/match_queue/presentation/pages/matching_rules_page.dart';
+import '../../features/admin/presentation/pages/data_governance_page.dart';
+import '../../features/admin/presentation/pages/approval_queue_page.dart';
+import '../../features/admin/presentation/pages/domain_policy_page.dart';
+import '../../features/auth/presentation/pages/auth_callback_page.dart';
 
 class AppRouter {
   AppRouter._();
@@ -55,6 +68,46 @@ class AppRouter {
           child: const LoginPage(),
         ),
       ),
+      GoRoute(
+        path: '/activate',
+        name: 'activate',
+        pageBuilder: (context, state) => _buildPage(
+          state: state,
+          child: ActivatePage(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        name: 'forgot-password',
+        pageBuilder: (context, state) => _buildPage(
+          state: state,
+          child: const ForgotPasswordPage(),
+        ),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        name: 'reset-password',
+        pageBuilder: (context, state) => _buildPage(
+          state: state,
+          child: ResetPasswordPage(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/auth-callback',
+        name: 'auth-callback',
+        pageBuilder: (context, state) => _buildPage(
+          state: state,
+          child: AuthCallbackPage(
+            code:             state.uri.queryParameters['code'],
+            error:            state.uri.queryParameters['error'],
+            errorDescription: state.uri.queryParameters['error_description'],
+          ),
+        ),
+      ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
         pageBuilder: (context, state, child) => _buildPage(
@@ -68,6 +121,25 @@ class AppRouter {
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
               child: const DashboardPage(),
+            ),
+          ),
+          // /dashboard/entities/create and /dashboard/entities/ingest are
+          // registered BEFORE the entities explorer so GoRouter never treats
+          // "create" or "ingest" as an entity UUID via the :id wildcard.
+          GoRoute(
+            path: '/dashboard/entities/create',
+            name: 'entity-create',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const EntityCreatePage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/entities/ingest',
+            name: 'ingest-data',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const IngestDataPage(),
             ),
           ),
           GoRoute(
@@ -100,14 +172,6 @@ class AppRouter {
                     ),
                   ),
                 ],
-              ),
-              GoRoute(
-                path: 'create',
-                name: 'entity-create',
-                pageBuilder: (context, state) => _buildFadePage(
-                  state: state,
-                  child: const EntityCreatePage(),
-                ),
               ),
             ],
           ),
@@ -217,7 +281,36 @@ class AppRouter {
           GoRoute(
             path: '/dashboard/admin/tenants/create',
             name: 'admin-tenants-create',
-            redirect: (_, __) => '/dashboard/admin/tenants',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const TenantCreatePage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/admin/tenants/:id',
+            name: 'admin-tenant-detail',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: TenantDetailPage(
+                tenantId: state.pathParameters['id']!,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/admin/license',
+            name: 'admin-license',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const LicenseManagementPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/admin/health',
+            name: 'admin-health',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const SystemHealthPage(),
+            ),
           ),
           GoRoute(
             path: '/dashboard/org/users',
@@ -251,6 +344,38 @@ class AppRouter {
               child: const SourceSystemsPage(),
             ),
           ),
+          GoRoute(
+            path: '/dashboard/org/data-governance',
+            name: 'data-governance',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const DataGovernancePage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/pending-approvals',
+            name: 'pending-approvals',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const ApprovalQueuePage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/matching-rules',
+            name: 'matching-rules',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const MatchingRulesPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/org/domain-policies',
+            name: 'domain-policies',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const DomainPolicyPage(),
+            ),
+          ),
         ],
       ),
     ],
@@ -268,10 +393,14 @@ class AppRouter {
     // Redirect to splash so the normal boot sequence plays.
     if (loc == '/' || loc.isEmpty) return '/splash';
 
-    final isSplash = loc == '/splash';
-    final isLogin = loc == '/login';
+    final isSplash         = loc == '/splash';
+    final isLogin          = loc == '/login';
+    final isActivate       = loc == '/activate';
+    final isForgotPassword = loc == '/forgot-password';
+    final isResetPassword  = loc == '/reset-password';
+    final isAuthCallback   = loc == '/auth-callback';
 
-    if (isSplash || isLogin) return null;
+    if (isSplash || isLogin || isActivate || isForgotPassword || isResetPassword || isAuthCallback) return null;
 
     try {
       final loggedIn = await AuthManager.isLoggedIn()

@@ -1,10 +1,25 @@
 import 'package:equatable/equatable.dart';
 
 enum UserRole {
-  admin,
-  steward,
-  analyst,
-  viewer,
+  productAdmin,  // Nexus platform staff — bypasses all license checks
+  admin,         // Tenant administrator — full access within tenant
+  businessAdmin, // Business administrator — org setup + data governance; no direct data entry
+  steward,       // Data steward — entity CRUD, merges, match approvals
+  analyst,       // Data analyst — match jobs and analytics
+  viewer,        // Read-only
+}
+
+// Maps backend role strings (snake_case) to Flutter enum values.
+UserRole _parseRole(String role) {
+  switch (role) {
+    case 'super_admin':    return UserRole.productAdmin;
+    case 'admin':          return UserRole.admin;
+    case 'business_admin': return UserRole.businessAdmin;
+    case 'steward':        return UserRole.steward;
+    case 'analyst':        return UserRole.analyst;
+    case 'viewer':         return UserRole.viewer;
+    default:               return UserRole.viewer;
+  }
 }
 
 class User extends Equatable {
@@ -44,20 +59,35 @@ class User extends Equatable {
 
   String get roleDisplayName {
     switch (role) {
-      case UserRole.admin:
-        return 'Administrator';
-      case UserRole.steward:
-        return 'Data Steward';
-      case UserRole.analyst:
-        return 'Data Analyst';
-      case UserRole.viewer:
-        return 'Viewer';
+      case UserRole.productAdmin:  return 'Product Admin';
+      case UserRole.admin:         return 'Administrator';
+      case UserRole.businessAdmin: return 'Business Admin';
+      case UserRole.steward:       return 'Data Steward';
+      case UserRole.analyst:       return 'Data Analyst';
+      case UserRole.viewer:        return 'Viewer';
     }
   }
 
-  bool get canEdit => role == UserRole.admin || role == UserRole.steward;
-  bool get canMerge => role == UserRole.admin || role == UserRole.steward;
-  bool get canManageSettings => role == UserRole.admin;
+  bool get isProductAdmin    => role == UserRole.productAdmin;
+
+  /// Can create / edit entity records directly.
+  bool get canEdit  => role == UserRole.productAdmin || role == UserRole.admin || role == UserRole.steward;
+
+  /// Can perform entity merges.
+  bool get canMerge => role == UserRole.productAdmin || role == UserRole.admin || role == UserRole.steward;
+
+  /// Can approve or reject match candidates (governance oversight).
+  bool get canApprove =>
+      role == UserRole.productAdmin ||
+      role == UserRole.admin        ||
+      role == UserRole.businessAdmin||
+      role == UserRole.steward;
+
+  /// Can access org setup: user management, entity types, source systems, policies.
+  bool get canManageSettings =>
+      role == UserRole.productAdmin ||
+      role == UserRole.admin        ||
+      role == UserRole.businessAdmin;
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
@@ -65,10 +95,7 @@ class User extends Equatable {
       email: json['email'] as String,
       name: json['name'] as String,
       avatarUrl: json['avatar_url'] as String?,
-      role: UserRole.values.firstWhere(
-        (r) => r.name == (json['role'] as String? ?? 'viewer'),
-        orElse: () => UserRole.viewer,
-      ),
+      role: _parseRole(json['role'] as String? ?? 'viewer'),
       tenantId: json['tenant_id'] as String,
       tenantName: json['tenant_name'] as String? ?? '',
       createdAt: DateTime.parse(json['created_at'] as String),

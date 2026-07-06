@@ -55,7 +55,6 @@ class MatchRepository {
   MatchRepository(this._apiClient);
 
   /// Returns pending match candidates from the queue.
-  /// Falls back to [MatchCandidate.demoList] on error.
   Future<ApiResult<List<MatchCandidate>>> getQueue({
     int page = AppConstants.defaultPage,
     int pageSize = AppConstants.defaultPageSize,

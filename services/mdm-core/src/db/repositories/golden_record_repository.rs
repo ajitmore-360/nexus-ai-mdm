@@ -103,9 +103,9 @@ impl GoldenRecordRepository {
         )
         .bind(golden_record.golden_record_id)
         .bind(golden_record.tenant_id)
-        .bind(format!("{:?}", golden_record.entity_type))
-        .bind(format!("{:?}", golden_record.lifecycle_stage))
-        .bind(format!("{:?}", golden_record.status))
+        .bind(golden_record.entity_type.to_string())
+        .bind(golden_record.lifecycle_stage.to_string())
+        .bind(golden_record.status.to_string())
         .bind(&golden_record.source_entities)
         .bind(&golden_record.semantic_identity)
         .bind(&golden_record.vector_namespace)
@@ -260,14 +260,58 @@ impl GoldenRecordRepository {
                 tenant_id:
                     row.get("tenant_id"),
 
-                entity_type:
-                    EntityType::Customer,
+                entity_type: {
+                    let s = row.try_get::<String, _>("entity_type").unwrap_or_default();
+                    match s.as_str() {
+                        "Vendor"        => EntityType::Vendor,
+                        "Material"      => EntityType::Material,
+                        "Product"       => EntityType::Product,
+                        "Account"       => EntityType::Account,
+                        "Employee"      => EntityType::Employee,
+                        "Location"      => EntityType::Location,
+                        "Organization"  => EntityType::Organization,
+                        "Asset"         => EntityType::Asset,
+                        "ReferenceData" => EntityType::ReferenceData,
+                        "Customer"      => EntityType::Customer,
+                        other => {
+                            if let Some(inner) = other
+                                .strip_prefix("Custom(\"")
+                                .and_then(|s| s.strip_suffix("\")"))
+                            {
+                                EntityType::Custom(inner.to_string())
+                            } else {
+                                EntityType::Custom(other.to_string())
+                            }
+                        }
+                    }
+                },
 
-                lifecycle_stage:
-                    GoldenRecordLifecycleStage::Published,
+                lifecycle_stage: {
+                    let s = row.try_get::<String, _>("lifecycle_stage").unwrap_or_default();
+                    match s.as_str() {
+                        "Matched"             => GoldenRecordLifecycleStage::Matched,
+                        "SurvivorshipApplied" => GoldenRecordLifecycleStage::SurvivorshipApplied,
+                        "AIValidated"         => GoldenRecordLifecycleStage::AIValidated,
+                        "HumanReviewed"       => GoldenRecordLifecycleStage::HumanReviewed,
+                        "Approved"            => GoldenRecordLifecycleStage::Approved,
+                        "Published"           => GoldenRecordLifecycleStage::Published,
+                        "Archived"            => GoldenRecordLifecycleStage::Archived,
+                        _                     => GoldenRecordLifecycleStage::Created,
+                    }
+                },
 
-                status:
-                    GoldenRecordStatus::Active,
+                status: {
+                    let s = row.try_get::<String, _>("status").unwrap_or_default();
+                    match s.as_str() {
+                        "Draft"           => GoldenRecordStatus::Draft,
+                        "PendingApproval" => GoldenRecordStatus::PendingApproval,
+                        "UnderReview"     => GoldenRecordStatus::UnderReview,
+                        "Superseded"      => GoldenRecordStatus::Superseded,
+                        "Archived"        => GoldenRecordStatus::Archived,
+                        "SoftDeleted"     => GoldenRecordStatus::SoftDeleted,
+                        _                 => GoldenRecordStatus::Active,
+                    }
+                },
 
                 source_entities:
                     row
@@ -639,13 +683,14 @@ impl GoldenRecordRepository {
         limit:       i64,
         offset:      i64,
     ) -> Result<Vec<GoldenRecord>> {
-        // Minimal projection — return id + tenant + type + status + lifecycle
-        // stage. Callers that need full attributes should call fetch_golden_record.
-        let rows = if let Some(etype) = entity_type {
+        // 1. Fetch header rows (single query).
+        let header_rows = if let Some(etype) = entity_type {
             sqlx::query(
                 r#"
                 SELECT golden_record_id, tenant_id, entity_type, status,
-                       lifecycle_stage, metadata
+                       lifecycle_stage, source_entities, semantic_identity,
+                       vector_namespace, valid_from, valid_to, metadata,
+                       created_at, updated_at
                 FROM core_mdm.golden_records
                 WHERE tenant_id   = $1
                   AND entity_type = $2
@@ -664,7 +709,9 @@ impl GoldenRecordRepository {
             sqlx::query(
                 r#"
                 SELECT golden_record_id, tenant_id, entity_type, status,
-                       lifecycle_stage, metadata
+                       lifecycle_stage, source_entities, semantic_identity,
+                       vector_namespace, valid_from, valid_to, metadata,
+                       created_at, updated_at
                 FROM core_mdm.golden_records
                 WHERE tenant_id = $1
                   AND valid_to  = 'infinity'
@@ -679,14 +726,179 @@ impl GoldenRecordRepository {
             .await?
         };
 
-        // For the list view we return shallow GoldenRecord stubs.
-        // fetch_golden_record provides the full record.
-        let mut results = Vec::with_capacity(rows.len());
-        for row in rows {
-            let gid: Uuid = row.try_get("golden_record_id")?;
-            if let Some(gr) = self.fetch_golden_record(tenant_id, gid).await? {
-                results.push(gr);
-            }
+        if header_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // 2. Batch-fetch all attributes for the returned record IDs (one query).
+        let record_ids: Vec<Uuid> = header_rows
+            .iter()
+            .map(|r| r.get::<Uuid, _>("golden_record_id"))
+            .collect();
+
+        let attr_rows = sqlx::query(
+            r#"
+            SELECT golden_attribute_id, golden_record_id, attribute_key,
+                   attribute_value, selected_from_entity, selected_from_source,
+                   survivorship_score, ai_confidence, explainability, metadata
+            FROM core_mdm.golden_record_attributes
+            WHERE tenant_id        = $1
+              AND golden_record_id = ANY($2)
+            ORDER BY created_at ASC
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&record_ids)
+        .fetch_all(&self.pool)
+        .await?;
+
+        // 3. Group attributes by golden_record_id.
+        use std::collections::HashMap;
+        let mut attr_map: HashMap<Uuid, Vec<GoldenAttribute>> = HashMap::new();
+        for row in attr_rows {
+            let gid: Uuid = row.get("golden_record_id");
+            let entity_attribute = EntityAttribute {
+                attribute_id:         Uuid::new_v4(),
+                key:                  row.get("attribute_key"),
+                value:                row.try_get::<Value, _>("attribute_value")
+                                         .unwrap_or(Value::Null),
+                data_type:            "string".to_string(),
+                confidence:           None,
+                provenance:           None,
+                policy_tags:          vec![],
+                semantic_type:        None,
+                aliases:              vec![],
+                embedding_ref:        None,
+                ai_annotations:       vec![],
+                searchable:           true,
+                indexed:              true,
+                encrypted:            false,
+                survivorship_eligible: true,
+                updated_at:           Some(Utc::now()),
+                attribute_version:    1,
+                metadata:             MetadataMap::default(),
+            };
+            let ga = GoldenAttribute {
+                golden_attribute_id:      row.get("golden_attribute_id"),
+                attribute:                entity_attribute,
+                selected_from_entity:     row.get("selected_from_entity"),
+                selected_from_source:     row.try_get("selected_from_source").ok(),
+                survivorship_rule_id:     None,
+                survivorship_execution_id: None,
+                survivorship_score:       row.try_get("survivorship_score").ok(),
+                ai_confidence:            row.try_get("ai_confidence").ok(),
+                overridden_by_user:       None,
+                overridden_at:            None,
+                override_reason:          None,
+                explainability:           row.try_get("explainability").ok(),
+                candidate_entities:       vec![],
+                policy_refs:              vec![],
+                metadata:                 row
+                    .try_get::<sqlx::types::Json<MetadataMap>, _>("metadata")
+                    .map(|v| v.0)
+                    .unwrap_or_default(),
+            };
+            attr_map.entry(gid).or_default().push(ga);
+        }
+
+        // 4. Assemble GoldenRecord structs.
+        let mut results = Vec::with_capacity(header_rows.len());
+        for row in header_rows {
+            let gid: Uuid = row.get("golden_record_id");
+            let entity_type_str = row.try_get::<String, _>("entity_type").unwrap_or_default();
+            let entity_type = match entity_type_str.as_str() {
+                "Vendor"        => EntityType::Vendor,
+                "Material"      => EntityType::Material,
+                "Product"       => EntityType::Product,
+                "Account"       => EntityType::Account,
+                "Employee"      => EntityType::Employee,
+                "Location"      => EntityType::Location,
+                "Organization"  => EntityType::Organization,
+                "Asset"         => EntityType::Asset,
+                "ReferenceData" => EntityType::ReferenceData,
+                "Customer"      => EntityType::Customer,
+                other => {
+                    if let Some(inner) = other
+                        .strip_prefix("Custom(\"")
+                        .and_then(|s| s.strip_suffix("\")"))
+                    {
+                        EntityType::Custom(inner.to_string())
+                    } else {
+                        EntityType::Custom(other.to_string())
+                    }
+                }
+            };
+            let lifecycle_stage = match row.try_get::<String, _>("lifecycle_stage")
+                .unwrap_or_default().as_str()
+            {
+                "Matched"             => GoldenRecordLifecycleStage::Matched,
+                "SurvivorshipApplied" => GoldenRecordLifecycleStage::SurvivorshipApplied,
+                "AIValidated"         => GoldenRecordLifecycleStage::AIValidated,
+                "HumanReviewed"       => GoldenRecordLifecycleStage::HumanReviewed,
+                "Approved"            => GoldenRecordLifecycleStage::Approved,
+                "Published"           => GoldenRecordLifecycleStage::Published,
+                "Archived"            => GoldenRecordLifecycleStage::Archived,
+                _                     => GoldenRecordLifecycleStage::Created,
+            };
+            let status = match row.try_get::<String, _>("status")
+                .unwrap_or_default().as_str()
+            {
+                "Draft"           => GoldenRecordStatus::Draft,
+                "PendingApproval" => GoldenRecordStatus::PendingApproval,
+                "UnderReview"     => GoldenRecordStatus::UnderReview,
+                "Superseded"      => GoldenRecordStatus::Superseded,
+                "Archived"        => GoldenRecordStatus::Archived,
+                "SoftDeleted"     => GoldenRecordStatus::SoftDeleted,
+                _                 => GoldenRecordStatus::Active,
+            };
+            let metadata = row.try_get::<sqlx::types::Json<MetadataMap>, _>("metadata")
+                .map(|v| v.0)
+                .unwrap_or_default();
+
+            results.push(GoldenRecord {
+                golden_record_id:   gid,
+                tenant_id,
+                entity_type,
+                lifecycle_stage,
+                status,
+                source_entities:    row.try_get("source_entities").unwrap_or_default(),
+                golden_attributes:  attr_map.remove(&gid).unwrap_or_default(),
+                quality: Some(GoldenRecordQuality {
+                    trust_score:           None,
+                    completeness_score:    None,
+                    consistency_score:     None,
+                    accuracy_score:        None,
+                    overall_quality_score: None,
+                }),
+                conflicts:            vec![],
+                source_contributions: vec![],
+                semantic_identity:    row.try_get("semantic_identity").ok(),
+                vector_namespace:     row.try_get("vector_namespace").ok(),
+                version_info: VersionInfo {
+                    schema_version:   "1.0.0".to_string(),
+                    contract_version: "1.0.0".to_string(),
+                    entity_version:   1,
+                },
+                audit: AuditMetadata {
+                    created_at:     row.get("created_at"),
+                    updated_at:     row.get("updated_at"),
+                    created_by:     None,
+                    updated_by:     None,
+                    correlation_id: None,
+                    causation_id:   None,
+                    request_id:     None,
+                },
+                metadata,
+                embedding_refs:       vec![],
+                lineage_refs:         vec![],
+                merge_refs:           vec![],
+                workflow_refs:        vec![],
+                policy_refs:          vec![],
+                survivorship_refs:    vec![],
+                approval_refs:        vec![],
+                valid_from:           row.try_get("valid_from").ok(),
+                valid_to:             row.try_get("valid_to").ok(),
+            });
         }
         Ok(results)
     }
@@ -713,7 +925,7 @@ impl GoldenRecordRepository {
         )
         .bind(tenant_id)
         .bind(golden_record_id)
-        .bind(format!("{:?}", stage))
+        .bind(stage.to_string())
         .execute(&mut **tx)
         .await?;
         Ok(())

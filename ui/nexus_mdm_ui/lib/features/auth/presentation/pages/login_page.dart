@@ -1,11 +1,15 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/auth/auth_manager.dart';
+import '../../../../core/auth/sso_service.dart';
+import '../../../../core/branding/branding_manager.dart';
+import '../../../../core/license/license_manager.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../shared/widgets/nexus_logo.dart';
 
@@ -32,7 +36,7 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
+  Future<void> _handleLogin({String? forcedTenantId}) async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -43,17 +47,31 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted) return;
 
     try {
-      // Call the real login API
-      final apiClient = ApiClient();
+      // Use the singleton ApiClient so auth headers set below take effect
+      // immediately for all subsequent requests in this session.
+      final apiClient = GetIt.instance<ApiClient>();
+      final payload = <String, dynamic>{
+        'email':    _emailController.text.trim(),
+        'password': _passwordController.text,
+      };
+      if (forcedTenantId != null) payload['tenant_id'] = forcedTenantId;
+
       final response = await apiClient.post<Map<String, dynamic>>(
         AppConstants.loginPath,
-        data: {
-          'email':    _emailController.text.trim(),
-          'password': _passwordController.text,
-        },
+        data: payload,
       );
 
       final body = response.data;
+
+      // Server found multiple tenant memberships — show picker then retry.
+      if (body?['requires_tenant_selection'] == true) {
+        setState(() => _isLoading = false);
+        final tenants = (body!['tenants'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final chosen = await _showTenantPicker(tenants);
+        if (chosen != null && mounted) await _handleLogin(forcedTenantId: chosen);
+        return;
+      }
+
       final success = body?['success'] == true;
       if (!success) {
         throw Exception(body?['error'] ?? 'Login failed');
@@ -64,24 +82,40 @@ class _LoginPageState extends State<LoginPage> {
       final token       = data['access_token']   as String;
       final refresh     = data['refresh_token']  as String? ?? '';
       final userMap     = data['user']            as Map<String, dynamic>? ?? {};
-      final tenantId    = userMap['tenant_id']    as String?
-                        ?? '00000000-0000-0000-0000-000000000001';
+      final tenantId    = userMap['tenant_id']    as String? ?? '';
       final userId      = userMap['user_id']      as String? ?? '';
       final email       = userMap['email']        as String?
                         ?? _emailController.text.trim();
       final displayName = userMap['display_name'] as String?
                         ?? email.split('@').first;
       final role        = userMap['role']         as String? ?? 'steward';
+      final tenantName  = userMap['tenant_name']  as String? ?? '';
+      final assignedEntityTypes = (userMap['assigned_entity_types'] as List<dynamic>?)
+          ?.cast<String>() ?? [];
 
       await AuthManager.persistLogin(
-        accessToken:  token,
-        refreshToken: refresh,
-        tenantId:     tenantId,
-        userId:       userId,
-        email:        email,
-        displayName:  displayName,
-        role:         role,
+        accessToken:          token,
+        refreshToken:         refresh,
+        tenantId:             tenantId,
+        userId:               userId,
+        email:                email,
+        displayName:          displayName,
+        role:                 role,
+        tenantName:           tenantName,
+        assignedEntityTypes:  assignedEntityTypes,
       );
+
+      // Update the live singleton so every subsequent request has the correct
+      // headers without waiting for the async interceptor to re-read storage.
+      apiClient.setAuthToken(token);
+      apiClient.setTenantId(tenantId);
+
+      // Load license + branding in parallel — both are fire-and-forget safe;
+      // failures fall back to defaults without blocking navigation.
+      await Future.wait([
+        LicenseManager.loadFromServer(),
+        BrandingManager.loadFromServer(),
+      ]);
 
       if (mounted) context.go('/dashboard');
 
@@ -119,6 +153,57 @@ class _LoginPageState extends State<LoginPage> {
         _isLoading    = false;
         _errorMessage = e.toString();
       });
+    }
+  }
+
+  Future<String?> _showTenantPicker(List<Map<String, dynamic>> tenants) {
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardSurface,
+        title: Text('Select workspace', style: AppTextStyles.titleMedium),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: tenants.map((t) {
+            final id   = t['tenant_id']   as String? ?? '';
+            final name = t['tenant_name'] as String? ?? id;
+            return ListTile(
+              leading: const Icon(Icons.business_outlined, color: AppColors.primary),
+              title: Text(name, style: AppTextStyles.bodyMedium),
+              onTap: () => Navigator.of(ctx).pop(id),
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Initiates the PKCE redirect flow for the chosen provider.
+  // SsoService stores the PKCE verifier in sessionStorage and redirects
+  // the browser to the provider's authorization endpoint.  Completion
+  // is handled by AuthCallbackPage at /auth-callback.
+  void _handleSsoLogin(String provider) {
+    if (_isLoading) return;
+    setState(() => _errorMessage = null);
+    try {
+      switch (provider) {
+        case 'google':
+          SsoService.startGoogleFlow();
+        case 'azure':
+          SsoService.startAzureFlow();
+        case 'okta':
+          SsoService.startOktaFlow();
+      }
+      // Browser will redirect — no further action in this widget.
+    } on SsoConfigException catch (e) {
+      setState(() => _errorMessage = e.message);
     }
   }
 
@@ -482,7 +567,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           const Spacer(),
                           TextButton(
-                            onPressed: () {},
+                            onPressed: () => context.go('/forgot-password'),
                             style: TextButton.styleFrom(
                               padding: EdgeInsets.zero,
                               minimumSize: const Size(0, 32),
@@ -587,9 +672,21 @@ class _LoginPageState extends State<LoginPage> {
                 // SSO buttons
                 Row(
                   children: [
-                    Expanded(child: _buildSSOButton('Google SSO', Icons.g_mobiledata_rounded)),
+                    Expanded(
+                      child: _buildSSOButton(
+                        label:    'Google',
+                        icon:     Icons.g_mobiledata_rounded,
+                        provider: 'google',
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildSSOButton('Microsoft', Icons.window_rounded)),
+                    Expanded(
+                      child: _buildSSOButton(
+                        label:    'Microsoft',
+                        icon:     Icons.window_rounded,
+                        provider: 'azure',
+                      ),
+                    ),
                   ],
                 )
                     .animate(delay: const Duration(milliseconds: 480))
@@ -603,14 +700,24 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildSSOButton(String label, IconData icon) {
-    return OutlinedButton.icon(
-      onPressed: () {},
+  Widget _buildSSOButton({
+    required String label,
+    required IconData icon,
+    required String provider,
+  }) {
+    return OutlinedButton(
+      onPressed: _isLoading ? null : () => _handleSsoLogin(provider),
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 12),
       ),
-      icon: Icon(icon, size: 20),
-      label: Text(label, style: AppTextStyles.buttonSmall),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 20),
+          const SizedBox(width: 8),
+          Text(label, style: AppTextStyles.buttonSmall),
+        ],
+      ),
     );
   }
 }

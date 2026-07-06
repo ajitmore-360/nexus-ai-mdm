@@ -17,13 +17,13 @@ use database::RequestContext;
 
 use crate::handlers::ApiResponse;
 use crate::middleware::tenant::TenantContext;
+use crate::services::audit_service::AuditEvent;
 use crate::AppState;
 
 // nexus_auth::Claims is used by gdpr_erase_entity — referenced via full path below.
 
 // ── Query params for GET /entities ──────────────────────────────────────────
 
-#[allow(dead_code)]
 #[derive(Deserialize)]
 pub struct ListEntitiesParams {
     pub page:          Option<i64>,
@@ -33,6 +33,11 @@ pub struct ListEntitiesParams {
     pub entity_type:   Option<String>,
     pub status:        Option<String>,
     pub source_system: Option<String>,
+    /// Column to sort by. Accepted values: created_at, updated_at, trust_score,
+    /// entity_type, status.  Anything else is silently coerced to created_at.
+    pub sort_by:       Option<String>,
+    /// Sort direction: "asc" or "desc" (case-insensitive, default "desc").
+    pub sort_dir:      Option<String>,
 }
 
 pub async fn create_entity(
@@ -88,6 +93,10 @@ pub async fn create_entity(
 
     let ctx = extract_request_context(&tenant_ctx, &headers);
 
+    let actor_id = headers.get("x-user-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| Uuid::parse_str(s).ok());
+
     match state.entity_service.create_entity(ctx, request).await {
         Ok(response) => {
             // Kick off completeness scoring without blocking the response.
@@ -95,6 +104,44 @@ pub async fn create_entity(
                 tenant_ctx.tenant_id,
                 response.entity_id,
             );
+            state.audit_service.log_background(AuditEvent {
+                tenant_id:     tenant_ctx.tenant_id,
+                event_type:    "entity.created".to_string(),
+                actor_id,
+                resource_type: "entity".to_string(),
+                resource_id:   response.entity_id.to_string(),
+                metadata:      serde_json::json!({ "entity_id": response.entity_id }),
+                before:        None,
+                after:         None,
+            });
+            // Publish real-time event to the API gateway WebSocket hub.
+            if let Some(pubsub) = &state.pubsub {
+                let pubsub = std::sync::Arc::clone(pubsub);
+                let tid    = tenant_ctx.tenant_id.to_string();
+                let eid    = response.entity_id;
+                tokio::spawn(async move {
+                    let evt = serde_json::json!({
+                        "type":      "entity.ingested",
+                        "entity_id": eid,
+                        "tenant_id": tid,
+                    });
+                    let _ = pubsub.publish_to_tenant(&tid, &evt).await;
+                });
+            }
+            // Enqueue embedding so new entity is immediately searchable via vector ANN.
+            if let Some(queue) = &state.task_queue {
+                let task = nexus_redis::queue::Task::new(
+                    nexus_redis::queue::task_types::ENTITY_EMBED,
+                    tenant_ctx.tenant_id.to_string(),
+                    serde_json::json!({
+                        "entity_id": response.entity_id,
+                        "tenant_id": tenant_ctx.tenant_id,
+                    }),
+                );
+                if let Err(e) = queue.enqueue(nexus_redis::queue::task_types::ENTITY_EMBED, &task).await {
+                    tracing::warn!(error=%e, entity_id=%response.entity_id, "embed task enqueue failed after create");
+                }
+            }
             (
                 StatusCode::CREATED,
                 Json(ApiResponse {
@@ -146,10 +193,45 @@ pub(crate) fn extract_request_context(
 pub async fn list_entities(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
+    Extension(claims):     Extension<nexus_auth::Claims>,
     Query(params):         Query<ListEntitiesParams>,
 ) -> impl IntoResponse {
     let page      = params.page.unwrap_or(1).max(1);
     let page_size = params.page_size.unwrap_or(20).clamp(1, 100);
+
+    const ALLOWED_SORT_COLS: &[&str] = &[
+        "created_at", "updated_at", "trust_score", "entity_type", "status",
+    ];
+    let sort_by = params.sort_by.as_deref()
+        .filter(|c| ALLOWED_SORT_COLS.contains(c))
+        .unwrap_or("created_at");
+    let sort_dir = match params.sort_dir.as_deref()
+        .map(|s| s.to_uppercase())
+        .as_deref()
+    {
+        Some("ASC") => "ASC",
+        _           => "DESC",
+    };
+
+    // Stewards can only see entity types they are explicitly assigned to.
+    // Admins, BusinessAdmins, Analysts, and Viewers see all types (no scoping).
+    let allowed_types: Option<Vec<String>> = if claims.nxs_role == nexus_auth::Role::Steward {
+        if let Ok(identity_id) = Uuid::parse_str(&claims.sub) {
+            let rows = sqlx::query_scalar::<_, String>(
+                "SELECT entity_type_code FROM core_mdm.entity_type_assignments WHERE tenant_id=$1 AND identity_id=$2"
+            )
+            .bind(tenant_ctx.tenant_id)
+            .bind(identity_id)
+            .fetch_all(&state.db)
+            .await
+            .unwrap_or_default();
+            Some(rows)
+        } else {
+            Some(vec![]) // invalid sub → empty result set
+        }
+    } else {
+        None // no restriction
+    };
 
     match state
         .entity_repository
@@ -160,6 +242,10 @@ pub async fn list_entities(
             params.entity_type.as_deref(),
             params.status.as_deref(),
             params.search.as_deref(),
+            params.source_system.as_deref(),
+            sort_by,
+            sort_dir,
+            allowed_types.as_deref(),
         )
         .await
     {
@@ -212,19 +298,42 @@ pub async fn get_entity_by_id(
     {
         Ok(Some(entity)) => {
             let flutter_type   = entity_type_to_flutter_type(&entity.entity_type);
-            let flutter_status = entity_status_to_flutter_status(&entity.status);
+            let flutter_status = if entity.master_record.is_some()
+                && matches!(entity.status, EntityStatus::Active)
+            {
+                "golden"
+            } else {
+                entity_status_to_flutter_status(&entity.status)
+            };
 
             // Derive display_name from the first recognisable name attribute.
+            const NAME_KEYS: &[&str] = &[
+                "name", "full_name", "display_name", "company_name", "legal_name",
+                "business_name", "organization_name", "organisation_name",
+                "customer_name", "vendor_name", "product_name", "title",
+            ];
             let display_name = entity
                 .attributes
                 .iter()
-                .find(|a| {
-                    ["name", "full_name", "display_name", "company_name", "legal_name"]
-                        .contains(&a.key.to_lowercase().as_str())
-                })
+                .find(|a| NAME_KEYS.contains(&a.key.to_lowercase().as_str()))
                 .and_then(|a| a.value.as_str().map(str::to_owned))
+                .or_else(|| {
+                    // Combine first_name + last_name when no single name field exists.
+                    let first = entity.attributes.iter()
+                        .find(|a| a.key.to_lowercase() == "first_name")
+                        .and_then(|a| a.value.as_str());
+                    let last = entity.attributes.iter()
+                        .find(|a| a.key.to_lowercase() == "last_name")
+                        .and_then(|a| a.value.as_str());
+                    match (first, last) {
+                        (Some(f), Some(l)) => Some(format!("{} {}", f, l)),
+                        (Some(f), None)    => Some(f.to_owned()),
+                        (None, Some(l))    => Some(l.to_owned()),
+                        (None, None)       => None,
+                    }
+                })
                 .unwrap_or_else(|| {
-                    format!("{:?} {}", entity.entity_type, &entity.entity_id.to_string()[..8])
+                    format!("{} {}", entity.entity_type, &entity.entity_id.to_string()[..8])
                 });
 
             // Derive primary_source from the first attribute that has one set.
@@ -297,18 +406,19 @@ pub async fn get_entity_by_id(
             let trust = entity.trust_score.map(|s| s as f64).unwrap_or(0.8);
 
             let json = serde_json::json!({
-                "id":             entity.entity_id.to_string(),
-                "entity_id":      entity.entity_id.to_string(),
-                "type":           flutter_type,
-                "status":         flutter_status,
-                "display_name":   display_name,
-                "trust_score":    trust,
-                "quality_score":  trust,
-                "primary_source": primary_source,
-                "source_systems": source_systems,
-                "attributes":     attributes,
-                "created_at":     entity.audit.created_at.to_rfc3339(),
-                "updated_at":     entity.audit.updated_at.to_rfc3339()
+                "id":               entity.entity_id.to_string(),
+                "entity_id":        entity.entity_id.to_string(),
+                "type":             flutter_type,
+                "status":           flutter_status,
+                "display_name":     display_name,
+                "trust_score":      trust,
+                "quality_score":    trust,
+                "primary_source":   primary_source,
+                "source_systems":   source_systems,
+                "attributes":       attributes,
+                "golden_record_id": entity.master_record.map(|id| id.to_string()),
+                "created_at":       entity.audit.created_at.to_rfc3339(),
+                "updated_at":       entity.audit.updated_at.to_rfc3339()
             });
 
             (StatusCode::OK, Json(json)).into_response()
@@ -342,9 +452,13 @@ pub struct PatchEntityRequest {
 pub async fn patch_entity(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
+    headers:               HeaderMap,
     Path(entity_id):       Path<String>,
     Json(request):         Json<PatchEntityRequest>,
 ) -> impl IntoResponse {
+    let actor_id = headers.get("x-user-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| Uuid::parse_str(s).ok());
     let entity_uuid = match Uuid::parse_str(&entity_id) {
         Ok(id)  => id,
         Err(_)  => return (
@@ -361,6 +475,23 @@ pub async fn patch_entity(
             ).into_response();
         }
     }
+
+    // Load tenant-declared PII keys from the attribute schema, then encrypt.
+    let schema_pii_keys = crate::services::entity_service::EntityService::load_schema_pii_keys(
+        &state.db,
+        tenant_ctx.tenant_id,
+    )
+    .await;
+    let encrypted_attrs: Option<Vec<contracts::mdm::entity::EntityAttribute>> =
+        if let (Some(attrs), Some(enc)) = (&request.attributes, &state.field_encryption) {
+            Some(crate::services::entity_service::EntityService::encrypt_pii_attributes(
+                attrs.clone(),
+                enc,
+                &schema_pii_keys,
+            ))
+        } else {
+            request.attributes.clone()
+        };
 
     let mut tx = match state.db.begin().await {
         Ok(t)  => t,
@@ -380,7 +511,7 @@ pub async fn patch_entity(
         request.entity_type.as_deref(),
         request.status.as_deref(),
         request.tags.as_ref(),
-        request.attributes.as_ref(),
+        encrypted_attrs.as_ref(),
     ).await {
         Ok(true) => {
             if let Err(e) = tx.commit().await {
@@ -389,6 +520,37 @@ pub async fn patch_entity(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(serde_json::json!({ "success": false, "error": "commit failed" })),
                 ).into_response();
+            }
+            // Audit: entity updated
+            state.audit_service.log_background(AuditEvent {
+                tenant_id:     tenant_ctx.tenant_id,
+                event_type:    "entity.updated".to_string(),
+                actor_id,
+                resource_type: "entity".to_string(),
+                resource_id:   entity_uuid.to_string(),
+                metadata:      serde_json::json!({
+                    "entity_id":      entity_uuid,
+                    "fields_updated": request.attributes.as_ref().map(|a| a.len()).unwrap_or(0),
+                }),
+                before:        None,
+                after:         request.attributes.as_ref().and_then(|a| serde_json::to_value(a).ok()),
+            });
+            // BL-026: re-embed entity when attributes are updated
+            if request.attributes.is_some() {
+                if let Some(queue) = &state.task_queue {
+                    let task = nexus_redis::queue::Task::new(
+                        nexus_redis::queue::task_types::ENTITY_EMBED,
+                        tenant_ctx.tenant_id.to_string(),
+                        serde_json::json!({
+                            "entity_id": entity_uuid,
+                            "tenant_id": tenant_ctx.tenant_id,
+                            "attributes": request.attributes,
+                        }),
+                    );
+                    if let Err(e) = queue.enqueue(nexus_redis::queue::task_types::ENTITY_EMBED, &task).await {
+                        tracing::warn!(error=%e, %entity_uuid, "re-embed task enqueue failed after PATCH");
+                    }
+                }
             }
             (StatusCode::OK, Json(serde_json::json!({
                 "success": true,
@@ -487,6 +649,8 @@ pub async fn gdpr_erase_entity(
         resource_type: "entity".to_owned(),
         resource_id:   entity_id.to_string(),
         metadata:      serde_json::json!({ "reason": "gdpr_art17" }),
+        before:        None,
+        after:         None,
     });
 
     (

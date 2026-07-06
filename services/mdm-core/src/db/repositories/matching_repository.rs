@@ -367,22 +367,57 @@ impl MatchingRepository {
     // ====================================
     //
 
+    /// Fetch human-review candidates in a single batch query (no N+1).
+    /// Paginates over distinct request_ids, then fetches all their candidates
+    /// and field matches in one JOIN — previously this ran one query per request_id.
     pub async fn fetch_review_queue(
         &self,
         tenant_id: Uuid,
         limit: i64,
         offset: i64,
     ) -> Result<Vec<MatchCandidate>, sqlx::Error> {
-
         let rows = sqlx::query(
             r#"
-            SELECT DISTINCT request_id
-            FROM core_mdm.match_candidates
-            WHERE tenant_id = $1
-              AND requires_human_review = TRUE
-            ORDER BY created_at DESC
-            LIMIT $2 OFFSET $3
-            "#
+            SELECT
+                mc.matched_entity_id,
+                mc.match_status,
+                mc.match_score,
+                mc.confidence_score,
+                mc.vector_similarity,
+                mc.graph_similarity,
+                mc.ai_score,
+                mc.survivorship_compatibility,
+                mc.recommended_for_merge,
+                mc.requires_human_review,
+                mc.explanations,
+                mc.policy_decisions,
+                mc.metadata,
+                fm.field_name,
+                fm.source_value,
+                fm.candidate_value,
+                fm.score            AS fm_score,
+                fm.confidence_score AS fm_confidence,
+                fm.strategy,
+                fm.semantic_similarity,
+                fm.explanation,
+                fm.metadata         AS fm_metadata
+            FROM (
+                SELECT DISTINCT request_id
+                FROM core_mdm.match_candidates
+                WHERE tenant_id = $1
+                  AND requires_human_review = TRUE
+                ORDER BY request_id
+                LIMIT $2 OFFSET $3
+            ) paged
+            JOIN core_mdm.match_candidates mc
+              ON mc.tenant_id  = $1
+             AND mc.request_id = paged.request_id
+            LEFT JOIN core_mdm.field_match_results fm
+              ON  fm.tenant_id        = mc.tenant_id
+             AND fm.request_id        = mc.request_id
+             AND fm.matched_entity_id = mc.matched_entity_id
+            ORDER BY mc.match_score DESC, fm.created_at ASC
+            "#,
         )
         .bind(tenant_id)
         .bind(limit)
@@ -390,15 +425,51 @@ impl MatchingRepository {
         .fetch_all(&self.pool)
         .await?;
 
-        let mut all_matches = Vec::new();
+        // Group field-match rows by candidate entity id (same logic as fetch_match_candidates).
+        let mut order: Vec<Uuid>             = Vec::new();
+        let mut candidate_rows: HashMap<Uuid, _>   = HashMap::new();
+        let mut field_rows:     HashMap<Uuid, Vec<_>> = HashMap::new();
 
-        for row in rows {
-            let request_id: Uuid = row.try_get("request_id")?;
-            let matches = self.fetch_match_candidates(tenant_id, request_id).await?;
-            all_matches.extend(matches);
+        for row in &rows {
+            let entity_id: Uuid = row.try_get("matched_entity_id")?;
+            if let std::collections::hash_map::Entry::Vacant(e) = candidate_rows.entry(entity_id) {
+                order.push(entity_id);
+                e.insert(row);
+            }
+            let field_name: Option<String> = row.try_get("field_name").ok().flatten();
+            if field_name.is_some() {
+                field_rows.entry(entity_id).or_default().push(row);
+            }
         }
 
-        Ok(all_matches)
+        let mut candidates = Vec::with_capacity(order.len());
+        for entity_id in order {
+            let row = candidate_rows[&entity_id];
+            let status_string: String = row.try_get("match_status")?;
+            let field_matches: Vec<FieldMatchResult> = field_rows
+                .get(&entity_id)
+                .map(|frs| frs.iter().filter_map(|fr| build_field_match(fr).ok()).collect())
+                .unwrap_or_default();
+
+            candidates.push(MatchCandidate {
+                entity_id,
+                status:                    parse_match_status(&status_string),
+                score:                     row.try_get("match_score")?,
+                confidence:                row.try_get("confidence_score")?,
+                vector_similarity:         row.try_get("vector_similarity")?,
+                graph_similarity:          row.try_get("graph_similarity")?,
+                ai_score:                  row.try_get("ai_score")?,
+                survivorship_compatibility: row.try_get("survivorship_compatibility")?,
+                explanations:              row.try_get::<sqlx::types::Json<Vec<String>>, _>("explanations").map(|v| v.0).unwrap_or_default(),
+                field_matches,
+                policy_decisions:          row.try_get::<sqlx::types::Json<Vec<String>>, _>("policy_decisions").map(|v| v.0).unwrap_or_default(),
+                recommended_for_merge:     row.try_get("recommended_for_merge")?,
+                requires_human_review:     row.try_get("requires_human_review")?,
+                metadata:                  row.try_get::<sqlx::types::Json<MetadataMap>, _>("metadata").map(|v| v.0).unwrap_or_default(),
+            });
+        }
+
+        Ok(candidates)
     }
 
     //
@@ -407,6 +478,10 @@ impl MatchingRepository {
     // ====================================
     //
 
+    /// Batch blocking-key lookup — replaces what was an N+1 per-key query loop.
+    ///
+    /// Exact keys (EMAIL/PHONE/TAX/CID/VID): single UNNEST join on entity_attributes.
+    /// Phonetic keys (PHONETIC): single ANY($) query on entity_blocking_keys.
     pub async fn find_by_blocking_keys(
         &self,
         tenant_id: Uuid,
@@ -415,34 +490,61 @@ impl MatchingRepository {
     ) -> Result<HashSet<Uuid>, sqlx::Error> {
         let mut entity_ids = HashSet::new();
 
+        // ── Separate exact keys from phonetic keys ──────────────────────────
+        let mut exact_attr_keys: Vec<String>   = Vec::new();
+        let mut exact_attr_vals: Vec<String>   = Vec::new();
+        let mut phonetic_vals:   Vec<String>   = Vec::new();
+
         for key in keys {
-            let Some((kind, value)) = key.split_once(':') else {
-                continue;
-            };
+            let Some((kind, value)) = key.split_once(':') else { continue; };
+            match kind {
+                "EMAIL" => { exact_attr_keys.push("email".into());       exact_attr_vals.push(value.into()); }
+                "PHONE" => { exact_attr_keys.push("phone".into());       exact_attr_vals.push(value.into()); }
+                "TAX"   => { exact_attr_keys.push("tax_id".into());      exact_attr_vals.push(value.into()); }
+                "CID"   => { exact_attr_keys.push("customer_id".into()); exact_attr_vals.push(value.into()); }
+                "VID"   => { exact_attr_keys.push("vendor_id".into());   exact_attr_vals.push(value.into()); }
+                "PHONETIC" => { phonetic_vals.push(value.to_lowercase()); }
+                _ => {}
+            }
+        }
 
-            let attribute_key = match kind {
-                "EMAIL"    => "email",
-                "PHONE"    => "phone",
-                "TAX"      => "tax_id",
-                "CID"      => "customer_id",
-                "VID"      => "vendor_id",
-                "PHONETIC" => "name",
-                _          => continue,
-            };
-
+        // ── Single batch query for exact keys ───────────────────────────────
+        if !exact_attr_keys.is_empty() {
             let rows = sqlx::query_scalar::<_, Uuid>(
                 r#"
-                SELECT DISTINCT entity_id
-                FROM core_mdm.entity_attributes
-                WHERE tenant_id = $1
-                  AND attribute_key = $2
-                  AND lower(trim(both '"' from attribute_value::text)) = $3
+                SELECT DISTINCT ea.entity_id
+                FROM core_mdm.entity_attributes ea
+                JOIN UNNEST($2::text[], $3::text[]) AS lookup(attr_key, attr_val)
+                  ON ea.attribute_key = lookup.attr_key
+                 AND lower(trim(both '"' from ea.attribute_value::text)) = lookup.attr_val
+                WHERE ea.tenant_id = $1
                 LIMIT $4
                 "#,
             )
             .bind(tenant_id)
-            .bind(attribute_key)
-            .bind(value)
+            .bind(&exact_attr_keys)
+            .bind(&exact_attr_vals)
+            .bind(limit as i64)
+            .fetch_all(&self.pool)
+            .await?;
+
+            entity_ids.extend(rows);
+        }
+
+        // ── Single batch query for phonetic keys ────────────────────────────
+        if !phonetic_vals.is_empty() {
+            let rows = sqlx::query_scalar::<_, Uuid>(
+                r#"
+                SELECT DISTINCT entity_id
+                FROM core_mdm.entity_blocking_keys
+                WHERE tenant_id = $1
+                  AND blocking_type = 'PHONETIC'
+                  AND blocking_value = ANY($2)
+                LIMIT $3
+                "#,
+            )
+            .bind(tenant_id)
+            .bind(&phonetic_vals)
             .bind(limit as i64)
             .fetch_all(&self.pool)
             .await?;
@@ -461,21 +563,15 @@ impl MatchingRepository {
 
     pub async fn load_entities(
         &self,
-        tenant_id: Uuid,
+        tenant_id:     Uuid,
         candidate_ids: &HashSet<Uuid>,
     ) -> anyhow::Result<Vec<CanonicalEntity>> {
-        let entity_repo = EntityRepository::new(self.pool.clone());
-        let mut entities = Vec::with_capacity(candidate_ids.len());
-
-        for entity_id in candidate_ids {
-            if let Some(entity) =
-                entity_repo.fetch_entity(tenant_id, *entity_id).await?
-            {
-                entities.push(entity);
-            }
+        if candidate_ids.is_empty() {
+            return Ok(vec![]);
         }
-
-        Ok(entities)
+        let ids: Vec<Uuid> = candidate_ids.iter().copied().collect();
+        let entity_repo = EntityRepository::new(self.pool.clone());
+        entity_repo.fetch_entities_batch(tenant_id, &ids).await
     }
 
     // ====================================

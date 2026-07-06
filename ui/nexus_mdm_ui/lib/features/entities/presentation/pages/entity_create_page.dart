@@ -12,6 +12,8 @@ import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../data/entity_repository.dart';
 import '../../../../core/validation/validators.dart';
 import '../../../../shared/widgets/nexus_dialog.dart';
+import '../../../../features/admin/data/governance_repository.dart';
+import '../../../../features/admin/data/source_systems_repository.dart';
 // ──────────────────────────────────────────────
 // Domain enums / models
 // ──────────────────────────────────────────────
@@ -200,23 +202,6 @@ extension _EntityTypeLabel on _EntityType {
   }
 }
 
-enum _SourceSystem { manual, salesforce, sap, oracle }
-
-extension _SourceSystemLabel on _SourceSystem {
-  String get label {
-    switch (this) {
-      case _SourceSystem.manual:
-        return 'Manual Entry';
-      case _SourceSystem.salesforce:
-        return 'Salesforce';
-      case _SourceSystem.sap:
-        return 'SAP';
-      case _SourceSystem.oracle:
-        return 'Oracle';
-    }
-  }
-}
-
 enum _Origin { mdmAuthoritative, sourceSystem }
 
 // ──────────────────────────────────────────────
@@ -280,13 +265,27 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
   final _formKey = GlobalKey<FormState>();
 
   late final EntityRepository _repository;
+  late final GovernanceRepository _governanceRepo;
+
+  static final SourceSystemModel _manualEntry = SourceSystemModel(
+    id: '', tenantId: '', name: 'Manual Entry', code: 'nexus-mdm',
+    connectorType: 'manual', description: 'Manually entered data',
+    icon: '', trustWeight: 1.0, priority: 0, entityTypes: const [],
+    syncMode: 'manual', isActive: true, isConnected: true,
+    lastSyncStatus: 'active',
+  );
 
   _EntityType _selectedType = _EntityType.customer;
-  _SourceSystem _selectedSource = _SourceSystem.manual;
+  List<SourceSystemModel> _sourceSystems = [];
+  SourceSystemModel _selectedSourceModel = _manualEntry;
+  bool _loadingSources = false;
   _Origin _selectedOrigin = _Origin.mdmAuthoritative;
+
+  List<SourceSystemModel> get _sourceOptions => [_manualEntry, ..._sourceSystems];
   bool _distribute = true;
   bool _isPublishing = false;
   bool _isSavingDraft = false;
+  bool _isSteward = false;
 
   // AI duplicate check state
   bool _isDupChecking = false;
@@ -301,8 +300,30 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
   @override
   void initState() {
     super.initState();
-    _repository = EntityRepository(ApiClient());
+    final api = ApiClient();
+    _repository = EntityRepository(api);
+    _governanceRepo = GovernanceRepository(api);
     _attributes = List.from(_selectedType.defaultAttributes);
+    _loadRole();
+    _loadSourceSystems();
+  }
+
+  Future<void> _loadRole() async {
+    final role = await AuthManager.getUserRole() ?? '';
+    if (mounted) setState(() => _isSteward = role == 'steward');
+  }
+
+  Future<void> _loadSourceSystems() async {
+    setState(() => _loadingSources = true);
+    final tenantId = await AuthManager.getTenantId() ?? '';
+    final result = await SourceSystemsRepository(ApiClient()).listSourceSystems(tenantId);
+    if (!mounted) return;
+    setState(() {
+      _loadingSources = false;
+      if (result is Success<List<SourceSystemModel>>) {
+        _sourceSystems = result.data.where((s) => s.isActive).toList();
+      }
+    });
   }
 
   static String _generateUuid() {
@@ -355,43 +376,70 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
       _dupCheckDone = false;
       _dupHits = [];
     });
-    await Future.delayed(const Duration(seconds: 2));
-    if (generation != _dupCheckGeneration || !mounted) return;
-    // Simulate response — show duplicate only if "name" field is non-empty
+
+    // Build a query from the first name-like or any non-empty field
     final nameAttr = _attributes
         .where((a) => a.key.toLowerCase().contains('name'))
         .firstOrNull;
+    final query = nameAttr?.valueController.text.trim() ??
+        _attributes.map((a) => a.valueController.text.trim()).firstWhere(
+              (v) => v.isNotEmpty,
+              orElse: () => '',
+            );
 
-    final hasDup = nameAttr?.valueController.text.trim().isNotEmpty ?? false;
-    setState(() {
-      _isDupChecking = false;
-      _dupCheckDone = true;
-      _dupHits = hasDup
-          ? const [
-              _DuplicateHit(
-                entityId: 'ENT-003',
-                entityName: 'Michael A. Rodriguez',
-                score: 0.87,
-                sourceSystem: 'Salesforce CRM',
-              ),
-              _DuplicateHit(
-                entityId: 'ENT-007',
-                entityName: 'M. Rodriguez Jr.',
-                score: 0.72,
-                sourceSystem: 'SAP ERP',
-              ),
-            ]
-          : [];
-    });
+    if (query.isEmpty) {
+      if (mounted) {
+        setState(() { _isDupChecking = false; _dupCheckDone = true; });
+      }
+      return;
+    }
+
+    try {
+      final api = ApiClient();
+      final resp = await api.get<Map<String, dynamic>>(
+        '/v1/search',
+        queryParameters: {'q': query, 'page_size': '5'},
+      );
+      if (generation != _dupCheckGeneration || !mounted) return;
+      final items = resp.data?['items'] as List<dynamic>? ?? [];
+      setState(() {
+        _isDupChecking = false;
+        _dupCheckDone = true;
+        _dupHits = items.map((e) {
+          final m = e as Map<String, dynamic>;
+          return _DuplicateHit(
+            entityId: m['id'] as String? ?? m['entity_id'] as String? ?? '—',
+            entityName: m['display_name'] as String? ?? m['name'] as String? ?? 'Unknown',
+            score: (m['score'] as num?)?.toDouble() ?? 0.8,
+            sourceSystem: (m['source_systems'] as List<dynamic>?)?.firstOrNull as String? ?? '—',
+          );
+        }).toList();
+      });
+    } catch (_) {
+      if (generation != _dupCheckGeneration || !mounted) return;
+      setState(() { _isDupChecking = false; _dupCheckDone = true; });
+    }
   }
 
   Future<void> _publish() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.white, size: 16),
+            SizedBox(width: 10),
+            Text('Fix the highlighted field errors before publishing.'),
+          ]),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     setState(() => _isPublishing = true);
 
     try {
-      final tenantId = (await AuthManager.getTenantId()) ?? 
-      '00000000-0000-0000-0000-000000000001';
+      final tenantId = await AuthManager.getTenantId() ?? '';
 
       final attributes = _attributes
           .where((a) => a.keyController.text.trim().isNotEmpty)
@@ -402,104 +450,166 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
               })
           .toList();
 
-      final recordOrigin = _selectedOrigin == _Origin.mdmAuthoritative
-          ? 'mdm_authoritative'
-          : 'ingested';
+      final isIngested = _selectedOrigin == _Origin.sourceSystem;
+      final recordOrigin = isIngested ? 'ingested' : 'mdm_authoritative';
+      final entityId = _generateUuid();
+
+      // Stewards create as Draft; Admins publish directly as Active.
+      final status = _isSteward ? 'Draft' : 'Active';
+
+      final entityBody = <String, dynamic>{
+        'entity_id': entityId,
+        'tenant_id': tenantId,
+        'entity_type': _selectedType.label,
+        'status': status,
+        'attributes': attributes,
+      };
+
+      // Include source snapshot when user selected a real (non-manual) source system.
+      if (isIngested && _selectedSourceModel.code != 'nexus-mdm') {
+        entityBody['source_snapshots'] = [
+          {
+            'source_system': _selectedSourceModel.code,
+            'source_entity_id': entityId,
+          }
+        ];
+      }
 
       final payload = {
-        'entity': {
-          'entity_id': _generateUuid(),
-          'tenant_id': tenantId,
-          'entity_type': _selectedType.label,
-          'status': 'Active',
-          'attributes': attributes,
-        },
+        'entity': entityBody,
         'record_origin': recordOrigin,
-        'distribute': _distribute,
+        'distribute': _isSteward ? false : _distribute,
         'distribution_targets': <Map<String, dynamic>>[],
       };
 
       final result = await _repository.createEntity(payload);
       if (!mounted) return;
-      setState(() => _isPublishing = false);
 
       switch (result) {
-        case Success<CreateEntityResponse>():
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle_rounded,
-                      color: Colors.white, size: 18),
-                  const SizedBox(width: 10),
-                  Text('Entity published successfully.',
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: Colors.white)),
-                ],
-              ),
+        case Success<CreateEntityResponse>(:final data):
+          if (_isSteward) {
+            // Auto-submit the new draft for Data Owner review.
+            final reviewResult = await _governanceRepo.submitForReview(
+              data.entityId,
+              changeSummary: 'New ${_selectedType.label} record submitted for review.',
+            );
+            if (!mounted) return;
+            setState(() => _isPublishing = false);
+            final msg = reviewResult is Success<bool>
+                ? 'Record submitted for Data Owner review.'
+                : 'Record saved as draft (submit-for-review failed — try from the entity detail page).';
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Row(children: [
+                const Icon(Icons.pending_actions_outlined,
+                    color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text(msg,
+                    style: AppTextStyles.bodyMedium.copyWith(color: Colors.white))),
+              ]),
+              backgroundColor: AppColors.warning,
+              behavior: SnackBarBehavior.floating,
+            ));
+          } else {
+            setState(() => _isPublishing = false);
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Row(children: [
+                const Icon(Icons.check_circle_rounded,
+                    color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Text('Entity published successfully.',
+                    style: AppTextStyles.bodyMedium.copyWith(color: Colors.white)),
+              ]),
               backgroundColor: AppColors.success,
               behavior: SnackBarBehavior.floating,
-            ),
-          );
+            ));
+          }
           context.pop(true);
         case Failure<CreateEntityResponse>(:final exception):
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.error_outline_rounded,
-                      color: Colors.white, size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                        'Failed to create entity: ${exception.message}',
-                        style: AppTextStyles.bodyMedium
-                            .copyWith(color: Colors.white)),
-                  ),
-                ],
+          setState(() => _isPublishing = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Row(children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Failed to create entity: ${exception.message}',
+                    style: AppTextStyles.bodyMedium.copyWith(color: Colors.white)),
               ),
-              backgroundColor: AppColors.error,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+            ]),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ));
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isPublishing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline_rounded,
-                  color: Colors.white, size: 18),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text('Error: $e',
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: Colors.white)),
-              ),
-            ],
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(children: [
+          const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('Error: $e',
+                style: AppTextStyles.bodyMedium.copyWith(color: Colors.white)),
           ),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        ]),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 
   Future<void> _saveDraft() async {
     setState(() => _isSavingDraft = true);
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-    setState(() => _isSavingDraft = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Draft saved.',
+    try {
+      final tenantId = await AuthManager.getTenantId() ?? '';
+      final attributes = _attributes
+          .where((a) => a.keyController.text.trim().isNotEmpty)
+          .map((a) => {
+                'key': a.keyController.text.trim(),
+                'value': a.valueController.text.trim(),
+                'data_type': a.type,
+              })
+          .toList();
+      final payload = {
+        'entity': {
+          'entity_id': _generateUuid(),
+          'tenant_id': tenantId,
+          'entity_type': _selectedType.label,
+          'status': 'Draft',
+          'attributes': attributes,
+        },
+        'record_origin': 'mdm_authoritative',
+        'distribute': false,
+        'distribution_targets': <Map<String, dynamic>>[],
+      };
+      final result = await _repository.createEntity(payload);
+      if (!mounted) return;
+      setState(() => _isSavingDraft = false);
+      switch (result) {
+        case Success<CreateEntityResponse>():
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Draft saved.',
+                style: AppTextStyles.bodyMedium.copyWith(color: Colors.white)),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+          ));
+        case Failure<CreateEntityResponse>(:final exception):
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Failed to save draft: ${exception.message}',
+                style: AppTextStyles.bodyMedium.copyWith(color: Colors.white)),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSavingDraft = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error saving draft: $e',
             style: AppTextStyles.bodyMedium.copyWith(color: Colors.white)),
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
-      ),
-    );
+      ));
+    }
   }
 
   @override
@@ -556,8 +666,8 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
         ElevatedButton(
           onPressed: (_isPublishing || _isSavingDraft) ? null : _publish,
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
+            backgroundColor: _isSteward ? AppColors.warning : AppColors.primary,
+            foregroundColor: _isSteward ? AppColors.navyBackground : Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             textStyle: AppTextStyles.buttonMedium,
           ),
@@ -567,7 +677,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
                   height: 14,
                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
-              : const Text('Publish'),
+              : Text(_isSteward ? 'Submit for Review' : 'Publish'),
         ),
         const SizedBox(width: 16),
       ],
@@ -610,12 +720,18 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
                   children: [
                     Text('Source System', style: AppTextStyles.labelMedium),
                     const SizedBox(height: 8),
-                    _StyledDropdown<_SourceSystem>(
-                      value: _selectedSource,
-                      items: _SourceSystem.values,
-                      labelOf: (s) => s.label,
-                      onChanged: (v) => v != null ? setState(() => _selectedSource = v) : null,
-                    ),
+                    if (_loadingSources)
+                      const SizedBox(
+                        height: 48,
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    else
+                      _StyledDropdown<SourceSystemModel>(
+                        value: _selectedSourceModel,
+                        items: _sourceOptions,
+                        labelOf: (s) => s.name,
+                        onChanged: (v) { if (v != null) setState(() => _selectedSourceModel = v); },
+                      ),
                   ],
                 ),
               ),
@@ -1092,7 +1208,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
           ),
           const SizedBox(width: 10),
           OutlinedButton(
-            onPressed: () {},
+            onPressed: () => context.go('/dashboard/entities/${hit.entityId}'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: const BorderSide(color: AppColors.primary),

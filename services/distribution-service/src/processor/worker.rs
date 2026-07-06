@@ -36,7 +36,9 @@ impl DistributionWorker {
     }
 
     async fn process_batch(&self) -> Result<()> {
-        // Fetch up to 50 pending jobs
+        // Fetch up to 50 pending jobs that are ready to run.
+        // Pending jobs with a future next_attempt_at are skipped until their
+        // backoff window elapses (exponential: 5s → 25s → 125s).
         let rows = sqlx::query(
             r#"
             SELECT
@@ -45,8 +47,9 @@ impl DistributionWorker {
                 c.connector_type, c.endpoint_url, c.config AS connector_config
             FROM platform.distribution_jobs j
             JOIN platform.distribution_connectors c ON c.connector_id = j.connector_id
-            WHERE j.status IN ('pending', 'failed')
+            WHERE j.status = 'pending'
               AND j.attempts < $1
+              AND (j.next_attempt_at IS NULL OR j.next_attempt_at <= NOW())
             ORDER BY j.created_at ASC
             LIMIT 50
             FOR UPDATE SKIP LOCKED
@@ -107,17 +110,23 @@ impl DistributionWorker {
     }
 
     async fn mark_failed(&self, job_id: Uuid, error: &str) {
+        // Compute exponential backoff: 5^(attempt+1) seconds (5s → 25s → 125s).
+        // After MAX_ATTEMPTS the job is permanently failed and won't be retried.
         let _ = sqlx::query(
             r#"
             UPDATE platform.distribution_jobs
-            SET status = CASE WHEN attempts + 1 >= $2 THEN 'failed' ELSE 'failed' END,
-                last_error = $3,
-                attempts   = attempts + 1
+            SET attempts       = attempts + 1,
+                error_message  = $3,
+                status         = CASE WHEN attempts + 1 >= $2 THEN 'failed' ELSE 'pending' END,
+                next_attempt_at = CASE
+                    WHEN attempts + 1 >= $2 THEN NULL
+                    ELSE NOW() + (POWER(5, attempts + 1) || ' seconds')::INTERVAL
+                END
             WHERE job_id = $1
             "#,
         )
         .bind(job_id)
-        .bind(MAX_ATTEMPTS)
+        .bind(MAX_ATTEMPTS as i32)
         .bind(error)
         .execute(&self.pool)
         .await;

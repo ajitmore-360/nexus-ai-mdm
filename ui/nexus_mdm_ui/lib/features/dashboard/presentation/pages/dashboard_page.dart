@@ -15,6 +15,9 @@ import '../../../../shared/widgets/stat_card.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/entity_avatar.dart';
 import '../../data/dashboard_repository.dart';
+import '../../../admin/presentation/pages/platform_dashboard_page.dart';
+import 'business_admin_dashboard_page.dart';
+import 'steward_dashboard_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final String? section;
@@ -29,9 +32,14 @@ class _DashboardPageState extends State<DashboardPage> {
   late final DashboardRepository _repository;
   bool _isLoading = true;
   bool _hasError = false;
+  bool _isProductAdmin = false;
+  bool _isBusinessAdmin = false;
+  bool _isSteward = false;
   String _errorMessage = '';
-  DashboardStats _stats = DashboardStats.demo;
-  List<ActivityItem> _activities = ActivityItem.demoList;
+  DashboardStats _stats = DashboardStats.empty;
+  List<ActivityItem> _activities = const [];
+  QualityDimensions _quality = QualityDimensions.empty;
+  List<StewardStat> _stewards = const [];
   int _touchedChartIndex = -1;
   String _firstName = '';
 
@@ -48,38 +56,59 @@ class _DashboardPageState extends State<DashboardPage> {
       _hasError = false;
     });
 
-    final tenantId = await AuthManager.getTenantId()
-        ?? '00000000-0000-0000-0000-000000000001';
+    final tenantId = await AuthManager.getTenantId() ?? '';
     final displayName = await AuthManager.getUserName() ?? '';
+    final role        = await AuthManager.getUserRole() ?? '';
     if (!mounted) return;
+    if (role == 'super_admin') {
+      setState(() { _isProductAdmin = true; _isLoading = false; });
+      return;
+    }
+    if (role == 'business_admin') {
+      setState(() { _isBusinessAdmin = true; _isLoading = false; });
+      return;
+    }
+    if (role == 'steward') {
+      setState(() { _isSteward = true; _isLoading = false; });
+      return;
+    }
     setState(() {
       _firstName = displayName.isNotEmpty
           ? displayName.split(' ').first
           : '';
     });
 
-    final statsResult = await _repository.getStats(tenantId);
-    final activityResult = await _repository.getActivityFeed(tenantId);
+    final results = await Future.wait([
+      _repository.getStats(tenantId),
+      _repository.getActivityFeed(tenantId),
+      _repository.getQualityDimensions(),
+      _repository.getStewardPerformance(),
+    ]);
 
     if (!mounted) return;
 
-    // Both methods always return Success (with demo fallback on error),
-    // so we can safely switch on the result type.
+    final statsResult    = results[0] as ApiResult<DashboardStats>;
+    final activityResult = results[1] as ApiResult<List<ActivityItem>>;
+    final quality        = results[2] as QualityDimensions;
+    final stewards       = results[3] as List<StewardStat>;
+
     setState(() {
       _isLoading = false;
+      _quality   = quality;
+      _stewards  = stewards;
       switch (statsResult) {
         case Success<DashboardStats>(:final data):
           _stats = data;
         case Failure<DashboardStats>(:final exception):
           _hasError = true;
           _errorMessage = exception.message;
-          _stats = DashboardStats.demo;
+          _stats = DashboardStats.empty;
       }
       switch (activityResult) {
         case Success<List<ActivityItem>>(:final data):
           _activities = data;
         case Failure<List<ActivityItem>>(:final exception):
-          _activities = ActivityItem.demoList;
+          _activities = const [];
           if (!_hasError) {
             _hasError = true;
             _errorMessage = exception.message;
@@ -90,6 +119,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isProductAdmin) return const PlatformDashboardPage();
+    if (_isBusinessAdmin) return const BusinessAdminDashboardPage();
+    if (_isSteward) return const StewardDashboardPage();
     if (widget.section != null && widget.section != 'main') {
       return _buildPlaceholderSection();
     }
@@ -173,6 +205,10 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 24),
           _buildChartsRow(),
           const SizedBox(height: 24),
+          _buildQualityDimensions(),
+          const SizedBox(height: 24),
+          _buildStewardPerformance(),
+          const SizedBox(height: 24),
           _buildActivityFeed(),
           const SizedBox(height: 32),
         ],
@@ -254,11 +290,13 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildStatCards() {
     if (_isLoading) {
-      return GridView.count(
-        crossAxisCount: _getCrossAxisCount(),
-        crossAxisSpacing: AppConstants.gridSpacing,
-        mainAxisSpacing: AppConstants.gridSpacing,
-        childAspectRatio: 1.8,
+      return GridView(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: _getCrossAxisCount(),
+          crossAxisSpacing: AppConstants.gridSpacing,
+          mainAxisSpacing: AppConstants.gridSpacing,
+          mainAxisExtent: 180,
+        ),
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         children: const [
@@ -318,11 +356,13 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     ];
 
-    return GridView.count(
-      crossAxisCount: _getCrossAxisCount(),
-      crossAxisSpacing: AppConstants.gridSpacing,
-      mainAxisSpacing: AppConstants.gridSpacing,
-      childAspectRatio: 1.8,
+    return GridView(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: _getCrossAxisCount(),
+        crossAxisSpacing: AppConstants.gridSpacing,
+        mainAxisSpacing: AppConstants.gridSpacing,
+        mainAxisExtent: 180,
+      ),
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: cards,
@@ -691,7 +731,7 @@ class _DashboardPageState extends State<DashboardPage> {
               Text('Recent Activity', style: AppTextStyles.titleSmall),
               const Spacer(),
               TextButton(
-                onPressed: () {},
+                onPressed: () => context.go('/dashboard/analytics'),
                 child: const Text('View all'),
               ),
             ],
@@ -838,5 +878,208 @@ class _DashboardPageState extends State<DashboardPage> {
     if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
     if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
     return n.toString();
+  }
+
+  // ---------------------------------------------------------------------------
+  // BL-067: Quality Dimensions card
+  // ---------------------------------------------------------------------------
+
+  Widget _buildQualityDimensions() {
+    final dims = [
+      ('Completeness', _quality.completeness),
+      ('Accuracy',     _quality.accuracy),
+      ('Consistency',  _quality.consistency),
+      ('Uniqueness',   _quality.uniqueness),
+      ('Timeliness',   _quality.timeliness),
+      ('Validity',     _quality.validity),
+    ];
+
+    Color barColor(double v) {
+      if (v < 0.70) return AppColors.error;
+      if (v < 0.85) return AppColors.warning;
+      return AppColors.success;
+    }
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text('Data Quality Dimensions', style: AppTextStyles.titleMedium),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: barColor(_quality.overallScore).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Overall ${(_quality.overallScore * 100).toStringAsFixed(1)}%',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: barColor(_quality.overallScore),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...dims.map((d) {
+              final label = d.$1;
+              final value = d.$2;
+              final color = barColor(value);
+              final pct   = (value * 100).toStringAsFixed(1);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(label, style: AppTextStyles.bodySmall),
+                        const Spacer(),
+                        Text('$pct%',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: color,
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: [const FontFeature.tabularFigures()],
+                            )),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: value.clamp(0.0, 1.0),
+                        minHeight: 8,
+                        backgroundColor: AppColors.cardSurface,
+                        valueColor: AlwaysStoppedAnimation<Color>(color),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // BL-067: Steward Performance card
+  // ---------------------------------------------------------------------------
+
+  Widget _buildStewardPerformance() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Steward Performance', style: AppTextStyles.titleMedium),
+            const SizedBox(height: 16),
+            if (_stewards.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text('No steward data available',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: AppColors.secondaryText)),
+                ),
+              )
+            else
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  headingRowColor: WidgetStateProperty.all(
+                      AppColors.surface),
+                  columnSpacing: 20,
+                  dataRowMinHeight: 44,
+                  headingTextStyle: AppTextStyles.labelSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.secondaryText,
+                    letterSpacing: 0.5,
+                  ),
+                  columns: const [
+                    DataColumn(label: Text('STEWARD')),
+                    DataColumn(label: Text('REVIEWS'), numeric: true),
+                    DataColumn(label: Text('APPROVED'), numeric: true),
+                    DataColumn(label: Text('REJECTED'), numeric: true),
+                    DataColumn(label: Text('APPROVAL %'), numeric: true),
+                    DataColumn(label: Text('AVG TIME'), numeric: true),
+                  ],
+                  rows: _stewards.map((s) {
+                    final approvalColor = s.approvalPct >= 85
+                        ? AppColors.success
+                        : s.approvalPct >= 70
+                            ? AppColors.warning
+                            : AppColors.error;
+                    return DataRow(cells: [
+                      DataCell(
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(s.displayName,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                    fontWeight: FontWeight.w600)),
+                            Text(s.email,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                    color: AppColors.secondaryText)),
+                          ],
+                        ),
+                      ),
+                      DataCell(Text(s.totalReviews.toString(),
+                          style: AppTextStyles.bodySmall.copyWith(
+                              fontFeatures: [const FontFeature.tabularFigures()]))),
+                      DataCell(Text(s.approvedCount.toString(),
+                          style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.success,
+                              fontFeatures: [const FontFeature.tabularFigures()]))),
+                      DataCell(Text(s.rejectedCount.toString(),
+                          style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.error,
+                              fontFeatures: [const FontFeature.tabularFigures()]))),
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: approvalColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${s.approvalPct.toStringAsFixed(1)}%',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: approvalColor,
+                              fontWeight: FontWeight.w700,
+                              fontFeatures: [const FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataCell(Text(
+                        s.avgReviewMin < 60
+                            ? '${s.avgReviewMin.toStringAsFixed(0)}m'
+                            : '${(s.avgReviewMin / 60).toStringAsFixed(1)}h',
+                        style: AppTextStyles.bodySmall.copyWith(
+                            fontFeatures: [const FontFeature.tabularFigures()]),
+                      )),
+                    ]);
+                  }).toList(),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

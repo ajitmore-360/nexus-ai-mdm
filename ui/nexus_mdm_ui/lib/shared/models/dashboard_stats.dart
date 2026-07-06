@@ -72,41 +72,21 @@ class DashboardStats extends Equatable {
         'overall_data_quality': overallDataQuality,
       };
 
-  static DashboardStats get demo => DashboardStats(
-        totalEntities: 247583,
-        totalGoldenRecords: 198421,
-        pendingReview: 1247,
-        aiMatchScore: 94.7,
-        entityGrowthRate: 12.4,
-        goldenRecordGrowthRate: 8.2,
-        pendingReviewDelta: -23,
-        aiScoreDelta: 1.3,
-        mergedToday: 184,
-        newEntitiesToday: 2341,
-        overallDataQuality: 87.3,
-        matchActivity: List.generate(
-          14,
-          (i) => MatchActivityPoint(
-            date: DateTime.now().subtract(Duration(days: 13 - i)),
-            autoMerged: 150 + (i * 12) + (i % 3 == 0 ? 50 : 0),
-            manualMerged: 30 + (i * 3),
-            rejected: 15 + (i % 4),
-            pending: 40 - i,
-          ),
-        ),
-        topDuplicateSources: const [
-          DuplicateSourcePoint(
-              source: 'Salesforce CRM', count: 523, percentage: 0.34),
-          DuplicateSourcePoint(
-              source: 'CSV Import', count: 389, percentage: 0.25),
-          DuplicateSourcePoint(
-              source: 'HubSpot', count: 287, percentage: 0.19),
-          DuplicateSourcePoint(
-              source: 'SAP ERP', count: 198, percentage: 0.13),
-          DuplicateSourcePoint(
-              source: 'Manual Entry', count: 142, percentage: 0.09),
-        ],
-      );
+  static const DashboardStats empty = DashboardStats(
+    totalEntities: 0,
+    totalGoldenRecords: 0,
+    pendingReview: 0,
+    aiMatchScore: 0.0,
+    entityGrowthRate: 0.0,
+    goldenRecordGrowthRate: 0.0,
+    pendingReviewDelta: 0,
+    aiScoreDelta: 0.0,
+    mergedToday: 0,
+    newEntitiesToday: 0,
+    overallDataQuality: 0.0,
+    matchActivity: [],
+    topDuplicateSources: [],
+  );
 
   @override
   List<Object?> get props => [

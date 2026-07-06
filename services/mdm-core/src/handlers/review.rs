@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::handlers::{entities::extract_request_context, ApiResponse};
 use crate::middleware::tenant::TenantContext;
+use crate::services::audit_service::AuditEvent;
 use crate::AppState;
 
 #[derive(Deserialize)]
@@ -66,18 +67,48 @@ pub async fn approve_match(
     Path((request_id, candidate_id)): Path<(Uuid, Uuid)>,
     body: Option<Json<ReviewDecisionBody>>,
 ) -> impl IntoResponse {
-    let ctx   = extract_request_context(&tenant_ctx, &headers);
-    let notes = body.and_then(|b| b.notes.clone());
+    let ctx      = extract_request_context(&tenant_ctx, &headers);
+    let notes    = body.and_then(|b| b.notes.clone());
+    let actor_id = headers.get("x-user-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| Uuid::parse_str(s).ok());
 
-    match state.review_service.approve(ctx, request_id, candidate_id, notes).await {
-        Ok(()) => (
-            StatusCode::OK,
-            Json(ApiResponse::<serde_json::Value> {
-                success: true,
-                data:    Some(serde_json::json!({ "request_id": request_id, "candidate_id": candidate_id, "status": "Matched" })),
-                error:   None,
-            }),
-        ),
+    match state.review_service.approve(ctx, request_id, candidate_id, notes.clone()).await {
+        Ok(()) => {
+            state.audit_service.log_background(AuditEvent {
+                tenant_id:     tenant_ctx.tenant_id,
+                event_type:    "match.approved".to_string(),
+                actor_id,
+                resource_type: "match_candidate".to_string(),
+                resource_id:   candidate_id.to_string(),
+                metadata:      serde_json::json!({
+                    "request_id":   request_id,
+                    "candidate_id": candidate_id,
+                    "notes":        notes,
+                }),
+                before: None,
+                after:  None,
+            });
+            if let Some(pubsub) = &state.pubsub {
+                let pubsub = std::sync::Arc::clone(pubsub);
+                let tid    = tenant_ctx.tenant_id.to_string();
+                tokio::spawn(async move {
+                    let _ = pubsub.publish_to_tenant(&tid, &serde_json::json!({
+                        "type":         "match.approved",
+                        "candidate_id": candidate_id,
+                        "request_id":   request_id,
+                    })).await;
+                });
+            }
+            (
+                StatusCode::OK,
+                Json(ApiResponse::<serde_json::Value> {
+                    success: true,
+                    data:    Some(serde_json::json!({ "request_id": request_id, "candidate_id": candidate_id, "status": "Matched" })),
+                    error:   None,
+                }),
+            )
+        },
         Err(err) => {
             tracing::error!(error=?err, "match approve failed");
             (
@@ -101,18 +132,48 @@ pub async fn reject_match(
     Path((request_id, candidate_id)): Path<(Uuid, Uuid)>,
     body: Option<Json<ReviewDecisionBody>>,
 ) -> impl IntoResponse {
-    let ctx   = extract_request_context(&tenant_ctx, &headers);
-    let notes = body.and_then(|b| b.notes.clone());
+    let ctx      = extract_request_context(&tenant_ctx, &headers);
+    let notes    = body.and_then(|b| b.notes.clone());
+    let actor_id = headers.get("x-user-id")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| Uuid::parse_str(s).ok());
 
-    match state.review_service.reject(ctx, request_id, candidate_id, notes).await {
-        Ok(()) => (
-            StatusCode::OK,
-            Json(ApiResponse::<serde_json::Value> {
-                success: true,
-                data:    Some(serde_json::json!({ "request_id": request_id, "candidate_id": candidate_id, "status": "Rejected" })),
-                error:   None,
-            }),
-        ),
+    match state.review_service.reject(ctx, request_id, candidate_id, notes.clone()).await {
+        Ok(()) => {
+            state.audit_service.log_background(AuditEvent {
+                tenant_id:     tenant_ctx.tenant_id,
+                event_type:    "match.rejected".to_string(),
+                actor_id,
+                resource_type: "match_candidate".to_string(),
+                resource_id:   candidate_id.to_string(),
+                metadata:      serde_json::json!({
+                    "request_id":   request_id,
+                    "candidate_id": candidate_id,
+                    "notes":        notes,
+                }),
+                before: None,
+                after:  None,
+            });
+            if let Some(pubsub) = &state.pubsub {
+                let pubsub = std::sync::Arc::clone(pubsub);
+                let tid    = tenant_ctx.tenant_id.to_string();
+                tokio::spawn(async move {
+                    let _ = pubsub.publish_to_tenant(&tid, &serde_json::json!({
+                        "type":         "match.rejected",
+                        "candidate_id": candidate_id,
+                        "request_id":   request_id,
+                    })).await;
+                });
+            }
+            (
+                StatusCode::OK,
+                Json(ApiResponse::<serde_json::Value> {
+                    success: true,
+                    data:    Some(serde_json::json!({ "request_id": request_id, "candidate_id": candidate_id, "status": "Rejected" })),
+                    error:   None,
+                }),
+            )
+        },
         Err(err) => {
             tracing::error!(error=?err, "match reject failed");
             (
@@ -281,6 +342,26 @@ pub async fn bulk_approve_matches(
         Ok(pg) => {
             let approved = pg.rows_affected() as i64;
             let failed   = body.candidate_ids.len() as i64 - approved;
+            state.audit_service.log_background(AuditEvent {
+                tenant_id:     tenant_id,
+                event_type:    "match.bulk_approved".to_string(),
+                actor_id:      user_id,
+                resource_type: "match_review_queue".to_string(),
+                resource_id:   tenant_id.to_string(),
+                metadata:      serde_json::json!({ "approved": approved, "failed": failed, "candidate_ids": body.candidate_ids }),
+                before:        None,
+                after:         None,
+            });
+            if let Some(pubsub) = &state.pubsub {
+                let pubsub = std::sync::Arc::clone(pubsub);
+                let tid    = tenant_id.to_string();
+                tokio::spawn(async move {
+                    let _ = pubsub.publish_to_tenant(&tid, &serde_json::json!({
+                        "type":     "match.bulk_approved",
+                        "approved": approved,
+                    })).await;
+                });
+            }
             (
                 StatusCode::OK,
                 Json(ApiResponse {
@@ -333,6 +414,26 @@ pub async fn bulk_reject_matches(
         Ok(pg) => {
             let rejected = pg.rows_affected() as i64;
             let failed   = body.candidate_ids.len() as i64 - rejected;
+            state.audit_service.log_background(AuditEvent {
+                tenant_id:     tenant_id,
+                event_type:    "match.bulk_rejected".to_string(),
+                actor_id:      user_id,
+                resource_type: "match_review_queue".to_string(),
+                resource_id:   tenant_id.to_string(),
+                metadata:      serde_json::json!({ "rejected": rejected, "failed": failed, "candidate_ids": body.candidate_ids }),
+                before:        None,
+                after:         None,
+            });
+            if let Some(pubsub) = &state.pubsub {
+                let pubsub = std::sync::Arc::clone(pubsub);
+                let tid    = tenant_id.to_string();
+                tokio::spawn(async move {
+                    let _ = pubsub.publish_to_tenant(&tid, &serde_json::json!({
+                        "type":     "match.bulk_rejected",
+                        "rejected": rejected,
+                    })).await;
+                });
+            }
             (
                 StatusCode::OK,
                 Json(ApiResponse {

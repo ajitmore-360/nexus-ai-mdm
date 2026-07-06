@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'match_candidate.dart';
 
 // ---------------------------------------------------------------------------
@@ -154,6 +155,32 @@ class ApiException implements Exception {
   bool get isForbidden => statusCode == 403;
   bool get isServerError => statusCode != null && statusCode! >= 500;
   bool get isNetworkError => statusCode == null;
+
+  factory ApiException.fromDioException(DioException e) {
+    final code = e.response?.statusCode;
+    final String msg;
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+        msg = 'Connection timeout. Check your network.';
+      case DioExceptionType.receiveTimeout:
+        msg = 'Request timed out. Please try again.';
+      case DioExceptionType.sendTimeout:
+        msg = 'Failed to send request. Please try again.';
+      case DioExceptionType.connectionError:
+        msg = 'Cannot connect to server. Check your network.';
+      case DioExceptionType.cancel:
+        msg = 'Request cancelled.';
+      case DioExceptionType.badResponse:
+        final data = e.response?.data;
+        msg = (data is Map
+                ? (data['error'] ?? data['message']) as String?
+                : null) ??
+            'Server error ($code)';
+      default:
+        msg = e.message ?? 'An unexpected error occurred.';
+    }
+    return ApiException(statusCode: code, message: msg, details: e.response?.data);
+  }
 
   @override
   String toString() =>

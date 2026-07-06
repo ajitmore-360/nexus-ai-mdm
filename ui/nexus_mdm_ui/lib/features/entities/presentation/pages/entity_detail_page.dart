@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/network/api_client.dart' hide ApiException;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -12,6 +13,7 @@ import '../../../../shared/widgets/entity_avatar.dart';
 import '../../../../shared/widgets/ai_badge.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../data/entity_repository.dart';
+import '../../data/relationship_repository.dart';
 
 class EntityDetailPage extends StatefulWidget {
   final String entityId;
@@ -31,17 +33,30 @@ class _EntityDetailPageState extends State<EntityDetailPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late final EntityRepository _repository;
+  late final RelationshipRepository _relRepository;
   bool _isLoading = true;
   CanonicalEntity? _entity;
+
+  // Relationships state
+  List<EntityRelationshipRecord> _relationships = [];
+  bool _relationshipsLoading = false;
+
+  // History state
+  List<_HistoryEvent> _historyEvents = [];
+  bool _historyLoading = true;
+  final Set<String> _dismissedRecs = {};
 
   @override
   void initState() {
     super.initState();
     _repository = EntityRepository(ApiClient());
+    _relRepository = RelationshipRepository(ApiClient());
     _tabController = TabController(
-        length: 5, vsync: this,
+        length: 6, vsync: this,
         initialIndex: widget.showLineage ? 3 : 0);
     _loadEntity();
+    _loadRelationships();
+    _loadHistory();
   }
 
   @override
@@ -55,20 +70,74 @@ class _EntityDetailPageState extends State<EntityDetailPage>
     if (!mounted) return;
     setState(() {
       _isLoading = false;
-      switch (result) {
-        case Success<CanonicalEntity>(:final data):
-          _entity = data;
-        case Failure():
-          // Fall back to demo data — pick by id or first available.
-          final demos = CanonicalEntity.demoList;
-          _entity = demos.isEmpty
-              ? null
-              : demos.firstWhere(
-                  (e) => e.id == widget.entityId,
-                  orElse: () => demos.first,
-                );
+      if (result case Success<CanonicalEntity>(:final data)) {
+        _entity = data;
       }
+      // On failure _entity stays null → _buildNotFound shown.
     });
+  }
+
+  Future<void> _loadHistory() async {
+    final api = ApiClient();
+    try {
+      final resp = await api.get<Map<String, dynamic>>(
+        AppConstants.auditEventsPath,
+        queryParameters: {
+          'aggregate_type': 'entity',
+          'aggregate_id': widget.entityId,
+          'page_size': '50',
+        },
+      );
+      if (!mounted) return;
+      final items = (resp.data?['items'] as List<dynamic>? ?? []);
+      setState(() {
+        _historyEvents = items
+            .map((e) => _HistoryEvent.fromJson(e as Map<String, dynamic>))
+            .toList();
+        _historyLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _historyLoading = false);
+    }
+  }
+
+  Future<void> _loadRelationships() async {
+    setState(() => _relationshipsLoading = true);
+    // tenant_id is injected by the auth interceptor; pass a placeholder here.
+    final result = await _relRepository.listForEntity(
+      tenantId: '',
+      entityId: widget.entityId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _relationshipsLoading = false;
+      if (result case Success<List<EntityRelationshipRecord>>(:final data)) {
+        _relationships = data;
+      }
+      // On failure keep _relationships empty — empty state will show.
+    });
+  }
+
+  Future<void> _submitForReview(CanonicalEntity entity) async {
+    final api = ApiClient();
+    try {
+      await api.patch<Map<String, dynamic>>(
+        '${AppConstants.entitiesPath}/${entity.id}',
+        data: {'status': 'PendingReview'},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Submitted for review.'),
+        backgroundColor: Colors.green,
+      ));
+      _loadEntity();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Failed to submit for review. Please try again.'),
+        backgroundColor: Colors.red,
+      ));
+    }
   }
 
   @override
@@ -143,6 +212,7 @@ class _EntityDetailPageState extends State<EntityDetailPage>
                 _buildConflictsTab(entity),
                 _buildLineageTab(entity),
                 _buildHistoryTab(entity),
+                _buildRelationshipsTab(),
               ],
             ),
           ),
@@ -288,7 +358,9 @@ class _EntityDetailPageState extends State<EntityDetailPage>
               ),
 
               // Actions
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   OutlinedButton.icon(
                     onPressed: () =>
@@ -296,14 +368,22 @@ class _EntityDetailPageState extends State<EntityDetailPage>
                     icon: const Icon(Icons.account_tree_outlined, size: 16),
                     label: const Text('Lineage'),
                   ),
-                  const SizedBox(width: 8),
                   OutlinedButton.icon(
                     onPressed: () =>
                         context.go('/dashboard/match-queue'),
                     icon: const Icon(Icons.merge_type_rounded, size: 16),
                     label: const Text('Find Matches'),
                   ),
-                  const SizedBox(width: 8),
+                  if (entity.status == EntityStatus.pending)
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.warning,
+                        side: const BorderSide(color: AppColors.warning),
+                      ),
+                      onPressed: () => _submitForReview(entity),
+                      icon: const Icon(Icons.rate_review_outlined, size: 16),
+                      label: const Text('Submit for Review'),
+                    ),
                   ElevatedButton.icon(
                     onPressed: () => context.push(
                       '/dashboard/entities/${_entity!.id}/edit',
@@ -361,29 +441,32 @@ class _EntityDetailPageState extends State<EntityDetailPage>
           Tab(text: 'Conflicts'),
           Tab(text: 'Lineage'),
           Tab(text: 'History'),
+          Tab(text: 'Relationships'),
         ],
       ),
     );
   }
 
   Widget _buildAttributesTab(CanonicalEntity entity) {
-    final demoAttrs = [
-      ('Full Name', 'full_name', entity.displayName, 'Salesforce CRM', 0.99, false),
-      ('Email', 'email', 'a.chen@company.com', 'Salesforce CRM', 0.95, true),
-      ('Phone', 'phone', '+1 (555) 012-3456', 'HubSpot', 0.88, false),
-      ('Department', 'department', 'Engineering', 'Workday HR', 0.97, false),
-      ('Title', 'title', 'Senior Data Architect', 'Salesforce CRM', 0.91, true),
-      ('Location', 'location', 'San Francisco, CA', 'Workday HR', 0.85, false),
-      ('LinkedIn', 'linkedin', 'linkedin.com/in/achen', 'Manual Entry', 0.72, false),
-      ('Source ID', 'source_id', 'SF-000123456', 'Salesforce CRM', 1.0, false),
-    ];
+    final attrs = entity.attributes.values.toList()
+      ..sort((a, b) => b.confidence.compareTo(a.confidence));
+
+    if (attrs.isEmpty) {
+      return Center(
+        child: Text('No attributes loaded.', style: AppTextStyles.bodySmall),
+      );
+    }
+
+    final rows = attrs
+        .map((a) => (a.displayName, a.name, a.value, a.sourceSystem, a.confidence, a.hasConflict))
+        .toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${demoAttrs.length} attributes from ${entity.sourceSystems.length} sources',
+          Text('${rows.length} attributes from ${entity.sourceSystems.length} sources',
               style: AppTextStyles.bodySmall),
           const SizedBox(height: 16),
           Container(
@@ -393,10 +476,9 @@ class _EntityDetailPageState extends State<EntityDetailPage>
               border: Border.all(color: AppColors.divider),
             ),
             child: Column(
-              children: demoAttrs.asMap().entries.map((entry) {
+              children: rows.asMap().entries.map((entry) {
                 final i = entry.key;
-                final attr = entry.value;
-                return _buildAttributeRow(attr, i == demoAttrs.length - 1);
+                return _buildAttributeRow(entry.value, i == rows.length - 1);
               }).toList(),
             ),
           ).animate().fadeIn(duration: 400.ms),
@@ -539,10 +621,7 @@ class _EntityDetailPageState extends State<EntityDetailPage>
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'This entity appears to be a high-confidence canonical record for a senior technical professional. '
-                  'The trust score of ${(entity.trustScore * 100).round()}% reflects strong data consistency across ${entity.sourceSystems.length} connected source systems. '
-                  'Email field shows a minor conflict between Salesforce CRM and HubSpot — likely a work vs personal email distinction. '
-                  'Recommend reviewing title attribute from Workday HR vs Salesforce CRM for canonicalization.',
+                  _buildAiSummary(entity),
                   style: AppTextStyles.aiMessage,
                 ),
               ],
@@ -551,33 +630,114 @@ class _EntityDetailPageState extends State<EntityDetailPage>
 
           const SizedBox(height: 16),
 
-          // Recommendations
-          _buildAiRecommendationCard(
-            'Resolve Email Conflict',
-            'Two email values detected from different sources. Recommend designating the Salesforce CRM email as primary based on confidence score.',
-            Icons.email_outlined,
-            AppColors.warning,
-            '94% confidence',
-          ),
-          const SizedBox(height: 12),
-          _buildAiRecommendationCard(
-            'Potential Duplicate Detected',
-            '3 entities in the system share high name and phone similarity. Review match candidates in the Match Queue.',
-            Icons.copy_outlined,
-            AppColors.error,
-            '87% match score',
-          ),
-          const SizedBox(height: 12),
-          _buildAiRecommendationCard(
-            'Complete LinkedIn Profile',
-            'Adding a verified LinkedIn URL would increase completeness score by 8% and improve entity confidence.',
-            Icons.link_outlined,
-            AppColors.info,
-            'Optional',
-          ),
+          // Recommendations — generated from real entity data
+          ..._buildAiRecommendations(entity),
         ],
       ),
     );
+  }
+
+  List<Widget> _buildAiRecommendations(CanonicalEntity entity) {
+    final cards = <Widget>[];
+
+    void add(String key, Widget w) {
+      if (_dismissedRecs.contains(key)) return;
+      if (cards.isNotEmpty) cards.add(const SizedBox(height: 12));
+      cards.add(w);
+    }
+
+    // Conflict recommendations — one card per conflicted attribute (max 3)
+    final conflictedAttrs = entity.attributes.values
+        .where((a) => a.hasConflict)
+        .take(3)
+        .toList();
+    for (final attr in conflictedAttrs) {
+      final key = 'Resolve ${attr.displayName} Conflict';
+      final sources = attr.conflicts.isNotEmpty
+          ? attr.conflicts.map((c) => c.sourceSystem).join(' vs ')
+          : 'multiple sources';
+      add(key, _buildAiRecommendationCard(
+        key,
+        'Conflicting values detected from $sources. Review and designate the authoritative value to improve record quality.',
+        Icons.compare_arrows_outlined,
+        AppColors.warning,
+        'Conflict',
+        onTakeAction: () => _tabController.animateTo(2),
+        onDismiss: () => setState(() => _dismissedRecs.add(key)),
+      ));
+    }
+
+    // Duplicates
+    if (entity.duplicateCount > 0) {
+      final n = entity.duplicateCount;
+      final key = '$n Potential Duplicate${n == 1 ? '' : 's'} Detected';
+      add(key, _buildAiRecommendationCard(
+        key,
+        '$n entr${n == 1 ? 'y' : 'ies'} share high attribute similarity with this record. Review match candidates to merge or dismiss.',
+        Icons.copy_outlined,
+        AppColors.error,
+        '$n match${n == 1 ? '' : 'es'}',
+        onTakeAction: () => context.go('/dashboard/match-queue'),
+        onDismiss: () => setState(() => _dismissedRecs.add(key)),
+      ));
+    }
+
+    // Low trust score (only if no conflicts to avoid redundant quality message)
+    if (entity.trustScore < 0.75 && conflictedAttrs.isEmpty) {
+      final score = (entity.trustScore * 100).round();
+      const key = 'Data Quality Below Threshold';
+      add(key, _buildAiRecommendationCard(
+        key,
+        'Trust score of $score% is below the recommended 75%. Connect additional verified source systems or resolve attribute conflicts to improve confidence.',
+        Icons.verified_outlined,
+        AppColors.info,
+        '$score% trust',
+        onDismiss: () => setState(() => _dismissedRecs.add(key)),
+      ));
+    }
+
+    // Single source (only when record is otherwise healthy)
+    if (entity.sourceSystems.length == 1 && cards.isEmpty) {
+      const key = 'Single Source System';
+      add(key, _buildAiRecommendationCard(
+        key,
+        'This entity is sourced only from ${entity.primarySource}. Connecting additional source systems enables cross-validation and increases data confidence.',
+        Icons.device_hub_outlined,
+        AppColors.info,
+        'Optional',
+        onDismiss: () => setState(() => _dismissedRecs.add(key)),
+      ));
+    }
+
+    // Healthy — no issues found
+    if (cards.isEmpty) {
+      return [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.success.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.success.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded,
+                  color: AppColors.success, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'No recommendations — this record looks healthy.',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: AppColors.success),
+                ),
+              ),
+            ],
+          ),
+        ).animate(delay: 100.ms).fadeIn(duration: 400.ms),
+      ];
+    }
+
+    return cards;
   }
 
   Widget _buildAiRecommendationCard(
@@ -585,8 +745,10 @@ class _EntityDetailPageState extends State<EntityDetailPage>
     String description,
     IconData icon,
     Color color,
-    String badge,
-  ) {
+    String badge, {
+    VoidCallback? onTakeAction,
+    VoidCallback? onDismiss,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -635,21 +797,22 @@ class _EntityDetailPageState extends State<EntityDetailPage>
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    OutlinedButton(
-                      onPressed: () {},
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        minimumSize: const Size(0, 28),
-                        textStyle: AppTextStyles.buttonSmall,
-                        foregroundColor: color,
-                        side: BorderSide(color: color.withValues(alpha:0.5)),
+                    if (onTakeAction != null)
+                      OutlinedButton(
+                        onPressed: onTakeAction,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          minimumSize: const Size(0, 28),
+                          textStyle: AppTextStyles.buttonSmall,
+                          foregroundColor: color,
+                          side: BorderSide(color: color.withValues(alpha: 0.5)),
+                        ),
+                        child: const Text('Take Action'),
                       ),
-                      child: const Text('Take Action'),
-                    ),
                     const SizedBox(width: 8),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: onDismiss,
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 6),
@@ -695,37 +858,96 @@ class _EntityDetailPageState extends State<EntityDetailPage>
       );
     }
 
+    final conflicted = entity.attributes.values
+        .where((a) => a.hasConflict && a.conflicts.isNotEmpty)
+        .toList();
+
+    if (conflicted.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_circle_outline_rounded,
+                  size: 36, color: AppColors.primary),
+            ).animate().fadeIn().scaleXY(begin: 0.8, end: 1.0),
+            const SizedBox(height: 16),
+            Text('No conflicts detected', style: AppTextStyles.titleMedium)
+                .animate(delay: 100.ms).fadeIn(),
+            const SizedBox(height: 6),
+            Text('All attribute values are consistent across sources.',
+                style: AppTextStyles.bodySmall).animate(delay: 150.ms).fadeIn(),
+          ],
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
-        children: [
-          _buildConflictItem(
-            'Email Address',
-            'Two different email values exist across source systems.',
-            [
-              ('Salesforce CRM', 'a.chen@techcorp.com', 0.95),
-              ('HubSpot', 'alex.chen@gmail.com', 0.72),
+        children: conflicted.asMap().entries.map((entry) {
+          final i = entry.key;
+          final attr = entry.value;
+          final values = [
+            (attr.sourceSystem, attr.value.toString(), attr.confidence),
+            ...attr.conflicts.map((c) => (c.sourceSystem, c.value.toString(), c.confidence)),
+          ];
+          return Column(
+            children: [
+              if (i > 0) const SizedBox(height: 12),
+              _buildConflictItem(
+                attr.displayName,
+                '${values.length} different values across source systems.',
+                values,
+                onResolve: (chosenValue) =>
+                    _resolveConflict(entity.id, attr.name, chosenValue),
+              ),
             ],
-          ),
-          const SizedBox(height: 12),
-          _buildConflictItem(
-            'Job Title',
-            'Job title varies between HR and CRM systems.',
-            [
-              ('Salesforce CRM', 'Senior Data Architect', 0.91),
-              ('Workday HR', 'Principal Data Engineer', 0.88),
-            ],
-          ),
-        ],
+          );
+        }).toList(),
       ),
     );
+  }
+
+  Future<void> _resolveConflict(
+      String entityId, String attrKey, String chosenValue) async {
+    final api = ApiClient();
+    try {
+      await api.patch<Map<String, dynamic>>(
+        '${AppConstants.entitiesPath}/$entityId',
+        data: {
+          'attributes': [
+            {'key': attrKey, 'value': chosenValue},
+          ],
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Conflict resolved.'),
+        backgroundColor: Colors.green,
+      ));
+      _loadEntity();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Failed to resolve conflict. Please try again.'),
+        backgroundColor: Colors.red,
+      ));
+    }
   }
 
   Widget _buildConflictItem(
     String field,
     String description,
-    List<(String, String, double)> values,
-  ) {
+    List<(String, String, double)> values, {
+    void Function(String value)? onResolve,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -782,7 +1004,8 @@ class _EntityDetailPageState extends State<EntityDetailPage>
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton(
-                      onPressed: () {},
+                      onPressed:
+                          onResolve != null ? () => onResolve(v.$2) : null,
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 4),
@@ -855,17 +1078,29 @@ class _EntityDetailPageState extends State<EntityDetailPage>
   }
 
   Widget _buildHistoryTab(CanonicalEntity entity) {
-    final events = [
-      ('Golden record status assigned', DateTime.now().subtract(const Duration(hours: 3))),
-      ('Attribute conflict resolved: email', DateTime.now().subtract(const Duration(hours: 8))),
-      ('Entity merged from duplicate (ent-006)', DateTime.now().subtract(const Duration(days: 1))),
-      ('Imported from Workday HR', DateTime.now().subtract(const Duration(days: 3))),
-      ('Entity created from Salesforce CRM', DateTime.now().subtract(const Duration(days: 14))),
-    ];
+    if (_historyLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_historyEvents.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.history, size: 48, color: AppColors.mutedText),
+            const SizedBox(height: 12),
+            Text('No history yet', style: AppTextStyles.titleSmall),
+            const SizedBox(height: 6),
+            Text('Events will appear here as changes are made.',
+                style: AppTextStyles.bodySmall),
+          ],
+        ),
+      );
+    }
 
     return ListView.separated(
       padding: const EdgeInsets.all(24),
-      itemCount: events.length,
+      itemCount: _historyEvents.length,
       separatorBuilder: (_, __) => Container(
         width: 2,
         height: 20,
@@ -873,7 +1108,7 @@ class _EntityDetailPageState extends State<EntityDetailPage>
         color: AppColors.divider,
       ),
       itemBuilder: (context, i) {
-        final event = events[i];
+        final event = _historyEvents[i];
         return Row(
           children: [
             Container(
@@ -882,19 +1117,17 @@ class _EntityDetailPageState extends State<EntityDetailPage>
               decoration: BoxDecoration(
                 color: AppColors.cardSurface,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.primary.withValues(alpha:0.5)),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.5)),
               ),
-              child: const Icon(Icons.circle,
-                  size: 10, color: AppColors.primary),
+              child: const Icon(Icons.circle, size: 10, color: AppColors.primary),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(event.$1, style: AppTextStyles.bodyMedium),
-                  Text(_formatTime(event.$2),
-                      style: AppTextStyles.timestamp),
+                  Text(event.label, style: AppTextStyles.bodyMedium),
+                  Text(_formatTime(event.timestamp), style: AppTextStyles.timestamp),
                 ],
               ),
             ),
@@ -904,12 +1137,643 @@ class _EntityDetailPageState extends State<EntityDetailPage>
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Relationships tab
+  // ---------------------------------------------------------------------------
+
+  static const Map<String, Color> _entityTypeColors = {
+    'CUSTOMER':     AppColors.primary,
+    'VENDOR':       AppColors.warning,
+    'MATERIAL':     Color(0xFFFF6B35), // deep orange
+    'PRODUCT':      AppColors.success,
+    'ACCOUNT':      Color(0xFF00BCD4), // teal
+    'EMPLOYEE':     AppColors.aiPurple,
+    'LOCATION':     Color(0xFF26A69A), // teal-green
+    'ORGANIZATION': Color(0xFFFFB800), // amber
+    'ASSET':        AppColors.mutedText,
+    'PERSON':       AppColors.primary,
+  };
+
+  Color _colorForType(String type) =>
+      _entityTypeColors[type.toUpperCase()] ?? AppColors.secondaryText;
+
+  Widget _buildRelationshipsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: _buildRelationshipsSection(),
+    );
+  }
+
+  Widget _buildRelationshipsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ---- Header row ----
+        Row(
+          children: [
+            const Icon(Icons.hub_outlined, size: 18, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Text('Cross-Domain Relationships', style: AppTextStyles.titleMedium),
+            const SizedBox(width: 10),
+            if (!_relationshipsLoading)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${_relationships.length}',
+                  style: AppTextStyles.badgeLabel
+                      .copyWith(color: AppColors.primary),
+                ),
+              ),
+            const Spacer(),
+            IconButton(
+              tooltip: 'Add relationship',
+              icon: const Icon(Icons.add_circle_outline,
+                  color: AppColors.primary, size: 22),
+              onPressed: () => _showAddRelationshipDialog(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // ---- Body ----
+        if (_relationshipsLoading)
+          _buildRelationshipsShimmer()
+        else if (_relationships.isEmpty)
+          _buildRelationshipsEmpty()
+        else
+          _buildRelationshipsList(),
+      ],
+    );
+  }
+
+  Widget _buildRelationshipsShimmer() {
+    return Column(
+      children: List.generate(
+        3,
+        (i) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Container(
+            height: 60,
+            decoration: BoxDecoration(
+              color: AppColors.elevatedCard,
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ).animate(onPlay: (c) => c.repeat(reverse: true))
+              .shimmer(duration: 1200.ms, color: AppColors.divider),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRelationshipsEmpty() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.hub_outlined,
+                size: 28, color: AppColors.primary),
+          ).animate().fadeIn().scaleXY(begin: 0.8, end: 1.0),
+          const SizedBox(height: 14),
+          Text('No relationships yet',
+              style: AppTextStyles.titleSmall)
+              .animate(delay: 80.ms).fadeIn(),
+          const SizedBox(height: 6),
+          Text(
+            'Connect this entity to others across domains.',
+            style: AppTextStyles.bodySmall,
+            textAlign: TextAlign.center,
+          ).animate(delay: 120.ms).fadeIn(),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: () => _showAddRelationshipDialog(),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add Relationship'),
+          ).animate(delay: 160.ms).fadeIn(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRelationshipsList() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        children: _relationships.asMap().entries.map((entry) {
+          final i = entry.key;
+          final rel = entry.value;
+          final isLast = i == _relationships.length - 1;
+          return _buildRelationshipRow(rel, isLast, i);
+        }).toList(),
+      ),
+    ).animate().fadeIn(duration: 400.ms);
+  }
+
+  Widget _buildRelationshipRow(
+      EntityRelationshipRecord rel, bool isLast, int index) {
+    final otherType = rel.otherEntityType();
+    final otherId = rel.otherEntityId(widget.entityId);
+    final truncatedId =
+        otherId.length > 8 ? '${otherId.substring(0, 8)}…' : otherId;
+    final typeColor = _colorForType(otherType);
+
+    IconData directionIcon;
+    String directionTooltip;
+    if (rel.isFromEntity) {
+      directionIcon = Icons.arrow_forward_rounded;
+      directionTooltip = 'Outgoing';
+    } else {
+      directionIcon = Icons.arrow_back_rounded;
+      directionTooltip = 'Incoming';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : const Border(
+                bottom: BorderSide(color: AppColors.divider, width: 1)),
+      ),
+      child: Row(
+        children: [
+          // Direction icon
+          Tooltip(
+            message: directionTooltip,
+            child: Icon(directionIcon,
+                size: 16, color: AppColors.secondaryText),
+          ),
+          const SizedBox(width: 10),
+
+          // Relationship type name
+          Expanded(
+            flex: 3,
+            child: Text(
+              rel.typeDisplayName.isNotEmpty
+                  ? rel.typeDisplayName
+                  : rel.typeName,
+              style: AppTextStyles.bodyMedium,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // Target entity ID (truncated, monospace)
+          Expanded(
+            flex: 2,
+            child: Text(
+              truncatedId,
+              style: AppTextStyles.codeStyle.copyWith(fontSize: 11),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // Entity type chip with colored dot
+          if (otherType.isNotEmpty)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: typeColor.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(
+                    color: typeColor.withValues(alpha: 0.30)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: typeColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    otherType,
+                    style: AppTextStyles.badgeLabel
+                        .copyWith(color: typeColor),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(width: 10),
+
+          // Strength bar (only when < 1.0)
+          if (rel.strength < 1.0) ...[
+            SizedBox(
+              width: 56,
+              child: TrustScoreBar(
+                score: rel.strength,
+                height: 4,
+                showPercentage: false,
+                animate: false,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '${(rel.strength * 100).round()}%',
+              style: AppTextStyles.timestamp,
+            ),
+            const SizedBox(width: 6),
+          ],
+
+          // Delete button
+          IconButton(
+            tooltip: 'Remove relationship',
+            icon: const Icon(Icons.delete_outline,
+                size: 16, color: AppColors.mutedText),
+            constraints: const BoxConstraints(
+                minWidth: 28, minHeight: 28),
+            padding: EdgeInsets.zero,
+            onPressed: () => _confirmDeleteRelationship(rel),
+          ),
+        ],
+      ),
+    ).animate(delay: (index * 40).ms).fadeIn(duration: 300.ms);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Add relationship dialog
+  // ---------------------------------------------------------------------------
+
+  Future<void> _showAddRelationshipDialog() async {
+    List<RelationshipType> types = [];
+    String? selectedTypeId;
+    final targetController = TextEditingController();
+    double strength = 1.0;
+    bool isCreating = false;
+    String? errorMessage;
+
+    // Eagerly fetch types inside the dialog so we can show a loader.
+    await showDialog<void>(
+      context: context,
+      barrierColor: AppColors.overlay,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            // Load types once on first build.
+            if (types.isEmpty && !isCreating) {
+              _relRepository
+                  .listTypes(tenantId: '')
+                  .then((result) {
+                if (result case Success<List<RelationshipType>>(:final data)) {
+                  setDialogState(() => types = data);
+                }
+              });
+            }
+
+            return Dialog(
+              backgroundColor: AppColors.cardSurface,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title
+                      Row(
+                        children: [
+                          const Icon(Icons.hub_outlined,
+                              color: AppColors.primary, size: 20),
+                          const SizedBox(width: 10),
+                          Text('Add Relationship',
+                              style: AppTextStyles.titleMedium),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.close,
+                                size: 18,
+                                color: AppColors.secondaryText),
+                            onPressed: () => Navigator.of(ctx).pop(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Relationship type dropdown
+                      Text('Relationship Type',
+                          style: AppTextStyles.labelMedium),
+                      const SizedBox(height: 8),
+                      types.isEmpty
+                          ? Container(
+                              height: 48,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: AppColors.elevatedCard,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: AppColors.divider),
+                              ),
+                              child: const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              ),
+                            )
+                          : DropdownButtonFormField<String>(
+                              initialValue: selectedTypeId,
+                              dropdownColor: AppColors.elevatedCard,
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: AppColors.elevatedCard,
+                                border: OutlineInputBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(8),
+                                  borderSide: const BorderSide(
+                                      color: AppColors.divider),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(8),
+                                  borderSide: const BorderSide(
+                                      color: AppColors.divider),
+                                ),
+                                contentPadding:
+                                    const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 12),
+                                hintText: 'Select a type…',
+                                hintStyle: AppTextStyles.inputHint,
+                              ),
+                              items: types
+                                  .map((t) => DropdownMenuItem(
+                                        value: t.typeId,
+                                        child: Text(t.displayName,
+                                            style:
+                                                AppTextStyles.bodyMedium),
+                                      ))
+                                  .toList(),
+                              onChanged: (v) => setDialogState(
+                                  () => selectedTypeId = v),
+                            ),
+                      const SizedBox(height: 16),
+
+                      // Target entity ID field
+                      Text('Target Entity ID',
+                          style: AppTextStyles.labelMedium),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: targetController,
+                        style: AppTextStyles.inputText,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: AppColors.elevatedCard,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                                color: AppColors.divider),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(
+                                color: AppColors.divider),
+                          ),
+                          hintText: 'e.g. ent-00123…',
+                          hintStyle: AppTextStyles.inputHint,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Strength slider
+                      Row(
+                        mainAxisAlignment:
+                            MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Strength',
+                              style: AppTextStyles.labelMedium),
+                          Text(
+                            '${(strength * 100).round()}%',
+                            style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.primary),
+                          ),
+                        ],
+                      ),
+                      SliderTheme(
+                        data: SliderThemeData(
+                          activeTrackColor: AppColors.primary,
+                          inactiveTrackColor:
+                              AppColors.primary.withValues(alpha: 0.2),
+                          thumbColor: AppColors.primary,
+                          overlayColor:
+                              AppColors.primary.withValues(alpha: 0.12),
+                          trackHeight: 4,
+                        ),
+                        child: Slider(
+                          value: strength,
+                          min: 0.1,
+                          max: 1.0,
+                          divisions: 9,
+                          onChanged: (v) =>
+                              setDialogState(() => strength = v),
+                        ),
+                      ),
+
+                      // Error message
+                      if (errorMessage != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          errorMessage!,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.error),
+                        ),
+                      ],
+
+                      const SizedBox(height: 20),
+
+                      // Actions
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            child: const Text('Cancel'),
+                          ),
+                          const SizedBox(width: 10),
+                          ElevatedButton.icon(
+                            onPressed: isCreating
+                                ? null
+                                : () async {
+                                    final typeId = selectedTypeId;
+                                    final toId =
+                                        targetController.text.trim();
+                                    if (typeId == null) {
+                                      setDialogState(() =>
+                                          errorMessage =
+                                              'Please select a relationship type.');
+                                      return;
+                                    }
+                                    if (toId.isEmpty) {
+                                      setDialogState(() =>
+                                          errorMessage =
+                                              'Please enter a target entity ID.');
+                                      return;
+                                    }
+                                    setDialogState(() {
+                                      isCreating = true;
+                                      errorMessage = null;
+                                    });
+                                    final result =
+                                        await _relRepository.create(
+                                      tenantId: '',
+                                      entityId: widget.entityId,
+                                      typeId: typeId,
+                                      toEntityId: toId,
+                                      strength: strength,
+                                    );
+                                    if (!ctx.mounted) return;
+                                    if (result is Failure) {
+                                      setDialogState(() {
+                                        isCreating = false;
+                                        errorMessage =
+                                            'Failed to create relationship.';
+                                      });
+                                    } else {
+                                      Navigator.of(ctx).pop();
+                                      _loadRelationships();
+                                    }
+                                  },
+                            icon: isCreating
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white),
+                                  )
+                                : const Icon(Icons.add, size: 16),
+                            label: const Text('Create'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    targetController.dispose();
+  }
+
+  Future<void> _confirmDeleteRelationship(
+      EntityRelationshipRecord rel) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: AppColors.overlay,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardSurface,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12)),
+        title: Text('Remove Relationship',
+            style: AppTextStyles.titleSmall),
+        content: Text(
+          'Remove the "${rel.typeDisplayName.isNotEmpty ? rel.typeDisplayName : rel.typeName}" '
+          'relationship? This cannot be undone.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    final result = await _relRepository.delete(
+      tenantId: '',
+      relationshipId: rel.relationshipId,
+    );
+    if (!mounted) return;
+    if (result is Success) {
+      setState(() =>
+          _relationships.removeWhere(
+              (r) => r.relationshipId == rel.relationshipId));
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+
+  String _buildAiSummary(CanonicalEntity entity) {
+    final score = (entity.trustScore * 100).round();
+    final sources = entity.sourceSystems.length;
+    final conflictCount = entity.attributes.values.where((a) => a.hasConflict).length;
+
+    final base = 'Trust score of $score% reflects data consistency across $sources connected source system${sources == 1 ? '' : 's'}.';
+
+    if (conflictCount == 0) {
+      return '$base All attribute values are consistent — no conflicts detected.';
+    }
+
+    final conflictedFields = entity.attributes.values
+        .where((a) => a.hasConflict)
+        .map((a) => a.displayName)
+        .take(3)
+        .join(', ');
+
+    return '$base $conflictCount attribute${conflictCount == 1 ? '' : 's'} have conflicting values across sources ($conflictedFields). Review and resolve to improve record quality.';
+  }
+
   String _formatTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
     return '${(diff.inDays / 7).floor()}w ago';
+  }
+}
+
+class _HistoryEvent {
+  final String eventType;
+  final DateTime timestamp;
+
+  const _HistoryEvent({required this.eventType, required this.timestamp});
+
+  factory _HistoryEvent.fromJson(Map<String, dynamic> json) {
+    return _HistoryEvent(
+      eventType: json['event_type'] as String? ?? 'Unknown event',
+      timestamp: DateTime.tryParse(json['timestamp'] as String? ?? '') ?? DateTime.now(),
+    );
+  }
+
+  String get label {
+    // Convert snake_case event type to a readable sentence.
+    return eventType
+        .replaceAll('_', ' ')
+        .replaceFirstMapped(RegExp(r'^.'), (m) => m[0]!.toUpperCase());
   }
 }
 

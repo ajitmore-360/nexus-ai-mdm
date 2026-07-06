@@ -26,3 +26,4 @@ database    = { workspace = true }
 nexus-redis = { workspace = true }
 
 futures.workspace = true
+dashmap           = "5"

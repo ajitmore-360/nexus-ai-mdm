@@ -69,6 +69,7 @@ class SecureStorage {
         prefs.remove(AppConstants.storageUserEmail),
         prefs.remove(AppConstants.storageUserName),
         prefs.remove(AppConstants.storageUserRole),
+        prefs.remove(AppConstants.storageAssignedEntityTypes),
       ]);
     } else {
       await Future.wait([
@@ -79,6 +80,7 @@ class SecureStorage {
         _nativeStorage.delete(key: AppConstants.storageUserEmail),
         _nativeStorage.delete(key: AppConstants.storageUserName),
         _nativeStorage.delete(key: AppConstants.storageUserRole),
+        _nativeStorage.delete(key: AppConstants.storageAssignedEntityTypes),
       ]);
     }
   }

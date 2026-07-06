@@ -1,6 +1,11 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:get_it/get_it.dart';
+import '../../../../core/auth/auth_manager.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/network/api_client.dart' hide ApiException;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/validation/validators.dart';
@@ -22,24 +27,26 @@ class _SourceSystem {
     required this.id,
     required this.name,
     required this.type,
-    required this.url,
-    required this.lastSync,
+    this.url = '',
+    this.lastSync = '—',
     required this.trustScore,
     required this.isActive,
   });
 }
 
 class _AppUser {
+  final String id;
   final String name;
   final String email;
   final String role;
   final String lastLogin;
 
   const _AppUser({
+    this.id = '',
     required this.name,
     required this.email,
     required this.role,
-    required this.lastLogin,
+    this.lastLogin = '',
   });
 }
 
@@ -58,82 +65,6 @@ class _ApiKey {
   String get fullKey => 'nxs_${id}_lk9Xm2vQpR7nTwYsJ4dKfB3hCeZoAuN';
 }
 
-// ─────────────────────────────────────────────
-// Demo data
-// ─────────────────────────────────────────────
-
-final _demoSources = [
-  _SourceSystem(
-    id: 's1',
-    name: 'Salesforce CRM',
-    type: 'CRM',
-    url: 'https://mycompany.salesforce.com',
-    lastSync: '4 min ago',
-    trustScore: 0.94,
-    isActive: true,
-  ),
-  _SourceSystem(
-    id: 's2',
-    name: 'SAP ERP',
-    type: 'ERP',
-    url: 'https://sap.internal.corp/api/v2',
-    lastSync: '1 hr ago',
-    trustScore: 0.88,
-    isActive: true,
-  ),
-  _SourceSystem(
-    id: 's3',
-    name: 'Oracle CRM',
-    type: 'CRM',
-    url: 'https://oracle-crm.corp.internal',
-    lastSync: '3 days ago',
-    trustScore: 0.71,
-    isActive: false,
-  ),
-];
-
-const _demoUsers = [
-  _AppUser(
-      name: 'Alex Rivera',
-      email: 'alex@acme.com',
-      role: 'admin',
-      lastLogin: '2 min ago'),
-  _AppUser(
-      name: 'Sarah Chen',
-      email: 'sarah@acme.com',
-      role: 'steward',
-      lastLogin: '1 hr ago'),
-  _AppUser(
-      name: 'Marcus Webb',
-      email: 'marcus@acme.com',
-      role: 'steward',
-      lastLogin: '3 hrs ago'),
-  _AppUser(
-      name: 'Priya Sharma',
-      email: 'priya@acme.com',
-      role: 'analyst',
-      lastLogin: 'Yesterday'),
-  _AppUser(
-      name: 'James Taylor',
-      email: 'james@acme.com',
-      role: 'viewer',
-      lastLogin: '2 days ago'),
-];
-
-final _demoApiKeys = [
-  _ApiKey(
-      id: 'prod001',
-      name: 'Production API',
-      maskedKey: 'nxs_prod001_****'),
-  _ApiKey(
-      id: 'ci002',
-      name: 'CI/CD Pipeline',
-      maskedKey: 'nxs_ci002_****'),
-  _ApiKey(
-      id: 'int003',
-      name: 'Integration Tests',
-      maskedKey: 'nxs_int003_****'),
-];
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -369,25 +300,58 @@ class _AiConfigTabState extends State<_AiConfigTab> {
   }
 
   Future<void> _testConnection() async {
+    final baseUrl = _endpointCtrl.text.trim().replaceAll(RegExp(r'/$'), '');
+    if (baseUrl.isEmpty) return;
     setState(() => _testingConnection = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-    setState(() => _testingConnection = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded,
-                color: AppColors.primary, size: 16),
-            const SizedBox(width: 8),
-            Text(
-                'Connected to Ollama at ${_endpointCtrl.text} · Model: $_llmModel'),
-          ],
+    try {
+      final dio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ));
+      final resp = await dio.get('$baseUrl/api/tags');
+      if (!mounted) return;
+      final models = (resp.data?['models'] as List?)
+              ?.map((m) => m['name'] as String? ?? '')
+              .where((n) => n.isNotEmpty)
+              .toList() ??
+          [];
+      setState(() => _testingConnection = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded,
+                  color: AppColors.primary, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(models.isNotEmpty
+                    ? 'Connected · ${models.length} model${models.length == 1 ? '' : 's'}: ${models.take(3).join(', ')}'
+                    : 'Connected to Ollama at $baseUrl'),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.cardSurface,
+          behavior: SnackBarBehavior.floating,
         ),
-        backgroundColor: AppColors.cardSurface,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _testingConnection = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded,
+                  color: AppColors.error, size: 16),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Could not reach Ollama at $baseUrl')),
+            ],
+          ),
+          backgroundColor: AppColors.cardSurface,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _saveThresholds() {
@@ -805,10 +769,57 @@ class _SourceSystemsTab extends StatefulWidget {
 }
 
 class _SourceSystemsTabState extends State<_SourceSystemsTab> {
-  final List<_SourceSystem> _sources = List.from(_demoSources);
+  List<_SourceSystem> _sources = [];
+  bool _sourcesLoading = true;
 
-  void _toggleSource(_SourceSystem s) {
+  @override
+  void initState() {
+    super.initState();
+    _loadSources();
+  }
+
+  Future<void> _loadSources() async {
+    final tenantId = await AuthManager.getTenantId();
+    if (!mounted) return;
+    if (tenantId == null) {
+      setState(() => _sourcesLoading = false);
+      return;
+    }
+    try {
+      final api = GetIt.instance<ApiClient>();
+      final resp = await api.get<Map<String, dynamic>>(
+        AppConstants.sourceSystemsPath,
+        queryParameters: {'tenant_id': tenantId},
+      );
+      final data = resp.data;
+      if (!mounted) return;
+      final list = (data?['data'] as List<dynamic>? ?? []).map((s) {
+        final m = s as Map<String, dynamic>;
+        return _SourceSystem(
+          id: (m['id'] as String?) ?? '',
+          name: (m['name'] as String?) ?? 'Unknown',
+          type: (m['connector_type'] as String?) ?? 'custom',
+          trustScore: (m['trust_weight'] as num?)?.toDouble() ?? 0.5,
+          isActive: (m['is_active'] as bool?) ?? false,
+        );
+      }).toList();
+      setState(() { _sources = list; _sourcesLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _sourcesLoading = false);
+    }
+  }
+
+  Future<void> _toggleSource(_SourceSystem s) async {
     setState(() => s.isActive = !s.isActive);
+    try {
+      final api = GetIt.instance<ApiClient>();
+      await api.put<Map<String, dynamic>>(
+        '${AppConstants.sourceSystemsPath}/${s.id}',
+        data: {'is_active': s.isActive},
+      );
+    } catch (_) {
+      if (mounted) setState(() => s.isActive = !s.isActive);
+    }
   }
 
   void _showAddSourceDialog() {
@@ -848,19 +859,33 @@ class _SourceSystemsTabState extends State<_SourceSystemsTab> {
               ],
             ),
             const SizedBox(height: 16),
-            ..._sources.asMap().entries.map((entry) {
-              final i = entry.key;
-              final s = entry.value;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: _SourceCard(
-                  source: s,
-                  index: i,
-                  onToggle: () => _toggleSource(s),
-                  onEdit: () {},
+            if (_sourcesLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (_sources.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    'No source systems connected yet.',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.secondaryText),
+                  ),
                 ),
-              );
-            }),
+              )
+            else
+              ..._sources.asMap().entries.map((entry) {
+                final i = entry.key;
+                final s = entry.value;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: _SourceCard(
+                    source: s,
+                    index: i,
+                    onToggle: () => _toggleSource(s),
+                    onEdit: () {},
+                  ),
+                );
+              }),
           ],
         ),
       ),
@@ -1230,8 +1255,266 @@ class _AdministrationTab extends StatefulWidget {
 }
 
 class _AdministrationTabState extends State<_AdministrationTab> {
-  final List<_ApiKey> _apiKeys = List.from(_demoApiKeys);
+  // ── Users state ───────────────────────────────────────────────────────────
+  List<_AppUser> _users = [];
+  bool _usersLoading = true;
+
+  // ── Tenant info state ─────────────────────────────────────────────────────
+  String _tenantId   = '—';
+  String _tenantName = '—';
+  String _planName   = 'Enterprise';
+  int    _entityCurrent = 0;
+  int    _entityLimit   = 10000000;
+  int    _userCurrent   = 0;
+  int    _userLimit     = 100;
+  bool   _tenantLoading = true;
+
+  // ── API keys state ────────────────────────────────────────────────────────
+  final List<_ApiKey> _apiKeys = [];
   int? _hoveredUserRow;
+
+  // ── Change-password state ─────────────────────────────────────────────────
+  final _pwFormKey    = GlobalKey<FormState>();
+  final _curPwCtrl    = TextEditingController();
+  final _newPwCtrl    = TextEditingController();
+  final _confirmCtrl  = TextEditingController();
+  bool _pwSaving      = false;
+  bool _obscureCur    = true;
+  bool _obscureNew    = true;
+  bool _obscureConf   = true;
+  String? _pwError;
+  bool _pwSuccess     = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+    _loadTenantInfo();
+  }
+
+  Future<void> _loadTenantInfo() async {
+    try {
+      final tenantId   = await AuthManager.getTenantId();
+      final tenantName = await AuthManager.getTenantName();
+      if (!mounted) return;
+      setState(() {
+        _tenantId   = tenantId   ?? '—';
+        _tenantName = tenantName ?? '—';
+      });
+
+      // Load quota + plan from license endpoint
+      final api  = GetIt.instance<ApiClient>();
+      final resp = await api.get<Map<String, dynamic>>('/v1/license');
+      if (!mounted) return;
+      final data = resp.data?['data'] as Map<String, dynamic>? ?? {};
+      setState(() {
+        _planName       = (data['plan_name'] as String?)             ?? 'Enterprise';
+        _entityCurrent  = (data['current_entity_count'] as int?)     ?? 0;
+        _entityLimit    = (data['max_entities'] as int?)             ?? 10000000;
+        _userCurrent    = (data['current_user_count'] as int?)       ?? 0;
+        _userLimit      = (data['max_users'] as int?)                ?? 100;
+        _tenantLoading  = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _tenantLoading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _curPwCtrl.dispose();
+    _newPwCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadUsers() async {
+    try {
+      final api = GetIt.instance<ApiClient>();
+      final resp = await api.get<Map<String, dynamic>>('/v1/users');
+      if (!mounted) return;
+      final rows = (resp.data?['data'] as List<dynamic>? ?? []);
+      final users = rows.map((u) {
+        final m = u as Map<String, dynamic>;
+        return _AppUser(
+          id:    (m['user_id'] as String?) ?? '',
+          name:  (m['display_name'] as String?) ?? (m['email'] as String?) ?? 'Unknown',
+          email: (m['email']        as String?) ?? '',
+          role:  (m['role']         as String?) ?? 'viewer',
+        );
+      }).toList();
+      setState(() { _users = users; _usersLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _usersLoading = false);
+    }
+  }
+
+  Future<void> _inviteUser(String email, String role) async {
+    try {
+      final api = GetIt.instance<ApiClient>();
+      await api.post<Map<String, dynamic>>(
+        '/v1/users/invite',
+        data: {'email': email, 'role': role},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Invite sent to $email'),
+        backgroundColor: AppColors.success,
+      ));
+      _loadUsers();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Failed to send invite. Please try again.'),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
+  Future<void> _changeUserRole(_AppUser user, String newRole) async {
+    if (user.id.isEmpty) return;
+    try {
+      final api = GetIt.instance<ApiClient>();
+      await api.patch<Map<String, dynamic>>(
+        '/v1/users/${user.id}/role',
+        data: {'role': newRole},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('${user.name} role updated to $newRole'),
+        backgroundColor: AppColors.success,
+      ));
+      _loadUsers();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Failed to update role. Please try again.'),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
+  void _showInviteDialog() {
+    final emailCtrl = TextEditingController();
+    String selectedRole = 'steward';
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          backgroundColor: AppColors.cardSurface,
+          title: const Text('Invite User'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: emailCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Email address',
+                  hintText: 'user@company.com',
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: selectedRole,
+                decoration: const InputDecoration(labelText: 'Role'),
+                items: const [
+                  DropdownMenuItem(value: 'admin',   child: Text('Admin')),
+                  DropdownMenuItem(value: 'steward', child: Text('Steward')),
+                  DropdownMenuItem(value: 'analyst', child: Text('Analyst')),
+                  DropdownMenuItem(value: 'viewer',  child: Text('Viewer')),
+                ],
+                onChanged: (v) => setDlgState(() => selectedRole = v!),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _inviteUser(emailCtrl.text.trim(), selectedRole);
+              },
+              child: const Text('Send Invite'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showChangeRoleDialog(_AppUser user) {
+    String selectedRole = user.role;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          backgroundColor: AppColors.cardSurface,
+          title: Text('Change role for ${user.name}'),
+          content: DropdownButtonFormField<String>(
+            initialValue: selectedRole,
+            decoration: const InputDecoration(labelText: 'Role'),
+            items: const [
+              DropdownMenuItem(value: 'admin',   child: Text('Admin')),
+              DropdownMenuItem(value: 'steward', child: Text('Steward')),
+              DropdownMenuItem(value: 'analyst', child: Text('Analyst')),
+              DropdownMenuItem(value: 'viewer',  child: Text('Viewer')),
+            ],
+            onChanged: (v) => setDlgState(() => selectedRole = v!),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _changeUserRole(user, selectedRole);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _changePassword() async {
+    if (!_pwFormKey.currentState!.validate()) return;
+    setState(() { _pwSaving = true; _pwError = null; _pwSuccess = false; });
+    try {
+      final api = GetIt.instance<ApiClient>();
+      await api.post<Map<String, dynamic>>(
+        '/auth/change-password',
+        data: {
+          'current_password': _curPwCtrl.text,
+          'new_password':     _newPwCtrl.text,
+        },
+      );
+      if (!mounted) return;
+      _curPwCtrl.clear();
+      _newPwCtrl.clear();
+      _confirmCtrl.clear();
+      setState(() { _pwSaving = false; _pwSuccess = true; });
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final body = e.response?.data;
+      final msg  = body is Map
+          ? (body['error'] ?? body['message'])?.toString()
+          : null;
+      setState(() {
+        _pwSaving = false;
+        _pwError  = msg ?? 'Failed (${e.response?.statusCode})';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _pwSaving = false; _pwError = e.toString(); });
+    }
+  }
 
   void _generateKey() {
     final newKey = _ApiKey(
@@ -1291,8 +1574,13 @@ class _AdministrationTabState extends State<_AdministrationTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildTenantInfo()
+            _buildChangePassword()
                 .animate()
+                .fadeIn(duration: 400.ms)
+                .slideY(begin: 0.04, end: 0),
+            const SizedBox(height: 20),
+            _buildTenantInfo()
+                .animate(delay: 60.ms)
                 .fadeIn(duration: 400.ms)
                 .slideY(begin: 0.04, end: 0),
             const SizedBox(height: 20),
@@ -1315,78 +1603,71 @@ class _AdministrationTabState extends State<_AdministrationTab> {
     return _sectionCard(
       title: 'Tenant Info',
       subtitle: 'Your organisation and plan details',
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _InfoRow(label: 'Tenant ID',
-                        value: '00000000-0000-0000-0000-000000000001'),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Text('Plan',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(
-                                    color: AppColors.secondaryText)),
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 3),
-                          decoration: BoxDecoration(
-                            gradient: AppColors.purpleGradient,
-                            borderRadius: BorderRadius.circular(6),
+      child: _tenantLoading
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _InfoRow(label: 'Tenant ID',   value: _tenantId),
+                      const SizedBox(height: 10),
+                      _InfoRow(label: 'Name',         value: _tenantName),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Text('Plan',
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: AppColors.secondaryText)),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              gradient: AppColors.purpleGradient,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(_planName,
+                                style: AppTextStyles.labelSmall
+                                    .copyWith(color: Colors.white)),
                           ),
-                          child: Text('Enterprise',
-                              style: AppTextStyles.labelSmall
-                                  .copyWith(color: Colors.white)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    const _InfoRow(label: 'Status', value: 'Active'),
-                    const SizedBox(height: 10),
-                    const _InfoRow(
-                        label: 'Created', value: 'Jan 15, 2025'),
-                  ],
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      const _InfoRow(label: 'Status', value: 'Active'),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 40),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _UsageBar(
-                        label: 'Entities',
-                        current: 4200000,
-                        max: 10000000,
-                        unit: 'M',
-                        color: AppColors.primary),
-                    SizedBox(height: 14),
-                    _UsageBar(
-                        label: 'Users',
-                        current: 8,
-                        max: 100,
-                        unit: '',
-                        color: AppColors.info),
-                    SizedBox(height: 14),
-                    _UsageBar(
-                        label: 'API calls (this month)',
-                        current: 892000,
-                        max: 5000000,
-                        unit: 'K',
-                        color: AppColors.aiPurple),
-                  ],
+                const SizedBox(width: 40),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _UsageBar(
+                          label:   'Entities',
+                          current: _entityCurrent,
+                          max:     _entityLimit,
+                          unit:    'M',
+                          color:   AppColors.primary),
+                      const SizedBox(height: 14),
+                      _UsageBar(
+                          label:   'Users',
+                          current: _userCurrent,
+                          max:     _userLimit,
+                          unit:    '',
+                          color:   AppColors.info),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
+              ],
+            ),
     );
   }
 
@@ -1427,141 +1708,145 @@ class _AdministrationTabState extends State<_AdministrationTab> {
             ),
           ),
           const Divider(color: AppColors.divider, height: 1),
-          ..._demoUsers.asMap().entries.map((entry) {
-            final i = entry.key;
-            final u = entry.value;
-            final isHovered = _hoveredUserRow == i;
-            return Column(
-              children: [
-                MouseRegion(
-                  onEnter: (_) =>
-                      setState(() => _hoveredUserRow = i),
-                  onExit: (_) =>
-                      setState(() => _hoveredUserRow = null),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    color: isHovered
-                        ? AppColors.elevatedCard.withValues(alpha:0.5)
-                        : Colors.transparent,
-                    child: Padding(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 11),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 14,
-                                  backgroundColor: _roleColor(u.role)
-                                      .withValues(alpha:0.15),
-                                  child: Text(
-                                    u.name
-                                        .split(' ')
-                                        .map((w) => w[0])
-                                        .take(2)
-                                        .join(),
-                                    style: AppTextStyles.labelSmall
-                                        .copyWith(
-                                      color: _roleColor(u.role),
-                                      fontWeight: FontWeight.w700,
+          if (_usersLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_users.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text('No users found.',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.secondaryText)),
+              ),
+            )
+          else
+            ..._users.asMap().entries.map((entry) {
+              final i = entry.key;
+              final u = entry.value;
+              final isHovered = _hoveredUserRow == i;
+              return Column(
+                children: [
+                  MouseRegion(
+                    onEnter: (_) =>
+                        setState(() => _hoveredUserRow = i),
+                    onExit: (_) =>
+                        setState(() => _hoveredUserRow = null),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      color: isHovered
+                          ? AppColors.elevatedCard.withValues(alpha: 0.5)
+                          : Colors.transparent,
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 11),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor: _roleColor(u.role)
+                                        .withValues(alpha: 0.15),
+                                    child: Text(
+                                      u.name
+                                          .split(' ')
+                                          .map((w) => w[0])
+                                          .take(2)
+                                          .join(),
+                                      style: AppTextStyles.labelSmall
+                                          .copyWith(
+                                        color: _roleColor(u.role),
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Flexible(
-                                  child: Text(u.name,
-                                      style: AppTextStyles.tableCell,
-                                      overflow:
-                                          TextOverflow.ellipsis),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            flex: 3,
-                            child: Text(u.email,
-                                style: AppTextStyles.tableCell
-                                    .copyWith(
-                                        color:
-                                            AppColors.secondaryText),
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: _roleColor(u.role)
-                                    .withValues(alpha:0.12),
-                                borderRadius:
-                                    BorderRadius.circular(6),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(u.name,
+                                        style: AppTextStyles.tableCell,
+                                        overflow:
+                                            TextOverflow.ellipsis),
+                                  ),
+                                ],
                               ),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text(u.email,
+                                  style: AppTextStyles.tableCell
+                                      .copyWith(
+                                          color:
+                                              AppColors.secondaryText),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: _roleColor(u.role)
+                                      .withValues(alpha: 0.12),
+                                  borderRadius:
+                                      BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  u.role,
+                                  style: AppTextStyles.labelSmall
+                                      .copyWith(
+                                          color: _roleColor(u.role)),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
                               child: Text(
-                                u.role,
-                                style: AppTextStyles.labelSmall
-                                    .copyWith(
-                                        color: _roleColor(u.role)),
-                              ),
+                                  u.lastLogin.isEmpty ? '—' : u.lastLogin,
+                                  style: AppTextStyles.tableCell
+                                      .copyWith(
+                                          color:
+                                              AppColors.secondaryText)),
                             ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(u.lastLogin,
-                                style: AppTextStyles.tableCell
-                                    .copyWith(
-                                        color:
-                                            AppColors.secondaryText)),
-                          ),
-                          SizedBox(
-                            width: 80,
-                            child: Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.center,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(
-                                      Icons.edit_outlined,
-                                      size: 15),
-                                  color: AppColors.secondaryText,
-                                  tooltip: 'Edit',
-                                  onPressed: () {},
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                      minWidth: 28, minHeight: 28),
-                                ),
-                                if (u.role != 'admin')
+                            SizedBox(
+                              width: 80,
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
+                                children: [
                                   IconButton(
                                     icon: const Icon(
-                                        Icons.person_remove_outlined,
+                                        Icons.edit_outlined,
                                         size: 15),
-                                    color: AppColors.error
-                                        .withValues(alpha:0.7),
-                                    tooltip: 'Remove',
-                                    onPressed: () {},
+                                    color: AppColors.secondaryText,
+                                    tooltip: 'Change role',
+                                    onPressed: () =>
+                                        _showChangeRoleDialog(u),
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(
                                         minWidth: 28, minHeight: 28),
                                   ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                if (i < _demoUsers.length - 1)
-                  const Divider(
-                      color: AppColors.divider, height: 1),
-              ],
-            );
-          }),
+                  if (i < _users.length - 1)
+                    const Divider(
+                        color: AppColors.divider, height: 1),
+                ],
+              );
+            }),
           const SizedBox(height: 14),
           OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: _showInviteDialog,
             icon: const Icon(Icons.person_add_outlined, size: 16),
             label: const Text('Invite User'),
             style: OutlinedButton.styleFrom(
@@ -1655,6 +1940,206 @@ class _AdministrationTabState extends State<_AdministrationTab> {
           ),
         ],
       ),
+    );
+  }
+
+  // ── Change password section ───────────────────────────────────────────────
+
+  Widget _buildChangePassword() {
+    return _sectionCard(
+      title: 'Security',
+      subtitle: 'Update your login password',
+      child: Form(
+        key: _pwFormKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_pwSuccess) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: AppColors.success.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_outline,
+                        color: AppColors.success, size: 16),
+                    const SizedBox(width: 8),
+                    Text('Password updated successfully.',
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: AppColors.success)),
+                  ],
+                ),
+              ),
+            ],
+            if (_pwError != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: AppColors.error.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline,
+                        color: AppColors.error, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(_pwError!,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.error)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _pwField(
+                    label: 'CURRENT PASSWORD',
+                    controller: _curPwCtrl,
+                    obscure: _obscureCur,
+                    onToggle: () =>
+                        setState(() => _obscureCur = !_obscureCur),
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? 'Required' : null,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _pwField(
+                    label: 'NEW PASSWORD',
+                    controller: _newPwCtrl,
+                    obscure: _obscureNew,
+                    onToggle: () =>
+                        setState(() => _obscureNew = !_obscureNew),
+                    validator: (v) {
+                      if (v == null || v.length < 8) {
+                        return 'At least 8 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _pwField(
+                    label: 'CONFIRM NEW PASSWORD',
+                    controller: _confirmCtrl,
+                    obscure: _obscureConf,
+                    onToggle: () =>
+                        setState(() => _obscureConf = !_obscureConf),
+                    validator: (v) => v != _newPwCtrl.text
+                        ? 'Passwords do not match'
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ElevatedButton.icon(
+                onPressed: _pwSaving ? null : _changePassword,
+                icon: _pwSaving
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Icon(Icons.lock_reset_rounded, size: 16),
+                label: Text(_pwSaving ? 'Saving…' : 'Update Password',
+                    style: AppTextStyles.buttonSmall
+                        .copyWith(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pwField({
+    required String label,
+    required TextEditingController controller,
+    required bool obscure,
+    required VoidCallback onToggle,
+    required String? Function(String?) validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: AppTextStyles.labelSmall.copyWith(
+                fontSize: 11,
+                color: AppColors.mutedText,
+                letterSpacing: 0.8)),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          obscureText: obscure,
+          validator: validator,
+          style: AppTextStyles.inputText,
+          decoration: InputDecoration(
+            hintText: '••••••••',
+            hintStyle: AppTextStyles.inputHint,
+            filled: true,
+            fillColor: AppColors.inputFill,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.divider),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.divider),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.error),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide:
+                  const BorderSide(color: AppColors.error, width: 1.5),
+            ),
+            suffixIcon: IconButton(
+              icon: Icon(
+                obscure
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                size: 16,
+                color: AppColors.mutedText,
+              ),
+              onPressed: onToggle,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

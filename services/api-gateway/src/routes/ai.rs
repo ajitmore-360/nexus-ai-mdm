@@ -10,9 +10,13 @@ use nexus_auth::Claims;
 use contracts::ai::mcp::MCPRequest;
 
 use crate::{
-    proxy::ai_proxy::proxy_ai_request,
+    proxy::ai_proxy::{proxy_ai_request, proxy_ai_stream},
     state::AppState,
 };
+
+/// Maximum UTF-8 bytes accepted in a copilot prompt.
+/// Prevents token-budget exhaustion attacks and OOM on the Ollama side.
+const MAX_PROMPT_BYTES: usize = 8_000;
 
 //
 // ========================================
@@ -49,6 +53,24 @@ pub async fn copilot(
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
 
+    let request_id = headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+
+    // Reject prompts that exceed the byte cap — protects Ollama from OOM and
+    // prevents token-budget exhaustion by large untrusted inputs.
+    if payload.prompt.as_deref().map(|p| p.len()).unwrap_or(0) > MAX_PROMPT_BYTES {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("prompt exceeds the {} character limit", MAX_PROMPT_BYTES)
+            })),
+        )
+            .into_response();
+    }
+
     let mut payload_json = match serde_json::to_value(payload) {
         Ok(v) => v,
         Err(e) => {
@@ -79,8 +101,84 @@ pub async fn copilot(
         }
     }
 
-    match proxy_ai_request(&state, payload_json, tenant_id, user_id, role, correlation_id).await {
+    match proxy_ai_request(&state, payload_json, tenant_id, user_id, role, correlation_id, request_id).await {
         Ok((status, body)) => (status, Json(body)).into_response(),
         Err((status, body)) => (status, Json(body)).into_response(),
     }
+}
+
+//
+// ========================================
+// 🚀 AI COPILOT — STREAMING  (additive: /copilot/stream)
+// ========================================
+//
+
+pub async fn copilot_stream(
+    State(state):  State<AppState>,
+    claims_opt:    Option<Extension<Claims>>,
+    headers:       HeaderMap,
+    Json(payload): Json<MCPRequest>,
+) -> axum::response::Response {
+    let tenant_id = headers
+        .get("x-tenant-id")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+
+    let (user_id, role) = match claims_opt {
+        Some(Extension(ref claims)) => (
+            Some(claims.sub.clone()),
+            Some(claims.nxs_role.to_string()),
+        ),
+        None => (None, None),
+    };
+
+    let correlation_id = headers
+        .get("x-correlation-id")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+
+    let request_id = headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+
+    if payload.prompt.as_deref().map(|p| p.len()).unwrap_or(0) > MAX_PROMPT_BYTES {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(serde_json::json!({
+                "success": false,
+                "error": format!("prompt exceeds the {} character limit", MAX_PROMPT_BYTES)
+            })),
+        )
+            .into_response();
+    }
+
+    let mut payload_json = match serde_json::to_value(payload) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(error=%e, "failed to serialize MCP stream request");
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "success": false,
+                    "error": "invalid request payload"
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    if let Some(map) = payload_json.as_object_mut() {
+        if let Some(ref tid) = tenant_id {
+            map.insert("tenant_id".into(), serde_json::Value::String(tid.clone()));
+        }
+        if let Some(ref uid) = user_id {
+            map.insert("user_id".into(), serde_json::Value::String(uid.clone()));
+        }
+        if let Some(ref cid) = correlation_id {
+            map.insert("correlation_id".into(), serde_json::Value::String(cid.clone()));
+        }
+    }
+
+    proxy_ai_stream(&state, payload_json, tenant_id, user_id, role, correlation_id, request_id).await
 }

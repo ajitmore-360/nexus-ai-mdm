@@ -52,30 +52,74 @@ impl SemanticMatcher {
             entity_type,
         );
 
-        let raw = self.llm.generate(&prompt).await?;
+        // Graceful degradation: if LLM is unavailable, fall back to a
+        // score-based heuristic rather than surfacing an error to the caller.
+        let raw = match self.llm.generate(&prompt).await {
+            Ok(r) => r,
+            Err(e) => {
+                warn!(
+                    error = %e,
+                    algo_score = algo_score,
+                    entity_type = %entity_type,
+                    "LLM unavailable — applying score-based fallback"
+                );
+                return Ok(Self::score_fallback(algo_score, "LLM unavailable"));
+            }
+        };
 
         // The prompt instructs the model to respond with JSON only.
         // Find the JSON object in the response (model may add whitespace).
         let parsed = parse_decision_json(&raw);
 
         match parsed {
-            Some(result) => {
+            Some(mut result) => {
+                result.algo_score = algo_score;
                 info!(
                     decision=?result.decision,
                     confidence=result.confidence,
+                    algo_score=result.algo_score,
                     "semantic matcher decided"
                 );
                 Ok(result)
             }
             None => {
-                warn!(raw=%raw, "failed to parse LLM decision; defaulting to review");
-                // Fail-safe: if LLM response is malformed, keep for human review.
-                Ok(SemanticMatchResult {
-                    decision:   MatchDecision::NoMatch,
-                    confidence: 0.5,
-                    reasoning:  "LLM response could not be parsed; routed to human review".to_string(),
-                    algo_score,
-                })
+                warn!(raw=%raw, "failed to parse LLM decision; applying score-based fallback");
+                Ok(Self::score_fallback(algo_score, "LLM response could not be parsed"))
+            }
+        }
+    }
+
+    /// Conservative score-based fallback used when the LLM is unavailable or
+    /// returns an unparseable response.
+    ///
+    /// Thresholds:
+    ///   ≥ 0.93 → auto-match  (deterministic score is highly confident)
+    ///   < 0.78 → no-match    (score is below the viable match band)
+    ///   otherwise → human review (queued; scored in the grey zone)
+    fn score_fallback(algo_score: f32, reason: &str) -> SemanticMatchResult {
+        if algo_score >= 0.93 {
+            warn!(algo_score, reason, "LLM fallback → auto-match (score above threshold)");
+            SemanticMatchResult {
+                decision:   MatchDecision::Match,
+                confidence: algo_score,
+                reasoning:  format!("{reason}; auto-matched based on high algo score ({algo_score:.3})"),
+                algo_score,
+            }
+        } else if algo_score < 0.78 {
+            warn!(algo_score, reason, "LLM fallback → no-match (score below threshold)");
+            SemanticMatchResult {
+                decision:   MatchDecision::NoMatch,
+                confidence: 1.0 - algo_score,
+                reasoning:  format!("{reason}; auto-rejected based on low algo score ({algo_score:.3})"),
+                algo_score,
+            }
+        } else {
+            warn!(algo_score, reason, "LLM fallback → human review (score in grey zone)");
+            SemanticMatchResult {
+                decision:   MatchDecision::NoMatch,
+                confidence: 0.5,
+                reasoning:  format!("{reason}; routed to human review (algo score {algo_score:.3} in grey zone 0.78–0.93)"),
+                algo_score,
             }
         }
     }

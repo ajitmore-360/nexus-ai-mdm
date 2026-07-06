@@ -1,15 +1,20 @@
 use axum::{
+    extract::State,
     http::{header, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
 use serde_json::{json, Value};
 
-pub async fn health() -> Json<Value> {
+use crate::state::AppState;
+
+pub async fn health(State(state): State<AppState>) -> Json<Value> {
+    let ws_connections = state.ws_manager.active_count();
     Json(json!({
-        "status":  "ok",
-        "service": "api-gateway",
-        "version": env!("CARGO_PKG_VERSION"),
+        "status":         "ok",
+        "service":        "api-gateway",
+        "version":        env!("CARGO_PKG_VERSION"),
+        "ws_connections": ws_connections,
     }))
 }
 

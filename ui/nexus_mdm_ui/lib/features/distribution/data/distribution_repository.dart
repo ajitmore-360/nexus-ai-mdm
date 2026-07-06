@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/auth/auth_manager.dart';
 import '../../../core/network/api_client.dart' hide ApiException;
 import '../../../core/constants/app_constants.dart';
 import '../../../shared/models/api_responses.dart';
@@ -71,9 +71,7 @@ class DistributionRepository {
     int offset = 0,
   }) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final tenantId = prefs.getString(AppConstants.storageTenantId) ??
-          '00000000-0000-0000-0000-000000000001';
+      final tenantId = await AuthManager.getTenantId() ?? '';
 
       final params = <String, dynamic>{
         'tenant_id': tenantId,

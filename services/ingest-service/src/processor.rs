@@ -176,6 +176,22 @@ impl IngestProcessor {
     }
 }
 
+fn parse_entity_type(s: &str) -> EntityType {
+    match s.to_lowercase().as_str() {
+        "customer" | "person" | "individual" | "client" | "contact" => EntityType::Customer,
+        "vendor"   | "supplier" | "partner"                          => EntityType::Vendor,
+        "material" | "item" | "part"                                 => EntityType::Material,
+        "product"  | "sku" | "good"                                  => EntityType::Product,
+        "account"                                                    => EntityType::Account,
+        "employee" | "staff" | "worker"                              => EntityType::Employee,
+        "location" | "address" | "site"                              => EntityType::Location,
+        "organization" | "org" | "company" | "enterprise"           => EntityType::Organization,
+        "asset"    | "equipment" | "device"                          => EntityType::Asset,
+        "referencedata" | "reference_data" | "reference"            => EntityType::ReferenceData,
+        other                                                        => EntityType::Custom(other.to_string()),
+    }
+}
+
 /// Convert an `IngestRecord` (after mapping + normalisation) into a
 /// `CanonicalEntity` ready to POST to MDM-Core.
 fn build_entity(tenant_id: Uuid, record: &crate::models::IngestRecord) -> CanonicalEntity {
@@ -209,7 +225,7 @@ fn build_entity(tenant_id: Uuid, record: &crate::models::IngestRecord) -> Canoni
     CanonicalEntity {
         entity_id:       Uuid::new_v4(),
         tenant_id,
-        entity_type:     EntityType::Customer,
+        entity_type:     parse_entity_type(&record.entity_type),
         status:          EntityStatus::Active,
         external_ids:    [(
             record.source_system.clone(),

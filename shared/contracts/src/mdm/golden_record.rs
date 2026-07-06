@@ -8,6 +8,7 @@ use serde::{
     Serialize,
 };
 
+use std::fmt;
 use uuid::Uuid;
 
 use crate::mdm::{
@@ -39,6 +40,20 @@ pub enum GoldenRecordStatus {
     SoftDeleted,
 }
 
+impl fmt::Display for GoldenRecordStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GoldenRecordStatus::Draft           => write!(f, "Draft"),
+            GoldenRecordStatus::Active          => write!(f, "Active"),
+            GoldenRecordStatus::PendingApproval => write!(f, "PendingApproval"),
+            GoldenRecordStatus::UnderReview     => write!(f, "UnderReview"),
+            GoldenRecordStatus::Superseded      => write!(f, "Superseded"),
+            GoldenRecordStatus::Archived        => write!(f, "Archived"),
+            GoldenRecordStatus::SoftDeleted     => write!(f, "SoftDeleted"),
+        }
+    }
+}
+
 //
 // ========================================
 // GOLDEN RECORD LIFECYCLE
@@ -63,6 +78,21 @@ pub enum GoldenRecordLifecycleStage {
     Published,
 
     Archived,
+}
+
+impl fmt::Display for GoldenRecordLifecycleStage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GoldenRecordLifecycleStage::Created              => write!(f, "Created"),
+            GoldenRecordLifecycleStage::Matched              => write!(f, "Matched"),
+            GoldenRecordLifecycleStage::SurvivorshipApplied  => write!(f, "SurvivorshipApplied"),
+            GoldenRecordLifecycleStage::AIValidated          => write!(f, "AIValidated"),
+            GoldenRecordLifecycleStage::HumanReviewed        => write!(f, "HumanReviewed"),
+            GoldenRecordLifecycleStage::Approved             => write!(f, "Approved"),
+            GoldenRecordLifecycleStage::Published            => write!(f, "Published"),
+            GoldenRecordLifecycleStage::Archived             => write!(f, "Archived"),
+        }
+    }
 }
 
 //

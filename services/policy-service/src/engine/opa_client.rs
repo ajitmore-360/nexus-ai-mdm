@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use anyhow::Result;
 use reqwest::Client;
 use tracing::{debug, instrument, warn};
 
@@ -80,6 +81,53 @@ impl OpaClient {
                     }
                 }
             }
+        }
+    }
+
+    /// Upload a rego policy to OPA under the given policy ID.
+    ///
+    /// OPA stores the policy at `/v1/policies/{policy_id}`.  Calling this with
+    /// the same ID is idempotent — OPA replaces the previous version.
+    ///
+    /// The rego text must declare `package mdm.policy` so that OPA merges it
+    /// with other tenant rules into the same evaluation namespace.
+    pub async fn upload_policy(&self, policy_id: &str, rego: &str) -> Result<()> {
+        let url = format!(
+            "{}/v1/policies/{}",
+            self.base_url.trim_end_matches('/'),
+            policy_id
+        );
+        let resp = self.http.put(&url).body(rego.to_string()).send().await
+            .map_err(|e| anyhow::anyhow!("OPA upload failed: {}", e))?;
+
+        if resp.status().is_success() {
+            debug!(policy_id=%policy_id, "OPA policy uploaded");
+            Ok(())
+        } else {
+            let status = resp.status();
+            let body   = resp.text().await.unwrap_or_default();
+            warn!(policy_id=%policy_id, status=%status, body=%body, "OPA upload error");
+            anyhow::bail!("OPA returned {} on policy upload: {}", status, body)
+        }
+    }
+
+    /// Remove a previously uploaded policy from OPA.
+    pub async fn delete_policy(&self, policy_id: &str) -> Result<()> {
+        let url = format!(
+            "{}/v1/policies/{}",
+            self.base_url.trim_end_matches('/'),
+            policy_id
+        );
+        let resp = self.http.delete(&url).send().await
+            .map_err(|e| anyhow::anyhow!("OPA delete failed: {}", e))?;
+
+        // 404 is fine — policy may have already been removed.
+        if resp.status().is_success() || resp.status() == reqwest::StatusCode::NOT_FOUND {
+            debug!(policy_id=%policy_id, "OPA policy deleted");
+            Ok(())
+        } else {
+            let status = resp.status();
+            anyhow::bail!("OPA returned {} on policy delete", status)
         }
     }
 

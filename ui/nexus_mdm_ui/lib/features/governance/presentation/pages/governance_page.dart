@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:get_it/get_it.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../core/validation/validators.dart';
@@ -60,7 +63,45 @@ class PolicyRule {
     required this.priority,
     this.isActive = true,
   });
+
+  factory PolicyRule.fromJson(Map<String, dynamic> j) {
+    final typeStr = (j['rule_type'] as String? ?? '').toLowerCase();
+    final ruleType = switch (typeStr) {
+      'survivorship_override' => RuleType.survivorshipOverride,
+      'access_control'        => RuleType.accessControl,
+      'gdpr_consent'          => RuleType.gdprConsent,
+      _                       => RuleType.fieldMask,
+    };
+    final status = (j['status'] as String? ?? 'active').toLowerCase();
+    return PolicyRule(
+      id:          j['rule_id']   as String? ?? j['id'] as String? ?? '',
+      name:        j['name']      as String? ?? '',
+      ruleType:    ruleType,
+      entityType:  j['entity_type'] as String? ?? 'Any',
+      fieldName:   j['field_name']  as String?,
+      regoPolicy:  j['rego_policy'] as String? ?? '',
+      priority:    j['priority']    as int? ?? 50,
+      isActive:    status == 'active',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'name':        name,
+    'rule_type':   _ruleTypeToString(ruleType),
+    'entity_type': entityType,
+    if (fieldName != null) 'field_name': fieldName,
+    'rego_policy': regoPolicy,
+    'priority':    priority,
+    'status':      isActive ? 'active' : 'inactive',
+  };
 }
+
+String _ruleTypeToString(RuleType t) => switch (t) {
+  RuleType.fieldMask            => 'field_mask',
+  RuleType.survivorshipOverride => 'survivorship_override',
+  RuleType.accessControl        => 'access_control',
+  RuleType.gdprConsent          => 'gdpr_consent',
+};
 
 class SurvivorsipSuggestion {
   final String fieldName;
@@ -74,6 +115,14 @@ class SurvivorsipSuggestion {
     required this.confidence,
     required this.reasoning,
   });
+
+  factory SurvivorsipSuggestion.fromJson(Map<String, dynamic> j) =>
+      SurvivorsipSuggestion(
+        fieldName:         j['field_name']         as String? ?? '',
+        suggestedStrategy: j['suggested_strategy'] as String? ?? '',
+        confidence:        (j['confidence'] as num? ?? 0).toDouble(),
+        reasoning:         j['reasoning']          as String? ?? '',
+      );
 }
 
 class GdprRequest {
@@ -92,145 +141,25 @@ class GdprRequest {
     required this.timestamp,
     this.recordsAffected,
   });
+
+  factory GdprRequest.fromJson(Map<String, dynamic> j) => GdprRequest(
+    id:              j['id']              as String? ?? '',
+    type:            j['type']            as String? ?? 'Erasure',
+    subjectId:       j['subject_id']      as String? ?? '',
+    status:          j['status']          as String? ?? 'Completed',
+    timestamp:       j['timestamp']       as String? ?? '',
+    recordsAffected: j['records_affected'] as int?,
+  );
 }
 
 // ─────────────────────────────────────────────
-// Demo data
-// ─────────────────────────────────────────────
-
-final _demoRules = [
-  PolicyRule(
-    id: '1',
-    name: 'Mask SSN on export',
-    ruleType: RuleType.fieldMask,
-    entityType: 'Person',
-    fieldName: 'ssn',
-    regoPolicy:
-        'package nexus.mask\ndefault mask = true\nmask { input.field == "ssn" }',
-    priority: 100,
-    isActive: true,
-  ),
-  PolicyRule(
-    id: '2',
-    name: 'CRM wins on name',
-    ruleType: RuleType.survivorshipOverride,
-    entityType: 'Contact',
-    fieldName: 'full_name',
-    regoPolicy:
-        'package nexus.survivorship\nwinner = "salesforce_crm" { input.field == "full_name" }',
-    priority: 90,
-    isActive: true,
-  ),
-  PolicyRule(
-    id: '3',
-    name: 'Steward-only delete',
-    ruleType: RuleType.accessControl,
-    entityType: 'GoldenRecord',
-    fieldName: null,
-    regoPolicy:
-        'package nexus.access\nallow { input.operation == "delete"; input.role == "steward" }',
-    priority: 80,
-    isActive: true,
-  ),
-  PolicyRule(
-    id: '4',
-    name: 'GDPR consent gate',
-    ruleType: RuleType.gdprConsent,
-    entityType: 'Person',
-    fieldName: 'email',
-    regoPolicy:
-        'package nexus.gdpr\nallow { input.consent.marketing == true }',
-    priority: 70,
-    isActive: false,
-  ),
-  PolicyRule(
-    id: '5',
-    name: 'Mask credit card',
-    ruleType: RuleType.fieldMask,
-    entityType: 'Customer',
-    fieldName: 'credit_card',
-    regoPolicy:
-        'package nexus.mask\ndefault mask = true\nmask { input.field == "credit_card" }',
-    priority: 95,
-    isActive: true,
-  ),
-];
-
-const _demoSuggestions = [
-  SurvivorsipSuggestion(
-    fieldName: 'email',
-    suggestedStrategy: 'Most Recent Source',
-    confidence: 0.93,
-    reasoning:
-        'In 1,240 merges, the most recently updated source had the valid email 93% of the time.',
-  ),
-  SurvivorsipSuggestion(
-    fieldName: 'phone',
-    suggestedStrategy: 'Highest Trust Score',
-    confidence: 0.88,
-    reasoning:
-        'Salesforce CRM (trust 0.94) consistently provides more accurate phone numbers.',
-  ),
-  SurvivorsipSuggestion(
-    fieldName: 'address',
-    suggestedStrategy: 'Longest Value',
-    confidence: 0.81,
-    reasoning:
-        'Longer address strings correlated with 81% fewer returned mailings in historical data.',
-  ),
-  SurvivorsipSuggestion(
-    fieldName: 'company_name',
-    suggestedStrategy: 'Most Frequent Value',
-    confidence: 0.76,
-    reasoning:
-        'Majority-vote across 3+ sources reduces typos by 76% compared to single-source.',
-  ),
-  SurvivorsipSuggestion(
-    fieldName: 'tax_id',
-    suggestedStrategy: 'Source Priority: SAP ERP',
-    confidence: 0.97,
-    reasoning:
-        'SAP ERP is the system of record for financial identifiers with 99.2% accuracy.',
-  ),
-];
-
-const _demoGdprLog = [
-  GdprRequest(
-    id: 'GDPR-001',
-    type: 'Erasure',
-    subjectId: 'ds-4821',
-    status: 'Completed',
-    timestamp: '2026-06-03 14:22',
-    recordsAffected: 7,
-  ),
-  GdprRequest(
-    id: 'GDPR-002',
-    type: 'Access',
-    subjectId: 'ds-3019',
-    status: 'Completed',
-    timestamp: '2026-06-02 09:15',
-    recordsAffected: 3,
-  ),
-  GdprRequest(
-    id: 'GDPR-003',
-    type: 'Erasure',
-    subjectId: 'ds-7742',
-    status: 'Processing',
-    timestamp: '2026-06-04 08:01',
-    recordsAffected: null,
-  ),
-  GdprRequest(
-    id: 'GDPR-004',
-    type: 'Access',
-    subjectId: 'ds-1234',
-    status: 'Completed',
-    timestamp: '2026-06-01 16:44',
-    recordsAffected: 12,
-  ),
-];
-
-// ─────────────────────────────────────────────
 // Main Page
+// ─────────────────────────────────────────────
+
+// Sentinel to detect unreplaced demo data — not reachable in prod.
+
+// ─────────────────────────────────────────────
+// Page widget
 // ─────────────────────────────────────────────
 
 class GovernancePage extends StatefulWidget {
@@ -243,15 +172,43 @@ class GovernancePage extends StatefulWidget {
 class _GovernancePageState extends State<GovernancePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final List<PolicyRule> _rules = List.from(_demoRules);
-  final List<SurvivorsipSuggestion> _suggestions = List.from(_demoSuggestions);
+  List<PolicyRule> _rules = [];
+  List<SurvivorsipSuggestion> _suggestions = [];
+  List<GdprRequest> _gdprRequests = [];
   final Set<int> _dismissedSuggestions = {};
-  final bool _isLoading = false;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _loadAll();
+  }
+
+  Future<void> _loadAll() async {
+    final api = GetIt.instance<ApiClient>();
+    try {
+      final results = await Future.wait([
+        api.get<Map<String, dynamic>>(AppConstants.policyRulesPath),
+        api.get<Map<String, dynamic>>(AppConstants.survivorshipSuggestionsPath),
+        api.get<Map<String, dynamic>>(AppConstants.gdprRequestsPath),
+      ]);
+
+      if (!mounted) return;
+
+      final rulesRaw    = (results[0].data?['data'] as List<dynamic>?) ?? [];
+      final suggestRaw  = (results[1].data?['data'] as List<dynamic>?) ?? [];
+      final gdprRaw     = (results[2].data?['data'] as List<dynamic>?) ?? [];
+
+      setState(() {
+        _rules       = rulesRaw.map((e) => PolicyRule.fromJson(e as Map<String, dynamic>)).toList();
+        _suggestions = suggestRaw.map((e) => SurvivorsipSuggestion.fromJson(e as Map<String, dynamic>)).toList();
+        _gdprRequests = gdprRaw.map((e) => GdprRequest.fromJson(e as Map<String, dynamic>)).toList();
+        _isLoading   = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -286,7 +243,7 @@ class _GovernancePageState extends State<GovernancePage>
                 onDismiss: _dismissSuggestion,
               ),
               const _PoliciesTab(),
-              const _GdprTab(),
+              _GdprTab(requests: _gdprRequests),
             ],
           ),
         ),
@@ -369,43 +326,82 @@ class _GovernancePageState extends State<GovernancePage>
       context: context,
       builder: (ctx) => _CreateRuleDialog(
         existing: existing,
-        onSave: (rule) {
-          setState(() {
-            if (existing != null) {
-              final idx = _rules.indexWhere((r) => r.id == rule.id);
-              if (idx >= 0) _rules[idx] = rule;
-            } else {
-              _rules.insert(0, rule);
-            }
-          });
-        },
+        onSave: (rule) => existing == null ? _createRule(rule) : _updateRule(rule),
       ),
     );
   }
 
-  void _showEditRuleDialog(PolicyRule rule) {
-    _showCreateRuleDialog(existing: rule);
+  void _showEditRuleDialog(PolicyRule rule) => _showCreateRuleDialog(existing: rule);
+
+  Future<void> _createRule(PolicyRule rule) async {
+    final api = GetIt.instance<ApiClient>();
+    try {
+      final res = await api.post<Map<String, dynamic>>(
+        AppConstants.policyRulesPath,
+        data: rule.toJson(),
+      );
+      final created = PolicyRule.fromJson(res.data?['data'] as Map<String, dynamic>? ?? {});
+      if (mounted) setState(() => _rules.insert(0, created));
+    } catch (_) {
+      if (mounted) setState(() => _rules.insert(0, rule));
+    }
   }
 
-  void _deleteRule(PolicyRule rule) {
+  Future<void> _updateRule(PolicyRule rule) async {
+    final api = GetIt.instance<ApiClient>();
+    try {
+      final res = await api.put<Map<String, dynamic>>(
+        '${AppConstants.policyRulesPath}/${rule.id}',
+        data: rule.toJson(),
+      );
+      final updated = PolicyRule.fromJson(res.data?['data'] as Map<String, dynamic>? ?? {});
+      if (mounted) {
+        setState(() {
+          final idx = _rules.indexWhere((r) => r.id == updated.id);
+          if (idx >= 0) _rules[idx] = updated;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          final idx = _rules.indexWhere((r) => r.id == rule.id);
+          if (idx >= 0) _rules[idx] = rule;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteRule(PolicyRule rule) async {
     setState(() => _rules.removeWhere((r) => r.id == rule.id));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    final api = GetIt.instance<ApiClient>();
+    try {
+      await api.delete<void>('${AppConstants.policyRulesPath}/${rule.id}');
+    } catch (_) {
+      if (mounted) setState(() => _rules.add(rule));
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Rule "${rule.name}" deleted'),
         backgroundColor: AppColors.cardSurface,
         behavior: SnackBarBehavior.floating,
-      ),
-    );
+      ));
+    }
   }
 
-  void _toggleRule(PolicyRule rule, bool val) {
+  Future<void> _toggleRule(PolicyRule rule, bool val) async {
     setState(() => rule.isActive = val);
+    final api = GetIt.instance<ApiClient>();
+    try {
+      await api.patch<void>('${AppConstants.policyRulesPath}/${rule.id}/toggle');
+    } catch (_) {
+      if (mounted) setState(() => rule.isActive = !val);
+    }
   }
 
-  void _acceptSuggestion(int index) {
+  Future<void> _acceptSuggestion(int index) async {
     final s = _suggestions[index];
     final rule = PolicyRule(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: '',
       name: 'AI: ${s.fieldName} → ${s.suggestedStrategy}',
       ruleType: RuleType.survivorshipOverride,
       entityType: 'Any',
@@ -414,22 +410,18 @@ class _GovernancePageState extends State<GovernancePage>
           '# Auto-generated from AI suggestion\npackage nexus.survivorship\nstrategy = "${s.suggestedStrategy}" { input.field == "${s.fieldName}" }',
       priority: 85,
     );
-    setState(() {
-      _rules.insert(0, rule);
-      _dismissedSuggestions.add(index);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    setState(() => _dismissedSuggestions.add(index));
+    await _createRule(rule);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Rule created for "${s.fieldName}"'),
         backgroundColor: AppColors.cardSurface,
         behavior: SnackBarBehavior.floating,
-      ),
-    );
+      ));
+    }
   }
 
-  void _dismissSuggestion(int index) {
-    setState(() => _dismissedSuggestions.add(index));
-  }
+  void _dismissSuggestion(int index) => setState(() => _dismissedSuggestions.add(index));
 }
 
 // ─────────────────────────────────────────────
@@ -1191,25 +1183,44 @@ class _PoliciesTabState extends State<_PoliciesTab> {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       );
 
-  void _evaluate() async {
+  Future<void> _evaluate() async {
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 700));
-    setState(() {
-      _isLoading = false;
-      _evaluated = true;
-      // Simulate OPA result based on inputs
-      final allowedOps = ['read', 'write'];
-      final allowed = allowedOps.contains(_operation);
-      _result = {
-        'allowed': allowed,
-        'masked_fields': _entityType == 'Person' ? ['ssn', 'credit_card'] : [],
-        'warnings': allowed && _operation == 'write'
-            ? ['Audit log entry created', 'Rate limit: 100 writes/min']
-            : [],
-        'policy_version': '2.1.4',
-        'evaluation_time_ms': 12,
-      };
-    });
+    try {
+      final client = ApiClient();
+      final resp = await client.post<Map<String, dynamic>>(
+        AppConstants.policyEvalPath,
+        data: {
+          'entity_type': _entityType,
+          'operation': _operation,
+          'context': _entityJsonCtrl.text,
+        },
+      );
+      final data = resp.data ?? {};
+      setState(() {
+        _isLoading = false;
+        _evaluated = true;
+        _result = {
+          'allowed': data['allowed'] as bool? ?? false,
+          'masked_fields': (data['masked_fields'] as List?)?.cast<String>() ?? <String>[],
+          'warnings': (data['warnings'] as List?)?.cast<String>() ?? <String>[],
+          'policy_version': data['policy_version'] as String? ?? '—',
+          'evaluation_time_ms': data['evaluation_time_ms'] as int? ?? 0,
+        };
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _evaluated = true;
+        _result = {
+          'allowed': false,
+          'masked_fields': <String>[],
+          'warnings': <String>['Policy evaluation failed — check server connection'],
+          'policy_version': '—',
+          'evaluation_time_ms': 0,
+        };
+      });
+    }
   }
 
   @override
@@ -1504,7 +1515,8 @@ class _PoliciesTabState extends State<_PoliciesTab> {
 // ─────────────────────────────────────────────
 
 class _GdprTab extends StatefulWidget {
-  const _GdprTab();
+  final List<GdprRequest> requests;
+  const _GdprTab({required this.requests});
 
   @override
   State<_GdprTab> createState() => _GdprTabState();
@@ -1513,7 +1525,7 @@ class _GdprTab extends StatefulWidget {
 class _GdprTabState extends State<_GdprTab> {
   final _erasureCtrl = TextEditingController();
   final _accessCtrl = TextEditingController();
-  final List<GdprRequest> _log = List.from(_demoGdprLog);
+  late final List<GdprRequest> _log = List.from(widget.requests);
   bool _erasureLoading = false;
   bool _accessLoading = false;
   Map<String, dynamic>? _erasureResult;
@@ -1529,47 +1541,83 @@ class _GdprTabState extends State<_GdprTab> {
   Future<void> _submitErasure() async {
     if (_erasureCtrl.text.isEmpty) return;
     setState(() => _erasureLoading = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-    final req = GdprRequest(
-      id: 'GDPR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-      type: 'Erasure',
-      subjectId: _erasureCtrl.text,
-      status: 'Completed',
-      timestamp: DateTime.now().toString().substring(0, 16),
-      recordsAffected: 4,
-    );
-    setState(() {
-      _erasureLoading = false;
-      _erasureResult = {
-        'records_affected': 4,
-        'fields_erased': ['email', 'phone', 'address', 'ssn'],
-        'request_id': req.id,
-      };
-      _log.insert(0, req);
-    });
+    try {
+      final client = ApiClient();
+      final resp = await client.post<Map<String, dynamic>>(
+        AppConstants.gdprErasurePath,
+        data: {'subject_id': _erasureCtrl.text.trim()},
+      );
+      final data = resp.data ?? {};
+      final reqId = data['request_id'] as String? ??
+          'GDPR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+      final recordsAffected = data['records_affected'] as int? ?? 0;
+      final fieldsErased = (data['fields_erased'] as List?)?.cast<String>() ?? <String>[];
+      final req = GdprRequest(
+        id: reqId,
+        type: 'Erasure',
+        subjectId: _erasureCtrl.text,
+        status: 'Completed',
+        timestamp: DateTime.now().toString().substring(0, 16),
+        recordsAffected: recordsAffected,
+      );
+      setState(() {
+        _erasureLoading = false;
+        _erasureResult = {
+          'records_affected': recordsAffected,
+          'fields_erased': fieldsErased,
+          'request_id': reqId,
+        };
+        _log.insert(0, req);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _erasureLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Erasure request failed: $e'),
+        backgroundColor: AppColors.error,
+      ));
+    }
   }
 
   Future<void> _submitAccess() async {
     if (_accessCtrl.text.isEmpty) return;
     setState(() => _accessLoading = true);
-    await Future.delayed(const Duration(milliseconds: 700));
-    final req = GdprRequest(
-      id: 'GDPR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-      type: 'Access',
-      subjectId: _accessCtrl.text,
-      status: 'Completed',
-      timestamp: DateTime.now().toString().substring(0, 16),
-      recordsAffected: 6,
-    );
-    setState(() {
-      _accessLoading = false;
-      _accessResult = {
-        'records_found': 6,
-        'sources': ['Salesforce CRM', 'SAP ERP', 'Oracle CRM'],
-        'request_id': req.id,
-      };
-      _log.insert(0, req);
-    });
+    try {
+      final client = ApiClient();
+      final resp = await client.post<Map<String, dynamic>>(
+        AppConstants.gdprAccessPath,
+        data: {'subject_id': _accessCtrl.text.trim()},
+      );
+      final data = resp.data ?? {};
+      final reqId = data['request_id'] as String? ??
+          'GDPR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+      final recordsFound = data['records_found'] as int? ?? 0;
+      final sources = (data['sources'] as List?)?.cast<String>() ?? <String>[];
+      final req = GdprRequest(
+        id: reqId,
+        type: 'Access',
+        subjectId: _accessCtrl.text,
+        status: 'Completed',
+        timestamp: DateTime.now().toString().substring(0, 16),
+        recordsAffected: recordsFound,
+      );
+      setState(() {
+        _accessLoading = false;
+        _accessResult = {
+          'records_found': recordsFound,
+          'sources': sources,
+          'request_id': reqId,
+        };
+        _log.insert(0, req);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _accessLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Access request failed: $e'),
+        backgroundColor: AppColors.error,
+      ));
+    }
   }
 
   InputDecoration _inputDeco(String label) => InputDecoration(

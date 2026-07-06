@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::State,
+    extract::{Extension, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
 };
+use nexus_auth::Claims;
 use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
 
+use crate::jobs::persist_job;
 use crate::models::{IngestBatch, IngestRecord};
 use crate::state::AppState;
 
@@ -18,9 +20,12 @@ use crate::state::AppState;
 // ============================================================
 
 pub async fn ingest_batch(
-    State(state): State<Arc<AppState>>,
-    Json(batch):  Json<IngestBatch>,
+    State(state):      State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
+    Json(mut batch):   Json<IngestBatch>,
 ) -> impl IntoResponse {
+    // Enforce tenant isolation — always use the JWT-authenticated tenant, ignoring any body value.
+    batch.tenant_id = claims.nxs_tenant_id;
     if batch.records.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
@@ -38,7 +43,16 @@ pub async fn ingest_batch(
     }
 
     match state.processor.process_batch(&batch, &[]).await {
-        Ok(result) => (StatusCode::OK, Json(json!({ "success": true, "result": result }))),
+        Ok(result) => {
+            let job_id = match persist_job(&state.pool, &batch, &result).await {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    tracing::warn!(error=%e, "failed to persist ingest job — result still returned");
+                    None
+                }
+            };
+            (StatusCode::OK, Json(json!({ "success": true, "job_id": job_id, "result": result })))
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "success": false, "error": e.to_string() })),
@@ -52,15 +66,15 @@ pub async fn ingest_batch(
 
 #[derive(Deserialize)]
 pub struct RawEntitiesRequest {
-    pub tenant_id:     Uuid,
     pub source_system: String,
     pub entity_type:   String,
     pub records:       Vec<serde_json::Map<String, serde_json::Value>>,
 }
 
 pub async fn ingest_entities(
-    State(state): State<Arc<AppState>>,
-    Json(req):    Json<RawEntitiesRequest>,
+    State(state):      State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
+    Json(req):         Json<RawEntitiesRequest>,
 ) -> impl IntoResponse {
     if req.records.is_empty() {
         return (
@@ -90,10 +104,19 @@ pub async fn ingest_entities(
         })
         .collect();
 
-    let batch = IngestBatch::new(req.tenant_id, req.source_system.clone(), ingest_records);
+    let batch = IngestBatch::new(claims.nxs_tenant_id, req.source_system.clone(), ingest_records);
 
     match state.processor.process_batch(&batch, &[]).await {
-        Ok(result) => (StatusCode::OK, Json(json!({ "success": true, "result": result }))),
+        Ok(result) => {
+            let job_id = match persist_job(&state.pool, &batch, &result).await {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    tracing::warn!(error=%e, "failed to persist ingest job — result still returned");
+                    None
+                }
+            };
+            (StatusCode::OK, Json(json!({ "success": true, "job_id": job_id, "result": result })))
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "success": false, "error": e.to_string() })),
@@ -107,15 +130,15 @@ pub async fn ingest_entities(
 
 #[derive(Deserialize)]
 pub struct CsvIngestRequest {
-    pub tenant_id:     Uuid,
     pub source_system: String,
     pub entity_type:   String,
     pub csv_data:      String,
 }
 
 pub async fn ingest_csv(
-    State(state): State<Arc<AppState>>,
-    Json(req):    Json<CsvIngestRequest>,
+    State(state):      State<Arc<AppState>>,
+    Extension(claims): Extension<Claims>,
+    Json(req):         Json<CsvIngestRequest>,
 ) -> impl IntoResponse {
     let mut rdr = csv::Reader::from_reader(req.csv_data.as_bytes());
     let headers = match rdr.headers() {
@@ -165,10 +188,19 @@ pub async fn ingest_csv(
         );
     }
 
-    let batch = IngestBatch::new(req.tenant_id, req.source_system.clone(), records);
+    let batch = IngestBatch::new(claims.nxs_tenant_id, req.source_system.clone(), records);
 
     match state.processor.process_batch(&batch, &[]).await {
-        Ok(result) => (StatusCode::OK, Json(json!({ "success": true, "result": result }))),
+        Ok(result) => {
+            let job_id = match persist_job(&state.pool, &batch, &result).await {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    tracing::warn!(error=%e, "failed to persist ingest job — result still returned");
+                    None
+                }
+            };
+            (StatusCode::OK, Json(json!({ "success": true, "job_id": job_id, "result": result })))
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "success": false, "error": e.to_string() })),

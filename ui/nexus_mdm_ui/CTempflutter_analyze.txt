@@ -1,0 +1,77 @@
+Analyzing nexus_mdm_ui...                                       
+
+   info - Don't invoke 'print' in production code - lib\core\network\api_client.dart:202:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\network\api_client.dart:213:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\network\api_client.dart:223:7 - avoid_print
+warning - Unused import: 'package:google_fonts/google_fonts.dart' - lib\core\theme\app_theme.dart:2:8 - unused_import
+   info - Use 'const' with the constructor to improve performance - lib\features\ai_copilot\data\copilot_repository.dart:35:11 - prefer_const_constructors
+   info - Don't invoke 'print' in production code - lib\features\ai_copilot\data\copilot_repository.dart:40:9 - avoid_print
+   info - Use 'const' with the constructor to improve performance - lib\features\ai_copilot\data\copilot_repository.dart:49:11 - prefer_const_constructors
+   info - Don't invoke 'print' in production code - lib\features\ai_copilot\data\copilot_repository.dart:72:9 - avoid_print
+   info - Unnecessary escape in string literal - lib\features\ai_copilot\presentation\pages\ai_copilot_page.dart:51:45 - unnecessary_string_escapes
+   info - Use 'const' with the constructor to improve performance - lib\features\ai_copilot\presentation\pages\ai_copilot_page.dart:229:7 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\ai_copilot\presentation\pages\ai_copilot_page.dart:363:23 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\auth\presentation\pages\login_page.dart:201:17 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\auth\presentation\pages\login_page.dart:345:11 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\auth\presentation\pages\splash_page.dart:96:17 - prefer_const_constructors
+warning - Unused import: '../../../../shared/models/entity.dart' - lib\features\dashboard\presentation\pages\dashboard_page.dart:17:8 - unused_import
+   info - Don't invoke 'print' in production code - lib\features\entities\data\entity_repository.dart:86:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\entities\data\entity_repository.dart:110:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\entities\data\entity_repository.dart:130:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\entities\data\entity_repository.dart:155:9 - avoid_print
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:82:12 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:84:13 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:86:16 - prefer_const_constructors
+   info - Use 'const' literals as arguments to constructors of '@immutable' classes - lib\features\entities\presentation\pages\entity_detail_page.dart:88:21 - prefer_const_literals_to_create_immutables
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:89:13 - prefer_const_constructors
+   info - Use 'const' literals as arguments to constructors of '@immutable' classes - lib\features\entities\presentation\pages\entity_detail_page.dart:89:27 - prefer_const_literals_to_create_immutables
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:90:15 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:92:15 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:92:31 - prefer_const_constructors
+   info - Use 'const' literals as arguments to constructors of '@immutable' classes - lib\features\entities\presentation\pages\entity_detail_page.dart:92:94 - prefer_const_literals_to_create_immutables
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:93:17 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:95:17 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:99:13 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:266:25 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_detail_page.dart:275:27 - prefer_const_constructors
+   info - Use a 'SizedBox' to add whitespace to a layout - lib\features\entities\presentation\pages\entity_detail_page.dart:481:21 - sized_box_for_whitespace
+   info - Use 'const' with the constructor to improve performance - lib\features\entities\presentation\pages\entity_edit_page.dart:208:11 - prefer_const_constructors
+warning - The value of the field '_entities' isn't used - lib\features\entities\presentation\pages\entity_explorer_page.dart:33:25 - unused_field
+warning - The declaration '_onSearchChanged' isn't referenced - lib\features\entities\presentation\pages\entity_explorer_page.dart:88:8 - unused_element
+   info - The private field _isLoading could be 'final' - lib\features\governance\presentation\pages\governance_page.dart:248:8 - prefer_final_fields
+   info - Use 'const' with the constructor to improve performance - lib\features\governance\presentation\pages\governance_page.dart:563:21 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\governance\presentation\pages\governance_page.dart:571:23 - prefer_const_constructors
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\features\governance\presentation\pages\governance_page.dart:589:13 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\governance\presentation\pages\governance_page.dart:792:35 - deprecated_member_use
+   info - Use 'const' with the constructor to improve performance - lib\features\governance\presentation\pages\governance_page.dart:1008:11 - prefer_const_constructors
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\governance\presentation\pages\governance_page.dart:1264:31 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\governance\presentation\pages\governance_page.dart:1279:31 - deprecated_member_use
+   info - Use 'const' with the constructor to improve performance - lib\features\governance\presentation\pages\governance_page.dart:1368:25 - prefer_const_constructors
+   info - Don't invoke 'print' in production code - lib\features\match_queue\data\match_repository.dart:37:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\match_queue\data\match_repository.dart:53:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\match_queue\data\match_repository.dart:69:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\features\match_queue\data\match_repository.dart:89:9 - avoid_print
+warning - Unused import: 'package:go_router/go_router.dart' - lib\features\match_queue\presentation\pages\match_queue_page.dart:3:8 - unused_import
+   info - The private field _selectedIds could be 'final' - lib\features\match_queue\presentation\pages\match_queue_page.dart:31:15 - prefer_final_fields
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_queue_page.dart:690:7 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_queue_page.dart:691:18 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_review_page.dart:198:11 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_review_page.dart:340:9 - prefer_const_constructors
+   info - Use 'const' literals as arguments to constructors of '@immutable' classes - lib\features\match_queue\presentation\pages\match_review_page.dart:342:21 - prefer_const_literals_to_create_immutables
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_review_page.dart:343:13 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_review_page.dart:343:29 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_review_page.dart:345:13 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_review_page.dart:345:29 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_review_page.dart:446:27 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_review_page.dart:452:25 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_review_page.dart:453:24 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_review_page.dart:454:26 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\match_queue\presentation\pages\match_review_page.dart:455:27 - prefer_const_constructors
+warning - Unused import: '../../../../shared/widgets/loading_shimmer.dart' - lib\features\settings\presentation\pages\settings_page.dart:6:8 - unused_import
+warning - A value for optional parameter 'revealed' isn't ever given - lib\features\settings\presentation\pages\settings_page.dart:56:10 - unused_element_parameter
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\settings\presentation\pages\settings_page.dart:431:31 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\settings\presentation\pages\settings_page.dart:455:31 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\settings\presentation\pages\settings_page.dart:1104:23 - deprecated_member_use
+   info - Use 'const' with the constructor to improve performance - lib\features\settings\presentation\pages\settings_page.dart:1362:15 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\settings\presentation\pages\settings_page.dart:1363:24 - prefer_const_constructors
+

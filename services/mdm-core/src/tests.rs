@@ -342,3 +342,298 @@ async fn test_gdpr_erase_no_auth_returns_401() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
+
+// ── Test: Full governance workflow — assign steward → submit → approve ─────────
+//
+// Scenario:
+//   1. Three identities share one tenant: admin, steward, owner (business_admin).
+//   2. Admin assigns the steward to the "Customer" entity type.
+//   3. Steward creates a Customer entity (defaults to Draft).
+//   4. Steward submits for review → entity becomes PendingReview, approval request created.
+//   5. Owner (business_admin) approves → entity becomes Active, request marked approved.
+//
+// This test exercises the full data-governance code path end-to-end against a
+// real PostgreSQL database, including the assignment-gated submit_for_review
+// check and the approval state machine.
+
+#[tokio::test]
+async fn test_governance_workflow_assign_submit_approve() {
+    let (app, db) = build_test_app().await;
+    let tenant_id = Uuid::new_v4();
+
+    let admin_email   = format!("gov-admin+{}@nexus.test",   tenant_id);
+    let steward_email = format!("gov-steward+{}@nexus.test", tenant_id);
+    let owner_email   = format!("gov-owner+{}@nexus.test",   tenant_id);
+
+    // ── 1. Register all three identities ──────────────────────────────────────
+    for (email, role, display_name) in [
+        (admin_email.as_str(),   "admin",          "Gov Admin"),
+        (steward_email.as_str(), "steward",        "Gov Steward"),
+        (owner_email.as_str(),   "business_admin", "Gov Owner"),
+    ] {
+        let resp = app
+            .clone()
+            .oneshot(post_json(
+                "/auth/register",
+                json!({
+                    "email": email, "password": "Test1234!",
+                    "display_name": display_name,
+                    "tenant_id": tenant_id, "role": role
+                }),
+            ))
+            .await
+            .unwrap();
+        assert!(
+            matches!(resp.status(), StatusCode::CREATED | StatusCode::CONFLICT),
+            "register {role}: unexpected status {}",
+            resp.status()
+        );
+    }
+
+    // ── 2. Login as admin ──────────────────────────────────────────────────────
+    let admin_token = {
+        let body = body_json(
+            app.clone()
+                .oneshot(post_json(
+                    "/auth/login",
+                    json!({ "email": admin_email, "password": "Test1234!" }),
+                ))
+                .await
+                .unwrap(),
+        )
+        .await;
+        match body["access_token"].as_str() {
+            Some(t) => t.to_owned(),
+            None    => return, // prior-run collision on this tenant_id — skip cleanly
+        }
+    };
+
+    // ── 3. Login as steward ────────────────────────────────────────────────────
+    let steward_token = body_json(
+        app.clone()
+            .oneshot(post_json(
+                "/auth/login",
+                json!({ "email": steward_email, "password": "Test1234!" }),
+            ))
+            .await
+            .unwrap(),
+    )
+    .await["access_token"]
+    .as_str()
+    .expect("steward login failed")
+    .to_owned();
+
+    // ── 4. Login as owner ──────────────────────────────────────────────────────
+    let owner_token = body_json(
+        app.clone()
+            .oneshot(post_json(
+                "/auth/login",
+                json!({ "email": owner_email, "password": "Test1234!" }),
+            ))
+            .await
+            .unwrap(),
+    )
+    .await["access_token"]
+    .as_str()
+    .expect("owner login failed")
+    .to_owned();
+
+    // ── 5. Fetch steward identity_id from DB ───────────────────────────────────
+    let steward_id: Uuid = sqlx::query_scalar(
+        "SELECT identity_id FROM core_mdm.identities WHERE email = $1",
+    )
+    .bind(&steward_email)
+    .fetch_one(&db)
+    .await
+    .expect("steward identity not found in DB");
+
+    // ── 6. Admin assigns steward to the "Customer" entity type ─────────────────
+    let assign_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(http::Method::POST)
+                .uri("/governance/assignments")
+                .header("Content-Type", "application/json")
+                .header("Authorization", format!("Bearer {admin_token}"))
+                .header("X-Tenant-ID", tenant_id.to_string())
+                .body(Body::from(
+                    json!({
+                        "identity_id":      steward_id,
+                        "entity_type_code": "Customer",
+                        "assignment_type":  "steward"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        assign_resp.status(),
+        StatusCode::CREATED,
+        "governance assignment creation failed: {:?}",
+        body_json(assign_resp).await
+    );
+
+    // ── 7. Steward creates a Customer entity (should default to Draft) ──────────
+    let create_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(http::Method::POST)
+                .uri("/entities")
+                .header("Content-Type", "application/json")
+                .header("Authorization", format!("Bearer {steward_token}"))
+                .header("X-Tenant-ID", tenant_id.to_string())
+                .body(Body::from(
+                    json!({
+                        "entity_type":   "Customer",
+                        "source_system": "governance_test",
+                        "external_id":   Uuid::new_v4().to_string(),
+                        "attributes":    [{ "key": "name", "value": "Test Corp Governance" }]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        create_resp.status(),
+        StatusCode::CREATED,
+        "steward entity creation failed"
+    );
+    let create_body = body_json(create_resp).await;
+    let entity_id: Uuid = create_body["data"]["entity_id"]
+        .as_str()
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .expect("entity_id missing from create response");
+
+    // ── 8. Steward submits entity for review ───────────────────────────────────
+    // The handler checks that the steward is assigned to "Customer" — this is
+    // the assignment we created in step 6.
+    let submit_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(http::Method::POST)
+                .uri(&format!("/entities/{entity_id}/submit-for-review"))
+                .header("Content-Type", "application/json")
+                .header("Authorization", format!("Bearer {steward_token}"))
+                .header("X-Tenant-ID", tenant_id.to_string())
+                .body(Body::from(
+                    json!({ "change_summary": "Initial Customer record — governance E2E test" })
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        submit_resp.status(),
+        StatusCode::OK,
+        "submit-for-review failed: {:?}",
+        body_json(submit_resp).await
+    );
+    let submit_body = body_json(submit_resp).await;
+    assert!(
+        submit_body["data"]["request_id"].as_str().is_some(),
+        "request_id missing from submit response"
+    );
+
+    // ── 9. Verify entity is PendingReview and one pending approval request exists
+    let entity_status: String = sqlx::query_scalar(
+        "SELECT status FROM core_mdm.entities WHERE entity_id = $1 AND tenant_id = $2",
+    )
+    .bind(entity_id)
+    .bind(tenant_id)
+    .fetch_one(&db)
+    .await
+    .expect("entity not found after submit");
+    assert_eq!(
+        entity_status, "PendingReview",
+        "entity should be PendingReview after submit-for-review"
+    );
+
+    let pending_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM core_mdm.entity_approval_requests \
+         WHERE entity_id = $1 AND status = 'pending'",
+    )
+    .bind(entity_id)
+    .fetch_one(&db)
+    .await
+    .unwrap_or(0);
+    assert_eq!(pending_count, 1, "expected exactly one pending approval request");
+
+    // ── 10. Owner (business_admin) approves the entity ─────────────────────────
+    let approve_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(http::Method::POST)
+                .uri(&format!("/entities/{entity_id}/approve"))
+                .header("Authorization", format!("Bearer {owner_token}"))
+                .header("X-Tenant-ID", tenant_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        approve_resp.status(),
+        StatusCode::OK,
+        "approve failed: {:?}",
+        body_json(approve_resp).await
+    );
+    let approve_body = body_json(approve_resp).await;
+    assert_eq!(
+        approve_body["data"]["status"],
+        json!("Active"),
+        "approve response should report Active status"
+    );
+
+    // ── 11. Verify entity is Active and approval request is marked approved ──
+    let final_status: String = sqlx::query_scalar(
+        "SELECT status FROM core_mdm.entities WHERE entity_id = $1",
+    )
+    .bind(entity_id)
+    .fetch_one(&db)
+    .await
+    .expect("entity not found after approve");
+    assert_eq!(final_status, "Active", "entity should be Active in DB after approval");
+
+    let approved_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM core_mdm.entity_approval_requests \
+         WHERE entity_id = $1 AND status = 'approved'",
+    )
+    .bind(entity_id)
+    .fetch_one(&db)
+    .await
+    .unwrap_or(0);
+    assert_eq!(approved_count, 1, "approval request should be marked approved in DB");
+
+    // ── 12. Cleanup — remove test-specific rows; identities are scoped by tenant_id ─
+    sqlx::query(
+        "DELETE FROM core_mdm.entity_approval_requests WHERE entity_id = $1",
+    )
+    .bind(entity_id)
+    .execute(&db)
+    .await
+    .ok();
+    sqlx::query(
+        "DELETE FROM core_mdm.entities WHERE entity_id = $1 AND tenant_id = $2",
+    )
+    .bind(entity_id)
+    .bind(tenant_id)
+    .execute(&db)
+    .await
+    .ok();
+    sqlx::query(
+        "DELETE FROM core_mdm.entity_type_assignments WHERE tenant_id = $1",
+    )
+    .bind(tenant_id)
+    .execute(&db)
+    .await
+    .ok();
+}

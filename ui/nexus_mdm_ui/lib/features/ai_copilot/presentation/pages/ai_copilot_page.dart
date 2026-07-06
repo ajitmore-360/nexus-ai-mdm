@@ -1,11 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'dart:async';
+import 'package:get_it/get_it.dart';
+import '../../../../core/license/licensed_module.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../shared/widgets/ai_badge.dart';
+import '../../../../shared/widgets/license_gate.dart';
+import '../../data/copilot_repository.dart';
 
 class _ChatMessage {
   final String id;
@@ -45,8 +49,6 @@ class _AiCopilotPageState extends State<AiCopilotPage> {
   final List<_ChatMessage> _messages = [];
   bool _isThinking = false;
   bool _isListening = false;
-  Timer? _streamTimer;
-  int _charIndex = 0;
 
   static const _welcomeMessage = '''Hello! I'm Nexus AI, your intelligent MDM assistant.
 
@@ -60,56 +62,6 @@ I can help you:
 
 What would you like to know about your master data?''';
 
-  static const Map<String, String> _demoResponses = {
-    'low trust': '''I found **47 entities** with trust scores below 65%:
-
-**Top concerns:**
-1. **23 Person entities** — missing email or phone fields
-2. **15 Organization entities** — conflicting address data from 3+ sources
-3. **9 Product entities** — duplicate SKUs detected from CSV imports
-
-**Recommended actions:**
-• Run bulk enrichment for the 23 Person entities
-• Review Organization address conflicts in Match Queue
-• De-duplicate Product SKUs (estimated: 2 hours)
-
-Would you like me to create a prioritized remediation plan?''',
-
-    'duplicate': '''**Duplicate Analysis Summary** (last 30 days):
-
-📊 **By Source System:**
-| Source | Duplicates | % of Ingest |
-|--------|-----------|-------------|
-| Salesforce CRM | 523 | 8.2% |
-| CSV Import | 389 | 24.1% |
-| HubSpot | 287 | 6.8% |
-
-**Root causes identified:**
-1. **No pre-ingestion deduplication** on CSV imports
-2. **Inconsistent name normalization** across CRM systems
-3. **Missing unique identifiers** in 18% of Salesforce records
-
-**AI Recommendation:** Enable pre-ingestion validation rules for CSV imports. Estimated reduction: **67% fewer duplicates**.
-
-Shall I configure these rules automatically?''',
-
-    'match score': '''**Match Score Explanation for Entity ENT-003:**
-
-The 93% confidence score is computed as a weighted ensemble of:
-
-| Algorithm | Score | Weight |
-|-----------|-------|--------|
-| Name similarity (Jaro-Winkler) | 87% | 0.30 |
-| Phone exact match | 99% | 0.35 |
-| Email domain match | 72% | 0.20 |
-| Address proximity | 91% | 0.15 |
-
-**Ensemble score: 90.6% → adjusted to 93%** (AI correction factor applied based on historical patterns for this entity type)
-
-**Verdict:** HIGH CONFIDENCE MATCH — recommend auto-merge with steward review.
-
-Want me to process this merge?''',
-  };
 
   @override
   void initState() {
@@ -121,7 +73,6 @@ Want me to process this merge?''',
   void dispose() {
     _inputController.dispose();
     _scrollController.dispose();
-    _streamTimer?.cancel();
     super.dispose();
   }
 
@@ -160,108 +111,72 @@ Want me to process this merge?''',
   }
 
   Future<void> _sendMessage(String text) async {
-    if (text.trim().isEmpty || _isThinking) return;
+    final query = text.trim();
+    if (query.isEmpty || _isThinking) return;
     _inputController.clear();
-    _addUserMessage(text);
+    _addUserMessage(query);
     setState(() => _isThinking = true);
 
-    // Try real API first, fall back to demo responses if backend is offline
-    try {
-      final apiClient = ApiClient();
-      final response = await apiClient.post<Map<String, dynamic>>(
-        AppConstants.aiCopilotPath,
-        data: {
-          'prompt':    text,
-          'tenant_id': '00000000-0000-0000-0000-000000000001',
-        },
-      );
-
-      if (!mounted) return;
-      setState(() => _isThinking = false);
-
-      final body   = response.data;
-      final answer = body?['data']?['answer'] as String?
-                   ?? body?['answer']         as String?
-                   ?? _getLocalFallback(text.toLowerCase());
-      _streamResponse(answer);
-
-    } catch (_) {
-      // Backend offline or error — stream local demo response
-      if (!mounted) return;
-      setState(() => _isThinking = false);
-      _streamResponse(_getLocalFallback(text.toLowerCase()));
-    }
-  }
-
-  /// Local fallback used when the AI service is unreachable.
-  /// Keeps the UI functional during development without a running backend.
-  String _getLocalFallback(String query) {
-    if (query.contains('low') || query.contains('trust')) {
-      return _demoResponses['low trust']!;
-    }
-    if (query.contains('duplicate') || query.contains('source')) {
-      return _demoResponses['duplicate']!;
-    }
-    if (query.contains('match') || query.contains('score') || query.contains('explain')) {
-      return _demoResponses['match score']!;
-    }
-    return 'I\'ve analyzed your query: **"$query"**\n\n'
-        'The AI service is currently offline. Start the backend with:\n'
-        '```\ncd nexus-ai-mdm/infra\ndocker compose up -d\n```\n\n'
-        'Once running, I can answer questions using your live entity data.';
-  }
-
-  void _streamResponse(String fullText) {
+    // Add an empty AI message that will grow as tokens arrive.
     final msgId = DateTime.now().millisecondsSinceEpoch.toString();
-    final streamMsg = _ChatMessage(
+    setState(() => _messages.add(_ChatMessage(
       id: msgId,
       content: '',
       isUser: false,
       timestamp: DateTime.now(),
       isStreaming: true,
-    );
-    setState(() => _messages.add(streamMsg));
-    _charIndex = 0;
+    )));
     _scrollToBottom();
 
-    _streamTimer?.cancel();
-    _streamTimer = Timer.periodic(
-      const Duration(milliseconds: AppConstants.aiResponseStreamDelayMs),
-      (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
+    final buffer = StringBuffer();
+    bool firstChunk = true;
+
+    try {
+      final repo = CopilotRepository(GetIt.instance<ApiClient>());
+      await for (final chunk in repo.chat(query)) {
+        if (!mounted) break;
+        if (firstChunk) {
+          firstChunk = false;
+          // Hide the "Thinking…" indicator as soon as tokens start arriving.
+          setState(() => _isThinking = false);
         }
-        if (_charIndex >= fullText.length) {
-          timer.cancel();
-          setState(() {
-            final idx = _messages.indexWhere((m) => m.id == msgId);
-            if (idx != -1) {
-              _messages[idx] = _messages[idx].copyWith(
-                content: fullText,
-                isStreaming: false,
-              );
-            }
-          });
-          return;
-        }
-        // Stream 3 chars at a time for speed
-        _charIndex = (_charIndex + 3).clamp(0, fullText.length);
+        buffer.write(chunk);
         setState(() {
           final idx = _messages.indexWhere((m) => m.id == msgId);
           if (idx != -1) {
-            _messages[idx] = _messages[idx].copyWith(
-              content: fullText.substring(0, _charIndex),
-            );
+            _messages[idx] = _messages[idx].copyWith(content: buffer.toString());
           }
         });
         _scrollToBottom();
-      },
-    );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      buffer.write('I\'m having trouble connecting to the AI service. '
+          'Please check your connection and try again.');
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isThinking = false;
+      final idx = _messages.indexWhere((m) => m.id == msgId);
+      if (idx != -1) {
+        _messages[idx] = _messages[idx].copyWith(
+          content: buffer.isEmpty ? 'No response received.' : buffer.toString(),
+          isStreaming: false,
+        );
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    return LicenseGuard(
+      module: LicensedModule.aiCopilot,
+      child: _buildMain(),
+    );
+  }
+
+  Widget _buildMain() {
     return Scaffold(
       backgroundColor: AppColors.navyBackground,
       body: Column(

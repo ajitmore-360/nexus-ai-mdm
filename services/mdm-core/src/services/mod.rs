@@ -1,6 +1,14 @@
+pub mod audit_service;
+pub mod branding_service;
+pub mod data_quality_service;
+pub mod distribution_service;
+pub mod domain_policy_service;
+pub mod license_service;
+pub mod notification_service;
 pub mod entity_service;
 pub mod golden_record_service;
 pub mod matching_service;
 pub mod merge_service;
+pub mod relationship_service;
 pub mod review_service;
 pub mod survivorship_service;

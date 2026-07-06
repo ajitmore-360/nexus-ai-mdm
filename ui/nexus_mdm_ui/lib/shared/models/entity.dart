@@ -178,6 +178,33 @@ class CanonicalEntity extends Equatable {
     }
   }
 
+  static EntityStatus _parseStatus(String? rawStatus, String? goldenRecordId) {
+    final normalized = (rawStatus ?? '').toLowerCase().replaceAll('_', '');
+    if (normalized == 'golden') return EntityStatus.golden;
+    if (goldenRecordId != null && normalized == 'active') return EntityStatus.golden;
+    switch (normalized) {
+      case 'active':
+        return EntityStatus.active;
+      case 'inactive':
+        return EntityStatus.inactive;
+      case 'merged':
+        return EntityStatus.merged;
+      case 'draft':
+      case 'pending':
+        return EntityStatus.pending;
+      case 'pendingreview':
+      case 'underinvestigation':
+      case 'review':
+        return EntityStatus.review;
+      case 'deleted':
+      case 'softdeleted':
+      case 'archived':
+        return EntityStatus.inactive;
+      default:
+        return EntityStatus.active;
+    }
+  }
+
   factory CanonicalEntity.fromJson(Map<String, dynamic> json) {
     return CanonicalEntity(
       id: json['id'] as String? ?? json['entity_id'] as String? ?? '',
@@ -185,10 +212,7 @@ class CanonicalEntity extends Equatable {
         (t) => t.name == (json['type'] as String? ?? 'person').toLowerCase(),
         orElse: () => EntityType.person,
       ),
-      status: EntityStatus.values.firstWhere(
-        (s) => s.name == (json['status'] as String? ?? 'active').toLowerCase(),
-        orElse: () => EntityStatus.active,
-      ),
+      status: _parseStatus(json['status'] as String?, json['golden_record_id'] as String?),
       displayName:    json['display_name'] as String? ?? 'Unknown Entity',
       goldenRecordId: json['golden_record_id'] as String?,
       trustScore:     (json['trust_score'] as num?)?.toDouble() ?? 0.0,
@@ -273,103 +297,6 @@ class CanonicalEntity extends Equatable {
       metadata: metadata ?? this.metadata,
     );
   }
-
-  // Demo data factory
-  static List<CanonicalEntity> get demoList => [
-        CanonicalEntity(
-          id: 'ent-001',
-          type: EntityType.person,
-          status: EntityStatus.golden,
-          displayName: 'Alexandra Chen',
-          goldenRecordId: 'gr-001',
-          trustScore: 0.97,
-          qualityScore: 0.95,
-          primarySource: 'Salesforce CRM',
-          sourceSystems: const ['Salesforce CRM', 'HubSpot', 'Workday HR'],
-          attributes: const {},
-          duplicateCount: 0,
-          conflictCount: 1,
-          createdAt: DateTime(2024, 3, 15),
-          updatedAt: DateTime.now().subtract(const Duration(hours: 3)),
-        ),
-        CanonicalEntity(
-          id: 'ent-002',
-          type: EntityType.organization,
-          status: EntityStatus.golden,
-          displayName: 'TechCorp Industries LLC',
-          goldenRecordId: 'gr-002',
-          trustScore: 0.92,
-          qualityScore: 0.89,
-          primarySource: 'SAP ERP',
-          sourceSystems: const ['SAP ERP', 'Salesforce CRM', 'Oracle DB'],
-          attributes: const {},
-          duplicateCount: 2,
-          conflictCount: 3,
-          createdAt: DateTime(2024, 1, 10),
-          updatedAt: DateTime.now().subtract(const Duration(hours: 1)),
-        ),
-        CanonicalEntity(
-          id: 'ent-003',
-          type: EntityType.person,
-          status: EntityStatus.review,
-          displayName: 'Michael Rodriguez',
-          trustScore: 0.71,
-          qualityScore: 0.68,
-          primarySource: 'HubSpot',
-          sourceSystems: const ['HubSpot', 'Marketo'],
-          attributes: const {},
-          duplicateCount: 3,
-          conflictCount: 5,
-          createdAt: DateTime(2024, 5, 20),
-          updatedAt: DateTime.now().subtract(const Duration(minutes: 45)),
-        ),
-        CanonicalEntity(
-          id: 'ent-004',
-          type: EntityType.product,
-          status: EntityStatus.active,
-          displayName: 'Enterprise Data Suite v3.0',
-          trustScore: 0.88,
-          qualityScore: 0.91,
-          primarySource: 'Oracle DB',
-          sourceSystems: const ['Oracle DB', 'SAP ERP'],
-          attributes: const {},
-          duplicateCount: 0,
-          conflictCount: 0,
-          createdAt: DateTime(2024, 2, 28),
-          updatedAt: DateTime.now().subtract(const Duration(days: 2)),
-        ),
-        CanonicalEntity(
-          id: 'ent-005',
-          type: EntityType.location,
-          status: EntityStatus.active,
-          displayName: '350 Mission Street, San Francisco, CA',
-          trustScore: 0.84,
-          qualityScore: 0.79,
-          primarySource: 'Manual Entry',
-          sourceSystems: const ['Manual Entry', 'Salesforce CRM'],
-          attributes: const {},
-          duplicateCount: 1,
-          conflictCount: 2,
-          createdAt: DateTime(2024, 4, 5),
-          updatedAt: DateTime.now().subtract(const Duration(hours: 6)),
-        ),
-        CanonicalEntity(
-          id: 'ent-006',
-          type: EntityType.person,
-          status: EntityStatus.merged,
-          displayName: 'Sarah Johnson',
-          mergedIntoId: 'ent-001',
-          trustScore: 0.45,
-          qualityScore: 0.42,
-          primarySource: 'CSV Import',
-          sourceSystems: const ['CSV Import'],
-          attributes: const {},
-          duplicateCount: 0,
-          conflictCount: 0,
-          createdAt: DateTime(2024, 6, 1),
-          updatedAt: DateTime.now().subtract(const Duration(minutes: 20)),
-        ),
-      ];
 
   @override
   List<Object?> get props => [

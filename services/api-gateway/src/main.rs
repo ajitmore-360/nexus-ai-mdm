@@ -25,23 +25,25 @@ use middleware::{
     license::license_guard,
     logging::logging_middleware,
     rate_limit::{rate_limit_middleware, operation_cost_middleware, InMemoryRateLimiter},
-    rbac::{block_super_admin, require_steward, require_super_admin},
+    rbac::{require_admin, require_approve, require_steward, require_super_admin},
     request_id::request_id_middleware,
     tenant::tenant_middleware,
+    user_context::inject_user_context,
 };
 
 use nexus_redis::{create_pool as create_redis_pool, RedisConfig, RedisRateLimiter, SessionStore};
 
 use routes::{
     ai::{copilot, copilot_stream},
-    auth::{login, me, refresh},
+    auth::{login, logout, me, refresh},
     health::{health, prometheus_metrics},
     mdm::{create_entity, execute_match},
     service_proxy::{
         // existing
-        accept_invite,
+        accept_invite, change_password,
         approve_match_candidate, autocomplete, create_policy_rule,
-        dashboard_activity, dashboard_stats,
+        dashboard_activity, dashboard_stats, dashboard_steward_performance,
+        dashboard_quality_dimensions,
         enqueue_distribution, evaluate_policy, execute_merge, gdpr_access, gdpr_erasure,
         get_distribution_job, get_entity_by_id, get_entity_lineage,
         get_match_review_queue, get_policy_weights,
@@ -65,6 +67,8 @@ use routes::{
         delete_source_system, test_source_system,
         // audit
         list_audit_events,
+        // lineage
+        list_lineage_events, get_lineage_stats, get_lineage_graph,
         // domain policies
         list_domain_policies, get_domain_policy, upsert_domain_policy, delete_domain_policy,
         // relationship types
@@ -73,6 +77,27 @@ use routes::{
         list_entity_relationships, create_entity_relationship, delete_entity_relationship,
         // review queue extras
         queue_metrics, bulk_approve_matches, bulk_reject_matches, defer_match, assign_review,
+        // license + branding
+        get_my_license, get_tenant_branding, upsert_tenant_branding,
+        // password reset
+        forgot_password, reset_password,
+        // invite info (public)
+        invite_info,
+        // SSO token exchange (public)
+        sso_exchange,
+        // notification inbox
+        list_notifications, notifications_unread_count,
+        mark_notification_read, mark_all_notifications_read,
+        // data governance
+        list_governance_assignments, my_governance_assigned_types,
+        create_governance_assignment, delete_governance_assignment,
+        list_pending_entity_approvals, submit_entity_for_review,
+        approve_entity_proxy, reject_entity_proxy,
+        bulk_approve_entities_proxy, bulk_reject_entities_proxy,
+        // policy rules (CRUD)
+        update_policy_rule, delete_policy_rule, toggle_policy_rule,
+        // survivorship suggestions + GDPR request log
+        policy_survivorship_suggestions, policy_gdpr_requests,
     },
 };
 
@@ -115,6 +140,17 @@ async fn main() {
     // Guard: reject known dev default JWT secret in non-dev environments.
     const KNOWN_DEV_JWT_SECRET: &str = "nexus-local-dev-jwt-secret-min-32-chars!!";
     let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_default();
+    if jwt_secret.is_empty()
+        && !auth_disabled
+        && matches!(app_env.as_str(), "production" | "staging" | "prod" | "stage")
+    {
+        panic!(
+            "SECURITY: JWT_SECRET is not set in APP_ENV={}. \
+             All JWT validation will fail. \
+             Generate a secret: openssl rand -hex 32",
+            app_env
+        );
+    }
     if jwt_secret == KNOWN_DEV_JWT_SECRET
         && matches!(app_env.as_str(), "production" | "staging" | "prod" | "stage")
     {
@@ -122,6 +158,30 @@ async fn main() {
             "SECURITY: JWT_SECRET is the well-known dev default. \
              Rotate it before deploying to APP_ENV={}. \
              Generate a new secret: openssl rand -hex 32",
+            app_env
+        );
+    }
+
+    // Guard: API_BEARER_TOKEN must be set and must not be the known dev default in
+    // non-development environments. mdm_service_auth() sends this as the
+    // service-to-service Authorization header on every proxied write to mdm-core.
+    const KNOWN_DEV_API_TOKEN: &str = "nexus-local-dev-token";
+    let api_bearer_token = std::env::var("API_BEARER_TOKEN").unwrap_or_default();
+    if api_bearer_token == KNOWN_DEV_API_TOKEN
+        && matches!(app_env.as_str(), "production" | "staging" | "prod" | "stage")
+    {
+        panic!(
+            "SECURITY: API_BEARER_TOKEN is the well-known dev default in APP_ENV={}. \
+             Rotate it before deploying.",
+            app_env
+        );
+    }
+    if api_bearer_token.is_empty()
+        && matches!(app_env.as_str(), "production" | "staging" | "prod" | "stage")
+    {
+        panic!(
+            "SECURITY: API_BEARER_TOKEN is not set in APP_ENV={}. \
+             Service-to-service calls to mdm-core will be unauthenticated.",
             app_env
         );
     }
@@ -142,7 +202,7 @@ async fn main() {
 
     // ---- Redis (optional) --------------------------------------------------
     let redis_cfg = RedisConfig::from_env();
-    let (redis_rate_limiter, session_store) =
+    let (redis_rate_limiter, session_store, token_blocklist) =
         match create_redis_pool(&redis_cfg) {
             Ok(pool) => {
                 tracing::info!("Redis connected at {}", redis_cfg.url);
@@ -153,14 +213,18 @@ async fn main() {
                     60,
                 ));
                 let sessions = Arc::new(SessionStore::new(
+                    pool.clone(),
+                    redis_cfg.key_prefix.clone(),
+                ));
+                let blocklist = Arc::new(nexus_redis::TokenBlocklist::new(
                     pool,
                     redis_cfg.key_prefix.clone(),
                 ));
-                (Some(limiter), Some(sessions))
+                (Some(limiter), Some(sessions), Some(blocklist))
             }
             Err(e) => {
                 tracing::warn!(error=%e, "Redis unavailable; using in-memory fallbacks");
-                (None, None)
+                (None, None, None)
             }
         };
 
@@ -182,6 +246,10 @@ async fn main() {
                 .expect("http client"),
         ),
         ws_manager:         ws::manager::WsManager::new(),
+        // Trip after 5 consecutive failures; recover after 30 s.
+        cb_mdm:             Arc::new(crate::proxy::circuit_breaker::CircuitBreaker::new(5, 30)),
+        cb_ai:              Arc::new(crate::proxy::circuit_breaker::CircuitBreaker::new(5, 30)),
+        token_blocklist,
     };
 
     // ---- CORS --------------------------------------------------------------
@@ -243,6 +311,7 @@ async fn main() {
             // license_guard is added first (innermost of the middleware stack) so it executes
             // after both auth and tenant_middleware have already run and populated extensions.
             .layer(axum_middleware::from_fn_with_state(state.clone(), license_guard))
+            .layer(axum_middleware::from_fn(inject_user_context))
             .layer(axum_middleware::from_fn_with_state(state.clone(), auth_middleware))
             .layer(axum_middleware::from_fn_with_state(state.clone(), tenant_middleware))
             .layer(axum_middleware::from_fn_with_state(state.clone(), rate_limit_middleware))
@@ -250,81 +319,199 @@ async fn main() {
             .layer(axum_middleware::from_fn(request_id_middleware))
     };
 
+    // Platform-level routes skip tenant_middleware — SuperAdmins are not scoped to a tenant.
+    // license_guard passes through safely when TenantContext is absent.
+    let platform_layers = |router: Router<AppState>| {
+        router
+            .layer(axum_middleware::from_fn_with_state(state.clone(), license_guard))
+            .layer(axum_middleware::from_fn_with_state(state.clone(), auth_middleware))
+            .layer(axum_middleware::from_fn_with_state(state.clone(), rate_limit_middleware))
+            .layer(axum_middleware::from_fn(logging_middleware))
+            .layer(axum_middleware::from_fn(request_id_middleware))
+    };
+
     // ── 1. Platform admin routes — SuperAdmin only ────────────────────────────
-    let platform_admin_routes = common_layers(
+    let platform_admin_routes = platform_layers(
         Router::new()
             .route("/admin/tenants",                get(admin_list_tenants).post(admin_create_tenant))
             .route("/admin/tenants/:id/admin-user", post(admin_create_admin_user))
-            .route("/admin/users",                  get(admin_list_users))
-            .route("/admin/users/invite",           post(admin_invite_user))
-            .route("/admin/users/:id/role",         put(admin_update_user_role))
             .layer(axum_middleware::from_fn(require_super_admin))
     );
 
-    // ── 2a. Steward-only routes — require Steward role, block SuperAdmin ─────────
-    // These routes permanently mutate master data: merging entities, creating
-    // golden records, approving/rejecting match candidates.
-    // Viewers and Analysts can READ the review queue but cannot TAKE ACTION.
+    // ── 1b. Tenant admin routes — Admin role (tenant admins managing their own tenant) ──
+    let tenant_admin_routes = common_layers(
+        Router::new()
+            .route("/admin/users",         get(admin_list_users))
+            .route("/admin/users/invite",  post(admin_invite_user))
+            .route("/admin/users/:id/role", patch(admin_update_user_role))
+            .layer(axum_middleware::from_fn(require_admin))
+    );
+
+    // ── 2a. Steward-only routes — require Steward role ─────────────────────────
+    // Merge and defer permanently alter or postpone master-data decisions.
+    // BusinessAdmin, Viewers, and Analysts cannot perform these operations.
+    // SuperAdmin (IT Admin) has full access — they can perform any data operation
+    // within the tenant they are logged into.
     let steward_routes = common_layers(
         Router::new()
-            .route("/merge",                                          post(execute_merge))
-            .route("/match/:rid/candidates/:cid/approve",            post(approve_match_candidate))
-            .route("/match/:rid/candidates/:cid/reject",             post(reject_match_candidate))
-            // Bulk review queue mutations
-            .route("/match/bulk-approve",                            post(bulk_approve_matches))
-            .route("/match/bulk-reject",                             post(bulk_reject_matches))
+            .route("/merge",                                             post(execute_merge))
             .route("/match/:request_id/candidates/:candidate_id/defer", post(defer_match))
             .layer(axum_middleware::from_fn_with_state(state.clone(), operation_cost_middleware))
             .layer(axum_middleware::from_fn(require_steward))
-            .layer(axum_middleware::from_fn(block_super_admin))
     );
 
-    // ── 2b. Tenant data routes — any tenant role, SuperAdmin blocked ──────────
+    // ── 2b. Approve/reject routes — Steward or BusinessAdmin ──────────────────
+    let approve_routes = common_layers(
+        Router::new()
+            .route("/match/:rid/candidates/:cid/approve", post(approve_match_candidate))
+            .route("/match/:rid/candidates/:cid/reject",  post(reject_match_candidate))
+            .route("/match/bulk-approve",                 post(bulk_approve_matches))
+            .route("/match/bulk-reject",                  post(bulk_reject_matches))
+            .layer(axum_middleware::from_fn(require_approve))
+    );
+
+    // ── 2c. Governance assignment config — BusinessAdmin/Admin only ───────────
+    let governance_admin_routes = common_layers(
+        Router::new()
+            .route("/governance/assignments",
+                get(list_governance_assignments).post(create_governance_assignment))
+            .route("/governance/assignments/:id",
+                delete(delete_governance_assignment))
+            .layer(axum_middleware::from_fn(require_admin))
+    );
+
+    // ── 2d. Governance workflow — Steward+ submit, Approve-role for approve/reject
+    let governance_workflow_routes = common_layers(
+        Router::new()
+            // Any authenticated tenant user can see their own assigned types
+            .route("/governance/assignments/my-types",
+                get(my_governance_assigned_types))
+            // Pending approvals list — Approve role (Steward owner, BusinessAdmin, Admin)
+            .route("/entities/pending-approvals",
+                get(list_pending_entity_approvals))
+            // Bulk approve/reject — same access level as single approve/reject
+            .route("/entities/bulk-approve", post(bulk_approve_entities_proxy))
+            .route("/entities/bulk-reject",  post(bulk_reject_entities_proxy))
+            // Approve/reject — Data Owner or Admin
+            .route("/entities/:id/approve",
+                post(approve_entity_proxy))
+            .route("/entities/:id/reject",
+                post(reject_entity_proxy))
+            .layer(axum_middleware::from_fn(require_approve))
+    );
+
+    // Steward-accessible: submit entity for Data Owner review
+    let governance_steward_routes = common_layers(
+        Router::new()
+            .route("/entities/:id/submit-for-review",
+                post(submit_entity_for_review))
+            .layer(axum_middleware::from_fn(require_steward))
+    );
+
+    // ── 2e. Steward data mutations — create/edit/delete entities, ingest ───────
+    // Viewer, Analyst, and BusinessAdmin cannot write entity records.
+    let steward_data_routes = common_layers(
+        Router::new()
+            .route("/entities",                          post(create_entity))
+            .route("/entities/:id",                      patch(patch_entity))
+            .route("/entities/:id/relationships",        post(create_entity_relationship))
+            .route("/relationships/:id",                 delete(delete_entity_relationship))
+            .route("/ingest/batch",                      post(ingest_batch))
+            .route("/ingest/entities",                   post(ingest_entities))
+            .route("/ingest/csv",                        post(ingest_csv))
+            .route("/golden-records/:id/attributes",     patch(patch_golden_record_attributes))
+            .route("/policy/consent",                    post(record_consent))
+            .route("/policy/consent/:id/withdraw",       post(withdraw_consent))
+            .layer(axum_middleware::from_fn(require_steward))
+    );
+
+    // ── 2f. Admin config mutations — schema, policies, source systems ─────────
+    // Only BusinessAdmin and above may modify tenant configuration.
+    let admin_config_routes = common_layers(
+        Router::new()
+            // Policy rule CRUD
+            .route("/policy/rules",              post(create_policy_rule))
+            .route("/policy/rules/:id",          put(update_policy_rule).delete(delete_policy_rule))
+            .route("/policy/rules/:id/toggle",   patch(toggle_policy_rule))
+            // Policy weights update
+            .route("/policy/weights",            patch(update_policy_weights))
+            // GDPR operations (admin-only — data erasure and access log)
+            .route("/policy/gdpr/erasure",       post(gdpr_erasure))
+            .route("/policy/gdpr/access",        post(gdpr_access))
+            // Distribution (admin-only — controls downstream data distribution)
+            .route("/distribution/jobs",         post(enqueue_distribution))
+            // Entity type schema management
+            .route("/entity-types",              post(create_entity_type))
+            .route("/entity-types/:id",          patch(update_entity_type).delete(delete_entity_type))
+            .route("/entity-types/:code/attributes",       post(create_attribute))
+            .route("/entity-types/:code/attributes/order", put(reorder_attributes))
+            .route("/entity-types/:code/attributes/:id",   delete(delete_attribute))
+            // /admin/entity-types aliases (Flutter UI uses this prefix)
+            .route("/admin/entity-types",              post(create_entity_type))
+            .route("/admin/entity-types/:id",          patch(update_entity_type).delete(delete_entity_type))
+            .route("/admin/entity-types/:code/attributes",       post(create_attribute))
+            .route("/admin/entity-types/:code/attributes/order", put(reorder_attributes))
+            .route("/admin/entity-types/:code/attributes/:id",   delete(delete_attribute))
+            // Source system management
+            .route("/admin/source-systems",            post(create_source_system))
+            .route("/admin/source-systems/:id",        put(update_source_system).delete(delete_source_system))
+            // Webhook management
+            .route("/webhooks",                        post(create_webhook))
+            .route("/webhooks/:id",                    delete(delete_webhook))
+            // Domain policies (write)
+            .route("/domain-policies/:entity_type_code", put(upsert_domain_policy).delete(delete_domain_policy))
+            // Relationship types (write)
+            .route("/relationship-types",              post(create_relationship_type))
+            .route("/relationship-types/:type_id",     delete(delete_relationship_type))
+            // Tenant branding (write)
+            .route("/tenant/branding",                 put(upsert_tenant_branding))
+            .layer(axum_middleware::from_fn(require_admin))
+    );
+
+    // ── 2g. Tenant data routes — read-only, any authenticated tenant role ─────
     let tenant_data_routes = common_layers(
         Router::new()
-            // MDM Core
-            .route("/entities",              get(list_entities).post(create_entity))
-            .route("/entities/:id",          get(get_entity_by_id).patch(patch_entity))
-            .route("/entities/:id/lineage",   get(get_entity_lineage))
-            .route("/entities/:id/relationships",
-                get(list_entity_relationships).post(create_entity_relationship))
-            .route("/relationships/:id",      delete(delete_entity_relationship))
+            // Entity reads
+            .route("/entities",                          get(list_entities))
+            .route("/entities/:id",                      get(get_entity_by_id))
+            .route("/entities/:id/lineage",              get(get_entity_lineage))
+            .route("/lineage",                           get(list_lineage_events))
+            .route("/lineage/graph",                     get(get_lineage_graph))
+            .route("/lineage/stats",                     get(get_lineage_stats))
+            .route("/entities/:id/relationships",        get(list_entity_relationships))
+            // Match — execute is read-based (scoring only, no persistence)
             .route("/match",
                 post(execute_match)
                     .layer(axum_middleware::from_fn_with_state(state.clone(), operation_cost_middleware))
             )
-            .route("/match/review-queue",     get(get_match_review_queue))
-            .route("/match/queue-metrics",    get(queue_metrics))
+            .route("/match/review-queue",                get(get_match_review_queue))
+            .route("/match/queue-metrics",               get(queue_metrics))
             .route("/match/review-queue/:review_id/assign", patch(assign_review))
-            // Ingest
-            .route("/ingest/batch",          post(ingest_batch))
-            .route("/ingest/entities",       post(ingest_entities))
-            .route("/ingest/csv",            post(ingest_csv))
-            .route("/ingest/jobs",           get(list_ingest_jobs))
-            .route("/ingest/jobs/:id",       get(get_ingest_job))
-            // Golden records
-            .route("/golden-records",                   get(list_golden_records))
-            .route("/golden-records/:id",               get(get_golden_record))
-            .route("/golden-records/:id/attributes",    patch(patch_golden_record_attributes))
-            // Policy / consent
-            .route("/policy/evaluate",       post(evaluate_policy))
-            .route("/policy/rules",          get(list_policy_rules).post(create_policy_rule))
-            .route("/policy/gdpr/erasure",   post(gdpr_erasure))
-            .route("/policy/gdpr/access",    post(gdpr_access))
-            .route("/policy/consent",        get(list_consent).post(record_consent))
-            .route("/policy/consent/:id/withdraw", post(withdraw_consent))
-            // Distribution
-            .route("/distribution/jobs",     get(list_distribution_jobs).post(enqueue_distribution))
-            .route("/distribution/jobs/:id", get(get_distribution_job))
-            .layer(axum_middleware::from_fn(block_super_admin))
+            // Ingest reads
+            .route("/ingest/jobs",                       get(list_ingest_jobs))
+            .route("/ingest/jobs/:id",                   get(get_ingest_job))
+            // Golden record reads
+            .route("/golden-records",                    get(list_golden_records))
+            .route("/golden-records/:id",                get(get_golden_record))
+            // Policy reads
+            .route("/policy/evaluate",                   post(evaluate_policy))
+            .route("/policy/rules",                      get(list_policy_rules))
+            .route("/policy/survivorship-suggestions",   get(policy_survivorship_suggestions))
+            .route("/policy/gdpr/requests",              get(policy_gdpr_requests))
+            .route("/policy/consent",                    get(list_consent))
+            // Distribution reads
+            .route("/distribution/jobs",                 get(list_distribution_jobs))
+            .route("/distribution/jobs/:id",             get(get_distribution_job))
     );
 
     // ── 3. Shared routes — any authenticated user ─────────────────────────────
     let shared_routes = common_layers(
         Router::new()
             // Dashboard (both IT admin overview and tenant user metrics)
-            .route("/dashboard/stats",    get(dashboard_stats))
-            .route("/dashboard/activity", get(dashboard_activity))
+            .route("/dashboard/stats",               get(dashboard_stats))
+            .route("/dashboard/activity",            get(dashboard_activity))
+            .route("/dashboard/steward-performance",  get(dashboard_steward_performance))
+            .route("/dashboard/quality-dimensions",   get(dashboard_quality_dimensions))
             // Search
             .route("/search",             get(search))
             .route("/search/autocomplete", get(autocomplete))
@@ -336,47 +523,54 @@ async fn main() {
                 get(scan_anomalies)
                     .layer(axum_middleware::from_fn_with_state(state.clone(), operation_cost_middleware))
             )
-            // Policy weights
-            .route("/policy/weights",     get(get_policy_weights).patch(update_policy_weights))
-            // Entity type / attribute config (tenant-scoped, accessible to admin + steward)
+            // Policy weights (read; patch is in admin_config_routes)
+            .route("/policy/weights",     get(get_policy_weights))
+            // Entity type / attribute config reads
             // Both /entity-types and /admin/entity-types are supported (Flutter uses /admin/ prefix)
-            .route("/entity-types",                              get(list_entity_types).post(create_entity_type))
-            .route("/entity-types/:id",                          patch(update_entity_type).delete(delete_entity_type))
-            .route("/entity-types/:code/attributes",             get(list_attributes).post(create_attribute))
-            .route("/entity-types/:code/attributes/order",       put(reorder_attributes))
-            .route("/entity-types/:code/attributes/:id",         delete(delete_attribute))
+            // Writes (POST/PATCH/DELETE/PUT) are in admin_config_routes
+            .route("/entity-types",                              get(list_entity_types))
+            .route("/entity-types/:code/attributes",             get(list_attributes))
             .route("/entity-types/:code/next-sequence",          get(next_sequence))
-            // /admin/entity-types aliases (Flutter UI uses this prefix)
-            .route("/admin/entity-types",                        get(list_entity_types).post(create_entity_type))
-            .route("/admin/entity-types/:id",                    patch(update_entity_type).delete(delete_entity_type))
-            .route("/admin/entity-types/:code/attributes",       get(list_attributes).post(create_attribute))
-            .route("/admin/entity-types/:code/attributes/order", put(reorder_attributes))
-            .route("/admin/entity-types/:code/attributes/:id",   delete(delete_attribute))
+            // /admin/entity-types aliases (reads)
+            .route("/admin/entity-types",                        get(list_entity_types))
+            .route("/admin/entity-types/:code/attributes",       get(list_attributes))
             .route("/admin/entity-types/:code/next-sequence",    get(next_sequence))
-            // Source systems (tenant-scoped)
-            .route("/admin/source-systems",          get(list_source_systems).post(create_source_system))
-            .route("/admin/source-systems/:id",      put(update_source_system).delete(delete_source_system))
+            // Source systems (reads; writes in admin_config_routes)
+            .route("/admin/source-systems",          get(list_source_systems))
             .route("/admin/source-systems/:id/test", post(test_source_system))
             // Audit log
             .route("/audit/events",                  get(list_audit_events))
-            // Notification webhook subscriptions
-            .route("/webhooks",                      get(list_webhooks).post(create_webhook))
-            .route("/webhooks/:id",                  delete(delete_webhook))
-            // Real-time notification WebSocket (authenticated — JWT in headers)
-            .route("/ws/notifications",              get(ws::handler::websocket_handler))
-            // Domain policies
+            // Notification webhook subscriptions (read; writes in admin_config_routes)
+            .route("/webhooks",                      get(list_webhooks))
+            // Domain policies (reads; writes in admin_config_routes)
             .route("/domain-policies",               get(list_domain_policies))
-            .route("/domain-policies/:entity_type_code",
-                get(get_domain_policy).put(upsert_domain_policy).delete(delete_domain_policy))
-            // Relationship types
-            .route("/relationship-types",
-                get(list_relationship_types).post(create_relationship_type))
-            .route("/relationship-types/:type_id",   delete(delete_relationship_type))
+            .route("/domain-policies/:entity_type_code", get(get_domain_policy))
+            // Relationship types (read; writes in admin_config_routes)
+            .route("/relationship-types",            get(list_relationship_types))
+            // Auth — protected endpoints that require a valid session
+            .route("/auth/logout",                   axum::routing::post(logout))
+            .route("/auth/change-password",          axum::routing::post(change_password))
+            // License — tenant's own license info
+            .route("/license",                       get(get_my_license))
+            // Tenant branding (read; put in admin_config_routes)
+            .route("/tenant/branding",               get(get_tenant_branding))
+            // User notification inbox
+            .route("/notifications",                 get(list_notifications))
+            .route("/notifications/unread-count",    get(notifications_unread_count))
+            .route("/notifications/:id/read",        patch(mark_notification_read))
+            .route("/notifications/read-all",        post(mark_all_notifications_read))
     );
 
     let protected_routes = Router::new()
         .merge(platform_admin_routes)
+        .merge(tenant_admin_routes)
         .merge(steward_routes)
+        .merge(steward_data_routes)
+        .merge(approve_routes)
+        .merge(governance_admin_routes)
+        .merge(governance_workflow_routes)
+        .merge(governance_steward_routes)
+        .merge(admin_config_routes)
         .merge(tenant_data_routes)
         .merge(shared_routes);
 
@@ -387,9 +581,16 @@ async fn main() {
     let public_routes = Router::new()
         .route("/health",              get(health))
         .route("/metrics",             get(prometheus_metrics))
-        .route("/auth/login",          axum::routing::post(login))
-        .route("/auth/refresh",        axum::routing::post(refresh))
-        .route("/auth/accept-invite",  axum::routing::post(accept_invite));
+        .route("/auth/login",            axum::routing::post(login))
+        .route("/auth/refresh",          axum::routing::post(refresh))
+        .route("/auth/accept-invite",    axum::routing::post(accept_invite))
+        .route("/auth/invite-info",      axum::routing::get(invite_info))
+        .route("/auth/forgot-password",  axum::routing::post(forgot_password))
+        .route("/auth/reset-password",   axum::routing::post(reset_password))
+        .route("/auth/sso-exchange",     axum::routing::post(sso_exchange))
+        // Real-time WebSocket — handler validates JWT from ?token= query param
+        // (browsers cannot set Authorization header on WebSocket connections)
+        .route("/ws/notifications",      get(ws::handler::websocket_handler));
 
     // All business routes under /v1 — public ones at root for backward compat
     // Request body size limits — prevent DoS via oversized payloads
@@ -405,9 +606,12 @@ async fn main() {
         // Security headers applied to every response
         .nest("/v1", Router::new()
             .route("/auth/me",             get(me))
-            .route("/auth/login",          axum::routing::post(login))
-            .route("/auth/refresh",        axum::routing::post(refresh))
-            .route("/auth/accept-invite",  axum::routing::post(accept_invite))
+            .route("/auth/login",            axum::routing::post(login))
+            .route("/auth/refresh",          axum::routing::post(refresh))
+            .route("/auth/accept-invite",    axum::routing::post(accept_invite))
+            .route("/auth/invite-info",      axum::routing::get(invite_info))
+            .route("/auth/forgot-password",  axum::routing::post(forgot_password))
+            .route("/auth/reset-password",   axum::routing::post(reset_password))
             .merge(protected_routes.clone())
         )
         // Legacy unversioned routes (no /v1 prefix) — kept for backward compat
@@ -419,6 +623,18 @@ async fn main() {
         ))
         .layer(body_limit)
         .layer(cors);
+
+    // ---- Redis pub/sub → WebSocket broadcast --------------------------------
+    // Subscribe to tenant-scoped Redis channels and fan notifications to active
+    // WS sessions. The subscriber loop restarts automatically on disconnect.
+    {
+        let redis_url = std::env::var("REDIS_URL")
+            .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+        let ws_mgr = state.ws_manager.clone();
+        tokio::spawn(async move {
+            ws::subscriber::run(redis_url, ws_mgr).await;
+        });
+    }
 
     // ---- WebSocket (legacy TCP) --------------------------------------------
     // Build JwtConfig for first-message auth on the port-4000 TCP WS server.
@@ -444,7 +660,7 @@ async fn main() {
         .await
         .expect("failed to bind API Gateway");
 
-    axum::serve(listener, app)
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
         .with_graceful_shutdown(shutdown_signal())
         .await
         .expect("API Gateway crashed");

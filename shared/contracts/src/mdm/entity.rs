@@ -9,6 +9,7 @@ use serde::{
 };
 
 use std::collections::HashMap;
+use std::fmt;
 
 use uuid::Uuid;
 
@@ -50,6 +51,24 @@ pub enum EntityType {
     Custom(String),
 }
 
+impl fmt::Display for EntityType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EntityType::Customer      => write!(f, "Customer"),
+            EntityType::Vendor        => write!(f, "Vendor"),
+            EntityType::Material      => write!(f, "Material"),
+            EntityType::Product       => write!(f, "Product"),
+            EntityType::Account       => write!(f, "Account"),
+            EntityType::Employee      => write!(f, "Employee"),
+            EntityType::Location      => write!(f, "Location"),
+            EntityType::Organization  => write!(f, "Organization"),
+            EntityType::Asset         => write!(f, "Asset"),
+            EntityType::ReferenceData => write!(f, "ReferenceData"),
+            EntityType::Custom(s)     => write!(f, "{}", s),
+        }
+    }
+}
+
 //
 // ========================================
 // ENTITY STATUS
@@ -57,6 +76,7 @@ pub enum EntityType {
 //
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum EntityStatus {
 
     Draft,
@@ -76,6 +96,22 @@ pub enum EntityStatus {
     Archived,
 
     SoftDeleted,
+}
+
+impl fmt::Display for EntityStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EntityStatus::Draft              => write!(f, "Draft"),
+            EntityStatus::Active             => write!(f, "Active"),
+            EntityStatus::Inactive           => write!(f, "Inactive"),
+            EntityStatus::PendingReview      => write!(f, "PendingReview"),
+            EntityStatus::UnderInvestigation => write!(f, "UnderInvestigation"),
+            EntityStatus::Merged             => write!(f, "Merged"),
+            EntityStatus::Deleted            => write!(f, "Deleted"),
+            EntityStatus::Archived           => write!(f, "Archived"),
+            EntityStatus::SoftDeleted        => write!(f, "SoftDeleted"),
+        }
+    }
 }
 
 //

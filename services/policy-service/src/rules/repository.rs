@@ -3,7 +3,7 @@ use chrono::Utc;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use crate::models::{CreateRuleRequest, PolicyRule, PolicyRuleStatus, PolicyRuleType};
+use crate::models::{CreateRuleRequest, UpdateRuleRequest, PolicyRule, PolicyRuleStatus, PolicyRuleType};
 
 pub struct PolicyRepository {
     pool: PgPool,
@@ -112,7 +112,6 @@ impl PolicyRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    #[allow(dead_code)]
     pub async fn update_status(
         &self,
         rule_id:   Uuid,
@@ -128,5 +127,85 @@ impl PolicyRepository {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    pub async fn update_rule(
+        &self,
+        rule_id:   Uuid,
+        tenant_id: Uuid,
+        req:       UpdateRuleRequest,
+    ) -> Result<Option<PolicyRule>> {
+        let rows = sqlx::query(
+            r#"
+            UPDATE governance.policy_rules
+            SET name        = COALESCE($3, name),
+                description = COALESCE($4, description),
+                rule_type   = COALESCE($5, rule_type),
+                entity_type = COALESCE($6, entity_type),
+                field_name  = COALESCE($7, field_name),
+                rego_policy = COALESCE($8, rego_policy),
+                priority    = COALESCE($9, priority),
+                status      = COALESCE($10, status),
+                updated_at  = NOW()
+            WHERE rule_id = $1 AND tenant_id = $2
+            RETURNING rule_id, tenant_id, name, description, rule_type, entity_type,
+                      field_name, rego_policy, priority, status, created_at, updated_at
+            "#,
+        )
+        .bind(rule_id)
+        .bind(tenant_id)
+        .bind(req.name.as_deref())
+        .bind(req.description.as_deref())
+        .bind(req.rule_type.as_deref())
+        .bind(req.entity_type.as_deref())
+        .bind(req.field_name.as_deref())
+        .bind(req.rego_policy.as_deref())
+        .bind(req.priority)
+        .bind(req.status.as_deref())
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let rule = rows.and_then(|r| {
+            let rule_type = r.try_get::<String, _>("rule_type").ok()?.parse::<PolicyRuleType>().ok()?;
+            let status    = r.try_get::<String, _>("status").ok()?.parse::<PolicyRuleStatus>().ok()?;
+            Some(PolicyRule {
+                rule_id:     r.try_get("rule_id").ok()?,
+                tenant_id:   r.try_get("tenant_id").ok()?,
+                name:        r.try_get("name").unwrap_or_default(),
+                description: r.try_get("description").ok().flatten(),
+                rule_type,
+                entity_type: r.try_get("entity_type").ok().flatten(),
+                field_name:  r.try_get("field_name").ok().flatten(),
+                rego_policy: r.try_get("rego_policy").unwrap_or_default(),
+                priority:    r.try_get("priority").unwrap_or(100),
+                status,
+                created_at:  r.try_get("created_at").unwrap_or_else(|_| Utc::now()),
+                updated_at:  r.try_get("updated_at").unwrap_or_else(|_| Utc::now()),
+            })
+        });
+
+        Ok(rule)
+    }
+
+    pub async fn toggle_active(
+        &self,
+        rule_id:   Uuid,
+        tenant_id: Uuid,
+    ) -> Result<Option<String>> {
+        let row = sqlx::query(
+            r#"
+            UPDATE governance.policy_rules
+            SET status     = CASE WHEN status = 'active' THEN 'inactive' ELSE 'active' END,
+                updated_at = NOW()
+            WHERE rule_id = $1 AND tenant_id = $2
+            RETURNING status
+            "#,
+        )
+        .bind(rule_id)
+        .bind(tenant_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.and_then(|r| r.try_get::<String, _>("status").ok()))
     }
 }

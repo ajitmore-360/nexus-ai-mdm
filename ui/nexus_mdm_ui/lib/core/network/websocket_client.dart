@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../auth/auth_manager.dart';
 import '../constants/app_constants.dart';
 
 // ──────────────────────────────────────────────
@@ -98,14 +98,22 @@ class WebSocketClient {
     _shouldReconnect = true;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final tenantId = prefs.getString(AppConstants.storageTenantId) ??
-          '00000000-0000-0000-0000-000000000001';
-      final userId = prefs.getString(AppConstants.storageUserId) ?? 'anon';
+      final tenantId    = await AuthManager.getTenantId()    ?? '';
+      final accessToken = await AuthManager.getToken() ?? '';
 
-      // Primary URL format: ws://localhost:8086/ws?tenant_id=...&user_id=...
-      final uri = Uri.parse(
-        'ws://localhost:8086/ws?tenant_id=$tenantId&user_id=$userId',
+      if (accessToken.isEmpty) {
+        _setPublicState(WsConnectionState.error);
+        return;
+      }
+
+      // Connect to the API gateway's authenticated WebSocket endpoint.
+      // The JWT is passed as ?token= because browsers cannot set custom
+      // HTTP headers on WebSocket upgrade requests.
+      const base = AppConstants.wsBaseUrl; // ws://localhost:8080
+      final uri  = Uri.parse(
+        '$base${AppConstants.wsNotificationsPath}'
+        '?token=${Uri.encodeComponent(accessToken)}'
+        '&tenant_id=${Uri.encodeComponent(tenantId)}',
       );
 
       _channel = WebSocketChannel.connect(uri);

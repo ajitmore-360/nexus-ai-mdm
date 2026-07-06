@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
+    http::HeaderMap,
     Json,
 };
 use serde::Deserialize;
@@ -48,7 +49,7 @@ pub struct ListUsersParams {
 
 #[derive(Debug, Deserialize)]
 pub struct InviteUserRequest {
-    pub tenant_id: Uuid,
+    pub tenant_id: Option<Uuid>, // optional — falls back to x-tenant-id header
     pub email:     String,
     pub full_name: Option<String>,
     pub role:      Option<String>,
@@ -285,8 +286,19 @@ pub async fn list_users(
 /// invite token (valid for 7 days).
 pub async fn invite_user(
     State(state): State<AppState>,
-    Json(body): Json<InviteUserRequest>,
+    headers:      HeaderMap,
+    Json(body):   Json<InviteUserRequest>,
 ) -> Json<serde_json::Value> {
+    // tenant_id: prefer body field, fall back to x-tenant-id header
+    let tenant_id = match body.tenant_id.or_else(|| {
+        headers.get("x-tenant-id")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| Uuid::parse_str(s).ok())
+    }) {
+        Some(id) => id,
+        None => return Json(json!({ "success": false, "error": "tenant_id is required" })),
+    };
+
     if body.email.trim().is_empty() {
         return Json(json!({ "success": false, "error": "email is required" }));
     }
@@ -318,7 +330,7 @@ pub async fn invite_user(
                  updated_at     = NOW()",
     )
     .bind(user_id)
-    .bind(body.tenant_id)
+    .bind(tenant_id)
     .bind(&body.email)
     .bind(&full_name)
     .bind(role)
@@ -330,7 +342,7 @@ pub async fn invite_user(
             "success": true,
             "data": {
                 "user_id":      user_id,
-                "tenant_id":    body.tenant_id,
+                "tenant_id":    tenant_id,
                 "email":        body.email,
                 "full_name":    full_name,
                 "role":         role,

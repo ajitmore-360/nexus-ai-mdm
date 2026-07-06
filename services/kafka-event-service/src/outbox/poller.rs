@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use anyhow::Result;
 use rdkafka::producer::FutureProducer;
 use sqlx::PgPool;
@@ -15,13 +13,6 @@ use crate::outbox::{
 
 /// Maximum publish attempts before moving an event to the DLQ.
 const MAX_RETRIES: i32 = 3;
-
-/// Retry back-off durations per attempt (0-indexed).
-const RETRY_BACKOFF: [Duration; 3] = [
-    Duration::from_secs(5),
-    Duration::from_secs(25),
-    Duration::from_secs(125),
-];
 
 /// Poll the outbox and publish pending events to Kafka.
 ///
@@ -77,16 +68,11 @@ pub async fn poll_outbox(pool: &PgPool, producer: &FutureProducer) -> Result<()>
                     attempt  = retry_count + 1,
                     max      = MAX_RETRIES,
                     error    = %e,
-                    "failed to publish event — will retry"
+                    "failed to publish event — will retry on next poll"
                 );
 
-                // Back off proportional to attempt number
-                let backoff = RETRY_BACKOFF.get(retry_count as usize)
-                    .copied()
-                    .unwrap_or(Duration::from_secs(125));
-
-                tokio::time::sleep(backoff).await;
-
+                // Increment retry count without sleeping inline — the next poll
+                // cycle provides the back-off gap so healthy events are not blocked.
                 if let Err(e) = mark_event_failed(pool, event_id).await {
                     error!(event_id=%event_id, error=%e, "failed to increment retry count");
                 }

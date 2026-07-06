@@ -88,8 +88,24 @@ async fn main() {
 
     let state = AppState { orchestrator };
 
-    // ── CORS ─────────────────────────────────────────────────────────────────
+    // ── Startup safety checks ─────────────────────────────────────────────────
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
+
+    if settings.mock_mode
+        && matches!(app_env.as_str(), "production" | "prod" | "staging" | "stage")
+    {
+        // A panic here is intentional: silently returning fake enrichment data
+        // in production would corrupt master data records without any indication.
+        // Set ENRICHMENT_MOCK_MODE=false and configure real API keys.
+        panic!(
+            "SAFETY: ENRICHMENT_MOCK_MODE=true in APP_ENV={}. \
+             All enrichment results will be synthetic/fake. \
+             Set ENRICHMENT_MOCK_MODE=false and provide DNB_API_KEY / EXPERIAN_API_KEY.",
+            app_env
+        );
+    }
+
+    // ── CORS ─────────────────────────────────────────────────────────────────
     let allowed_origins_raw = std::env::var("ALLOWED_ORIGINS")
         .unwrap_or_else(|_| "http://localhost:3000,http://localhost:4000".to_string());
     if matches!(app_env.as_str(), "production" | "prod" | "staging" | "stage") {

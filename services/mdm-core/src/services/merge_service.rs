@@ -11,6 +11,7 @@ use contracts::mdm::entity::{CanonicalEntity, EntityStatus};
 use contracts::mdm::merge::{MergeExecutionResult, MergeRequest};
 use contracts::mdm::survivorship::SurvivorshipRule;
 use database::{DbPool, PendingOutboxEvent, RequestContext, RequestContextFactory};
+use nexus_redis::{TaskQueue, queue::task_types};
 
 use crate::db::repositories::entity_repository::EntityRepository;
 use crate::db::repositories::golden_record_repository::GoldenRecordRepository;
@@ -23,6 +24,8 @@ pub struct MergeService {
     pool:                     DbPool,
     entity_repository:        Arc<EntityRepository>,
     golden_record_repository: Arc<GoldenRecordRepository>,
+    /// Optional Redis task queue for triggering re-embedding after merge.
+    task_queue:               Option<Arc<TaskQueue>>,
 }
 
 impl MergeService {
@@ -31,7 +34,12 @@ impl MergeService {
         entity_repository:        Arc<EntityRepository>,
         golden_record_repository: Arc<GoldenRecordRepository>,
     ) -> Self {
-        Self { pool, entity_repository, golden_record_repository }
+        Self { pool, entity_repository, golden_record_repository, task_queue: None }
+    }
+
+    pub fn with_task_queue(mut self, task_queue: Arc<TaskQueue>) -> Self {
+        self.task_queue = Some(task_queue);
+        self
     }
 
     #[instrument(skip(self, ctx, request), fields(
@@ -165,6 +173,34 @@ impl MergeService {
 
         uow.commit().await?;
 
+        // After a successful merge the surviving entity's attributes may have
+        // changed via survivorship. Re-queue an embedding task so the vector
+        // index stays in sync.
+        let embeddings_regenerated = if let Some(queue) = &self.task_queue {
+            let task = nexus_redis::queue::Task::new(
+                task_types::ENTITY_EMBED,
+                tenant_id.to_string(),
+                json!({
+                    "entity_id":  primary.entity_id,
+                    "tenant_id":  tenant_id,
+                    "attributes": primary.attributes,
+                }),
+            );
+            match queue.enqueue(task_types::ENTITY_EMBED, &task).await {
+                Ok(_)  => true,
+                Err(e) => {
+                    tracing::warn!(
+                        entity_id=%primary.entity_id,
+                        error=%e,
+                        "embed re-queue after merge failed"
+                    );
+                    false
+                }
+            }
+        } else {
+            false
+        };
+
         let completed_at = Utc::now();
 
         tracing::info!(
@@ -188,7 +224,7 @@ impl MergeService {
             lineage_event_ids:        lineage_ids,
             published_event_ids:      vec![],
             search_reindexed:         false,
-            embeddings_regenerated:   false,
+            embeddings_regenerated,
             metadata:                 Default::default(),
         })
     }

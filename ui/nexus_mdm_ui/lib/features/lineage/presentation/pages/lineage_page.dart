@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_animations.dart';
+import '../../data/lineage_repository.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LineagePage — Visual data-flow overview of the MDM lineage graph
+// When [entityId] is provided, the Recent Events section shows real lineage
+// data for that entity from the API.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class LineagePage extends StatefulWidget {
-  const LineagePage({super.key});
+  final String? entityId;
+  const LineagePage({super.key, this.entityId});
 
   @override
   State<LineagePage> createState() => _LineagePageState();
@@ -20,33 +27,29 @@ class _LineagePageState extends State<LineagePage>
   late final AnimationController _pulseCtrl;
   int _selectedNode = -1;
 
-  static const _sourceNodes = [
-    _LineageNode('Salesforce CRM', Icons.cloud_outlined, AppColors.primary,
-        '12,847 entities', 'Last sync: 4 min ago'),
-    _LineageNode('SAP ERP', Icons.precision_manufacturing_outlined,
-        Color(0xFF00C896), '9,231 entities', 'Last sync: 1 hr ago'),
-    _LineageNode('Oracle CRM', Icons.storage_outlined, Color(0xFFFF6B35),
-        '3,419 entities', 'Last sync: 3 days ago'),
-    _LineageNode('Manual Entry', Icons.edit_outlined, Color(0xFF8B5CF6),
-        '847 entities', 'Last sync: Real-time'),
-  ];
+  late final LineageRepository _lineageRepo;
+  List<LineageRecord>? _entityLineage;
+  bool _lineageLoading = false;
 
+  LineageGraphData _graphData = LineageGraphData.empty;
+  bool _graphLoading = false;
+
+  // Real data loaded from API
+  List<_LineageNode> _sourceNodes = [];
+  List<_LineStat> _stats = [];
+  List<_LineageEvent> _globalEvents = [];
+  bool _globalEventsLoading = false;
+
+  // Target nodes: distribution sinks — no dedicated API yet, use sensible defaults
   static const _targetNodes = [
-    _LineageNode('Salesforce Output', Icons.upload_outlined, AppColors.primary,
-        '11,200 pushed', 'Mode: Push'),
     _LineageNode('Data Warehouse', Icons.warehouse_outlined, Color(0xFF00C896),
-        '22,344 synced', 'Mode: CDC'),
+        'Golden records', 'Mode: CDC'),
     _LineageNode('Analytics BI', Icons.bar_chart_outlined, Color(0xFF3B82F6),
-        '18,000 records', 'Mode: Pull'),
+        'Reporting layer', 'Mode: Pull'),
     _LineageNode('Kafka Stream', Icons.stream_outlined, Color(0xFFFF6B35),
-        '1.2M events', 'Mode: Webhook'),
-  ];
-
-  static const _stats = [
-    _LineStat('Total Lineage Events', '2.4M', Icons.timeline_rounded, AppColors.primary),
-    _LineStat('Active Pipelines', '14', Icons.hub_rounded, Color(0xFF00C896)),
-    _LineStat('Avg. Propagation', '340ms', Icons.speed_rounded, Color(0xFF8B5CF6)),
-    _LineStat('Data Freshness', '98.7%', Icons.verified_rounded, Color(0xFF3B82F6)),
+        'Event streaming', 'Mode: Webhook'),
+    _LineageNode('Downstream API', Icons.upload_outlined, AppColors.primary,
+        'Push targets', 'Mode: Push'),
   ];
 
   @override
@@ -56,6 +59,153 @@ class _LineagePageState extends State<LineagePage>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
+    _lineageRepo = LineageRepository(ApiClient());
+    _loadLineageStats();
+    _loadSourceSystems();
+    _loadGraph();
+    if (widget.entityId != null) {
+      _loadEntityLineage(widget.entityId!);
+    } else {
+      _loadGlobalEvents();
+    }
+  }
+
+  Future<void> _loadGraph() async {
+    setState(() => _graphLoading = true);
+    final data = await _lineageRepo.getLineageGraph();
+    if (mounted) setState(() { _graphData = data; _graphLoading = false; });
+  }
+
+  Future<void> _loadLineageStats() async {
+    final api = ApiClient();
+    try {
+      final resp = await api.get<Map<String, dynamic>>(AppConstants.lineageStatsPath);
+      final data = resp.data;
+      if (!mounted || data == null) return;
+      final total = data['total_lineage_events'] as int? ?? 0;
+      setState(() {
+        _stats = [
+          _LineStat('Total Lineage Events', _compactNum(total), Icons.timeline_rounded, AppColors.primary),
+          _LineStat('Source Systems', '${_sourceNodes.length}', Icons.hub_rounded, const Color(0xFF00C896)),
+          _LineStat('Active Pipelines', '${_sourceNodes.length + _targetNodes.length}', Icons.speed_rounded, const Color(0xFF8B5CF6)),
+          _LineStat('Lineage Types', '${(data['by_type'] as Map?)?.length ?? 0}', Icons.verified_rounded, const Color(0xFF3B82F6)),
+        ];
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadSourceSystems() async {
+    final api = ApiClient();
+    try {
+      final resp = await api.get<Map<String, dynamic>>(AppConstants.sourceSystemsPath);
+      final items = resp.data?['data'] as List<dynamic>? ?? [];
+      if (!mounted) return;
+      setState(() {
+        _sourceNodes = items.map((e) {
+          final m = e as Map<String, dynamic>;
+          final type = (m['connector_type'] as String? ?? '').toLowerCase();
+          return _LineageNode(
+            m['name'] as String? ?? 'Unknown',
+            _iconForConnector(type),
+            _colorForConnector(type),
+            type,
+            m['sync_mode'] as String? ?? 'manual',
+          );
+        }).toList();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadGlobalEvents() async {
+    setState(() => _globalEventsLoading = true);
+    final api = ApiClient();
+    try {
+      final resp = await api.get<Map<String, dynamic>>(
+        AppConstants.lineagePath,
+        queryParameters: {'limit': '10'},
+      );
+      if (!mounted) return;
+      final items = resp.data?['data'] as List<dynamic>? ?? [];
+      setState(() {
+        _globalEvents = items.map((e) {
+          final m = e as Map<String, dynamic>;
+          final ltype = m['lineage_type'] as String? ?? 'Unknown';
+          final src = (m['source_entity_id'] as String? ?? '').substring(0, 8);
+          final tgt = (m['target_entity_id'] as String? ?? '').substring(0, 8);
+          final ts = m['created_at'] as String? ?? '';
+          final dt = DateTime.tryParse(ts) ?? DateTime.now();
+          return _LineageEvent(ltype, '$src… → $tgt…', _lineageTypeColor(ltype), _formatAgo(dt));
+        }).toList();
+        _globalEventsLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _globalEventsLoading = false);
+    }
+  }
+
+  Future<void> _loadEntityLineage(String entityId) async {
+    setState(() => _lineageLoading = true);
+    try {
+      final records = await _lineageRepo.getEntityLineage(entityId);
+      if (mounted) setState(() { _entityLineage = records; _lineageLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _lineageLoading = false);
+    }
+  }
+
+  static IconData _iconForConnector(String type) {
+    switch (type) {
+      case 'salesforce':  return Icons.cloud_outlined;
+      case 'sap':         return Icons.precision_manufacturing_outlined;
+      case 'oracle':      return Icons.storage_outlined;
+      case 'manual':      return Icons.edit_outlined;
+      case 'hubspot':     return Icons.hub_outlined;
+      case 'kafka':       return Icons.stream_outlined;
+      case 'csv':         return Icons.table_chart_outlined;
+      case 'rest_api':    return Icons.api_outlined;
+      default:            return Icons.device_hub_outlined;
+    }
+  }
+
+  static Color _colorForConnector(String type) {
+    switch (type) {
+      case 'salesforce': return AppColors.primary;
+      case 'sap':        return const Color(0xFF00C896);
+      case 'oracle':     return const Color(0xFFFF6B35);
+      case 'manual':     return const Color(0xFF8B5CF6);
+      case 'hubspot':    return const Color(0xFFFF7A59);
+      case 'kafka':      return const Color(0xFF3B82F6);
+      default:           return AppColors.secondaryText;
+    }
+  }
+
+  static String _compactNum(int n) {
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000)    return '${(n / 1000).toStringAsFixed(1)}K';
+    return '$n';
+  }
+
+  void _exportLineage() {
+    final buf = StringBuffer();
+    if (_entityLineage != null && _entityLineage!.isNotEmpty) {
+      buf.writeln('Lineage ID,Type,Source Entity,Target Entity,Created At');
+      for (final rec in _entityLineage!) {
+        buf.writeln('"${rec.lineageId}","${rec.lineageType}",'
+            '"${rec.sourceEntityId}","${rec.targetEntityId}",'
+            '"${rec.createdAt.toIso8601String()}"');
+      }
+    } else {
+      buf.writeln('Event Type,Description,Time Ago');
+      for (final ev in _globalEvents) {
+        final desc = ev.description.replaceAll('"', '""');
+        buf.writeln('"${ev.type}","$desc","${ev.ago}"');
+      }
+    }
+    Clipboard.setData(ClipboardData(text: buf.toString()));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Lineage data copied to clipboard'),
+      backgroundColor: AppColors.success,
+    ));
   }
 
   @override
@@ -78,6 +228,8 @@ class _LineagePageState extends State<LineagePage>
             _buildStats(),
             const SizedBox(height: 24),
             _buildLineageGraph(),
+            const SizedBox(height: 24),
+            _buildEntityLineageGraph(),
             const SizedBox(height: 24),
             _buildRecentEvents(),
           ],
@@ -112,7 +264,15 @@ class _LineagePageState extends State<LineagePage>
         ),
         const Spacer(),
         OutlinedButton.icon(
-          onPressed: () {},
+          onPressed: () {
+            _loadLineageStats();
+            _loadSourceSystems();
+            if (widget.entityId != null) {
+              _loadEntityLineage(widget.entityId!);
+            } else {
+              _loadGlobalEvents();
+            }
+          },
           icon: const Icon(Icons.refresh_rounded, size: 16),
           label: const Text('Refresh'),
           style: OutlinedButton.styleFrom(
@@ -122,7 +282,7 @@ class _LineagePageState extends State<LineagePage>
         ),
         const SizedBox(width: 8),
         ElevatedButton.icon(
-          onPressed: () {},
+          onPressed: _exportLineage,
           icon: const Icon(Icons.download_outlined, size: 16),
           label: const Text('Export'),
           style: ElevatedButton.styleFrom(
@@ -138,6 +298,9 @@ class _LineagePageState extends State<LineagePage>
   }
 
   Widget _buildStats() {
+    if (_stats.isEmpty) {
+      return const SizedBox(height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
+    }
     return Row(
       children: _stats.asMap().entries.map((e) {
         final i = e.key;
@@ -342,18 +505,42 @@ class _LineagePageState extends State<LineagePage>
   }
 
   Widget _buildRecentEvents() {
-    const events = [
-      _LineageEvent('EntityCreated', 'Customer #CUST-001234 created via Salesforce',
-          AppColors.primary, '2s ago'),
-      _LineageEvent('EntityUpdated', 'Vendor #VEND-005678 phone updated from SAP',
-          Color(0xFF00C896), '14s ago'),
-      _LineageEvent('EntityMerged', 'Duplicate Customer records merged → Golden Record',
-          Color(0xFF8B5CF6), '1 min ago'),
-      _LineageEvent('EntityDistributed', 'Material #MAT-00890 pushed to 3 targets',
-          Color(0xFF3B82F6), '3 min ago'),
-      _LineageEvent('QualityViolation', 'Customer email format invalid — quarantined',
-          AppColors.warning, '7 min ago'),
-    ];
+    Widget bodyContent;
+    if (_lineageLoading || _globalEventsLoading) {
+      bodyContent = const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    } else if (_entityLineage != null && _entityLineage!.isEmpty) {
+      bodyContent = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Center(
+          child: Text('No lineage records for this entity.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedText)),
+        ),
+      );
+    } else if (_entityLineage != null) {
+      final liveEvents = _entityLineage!.take(10).toList().asMap().entries.map((e) {
+        final r = e.value;
+        final color = _lineageTypeColor(r.lineageType);
+        final ago = _formatAgo(r.createdAt);
+        final desc = '${r.sourceEntityId.substring(0, 8)}… → ${r.targetEntityId.substring(0, 8)}…';
+        return _buildEventRow(_LineageEvent(r.lineageType, desc, color, ago), e.key);
+      }).toList();
+      bodyContent = Column(children: liveEvents);
+    } else if (_globalEvents.isNotEmpty) {
+      bodyContent = Column(
+        children: _globalEvents.asMap().entries.map((e) => _buildEventRow(e.value, e.key)).toList(),
+      );
+    } else {
+      bodyContent = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Center(
+          child: Text('No lineage events yet.',
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedText)),
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -369,26 +556,48 @@ class _LineagePageState extends State<LineagePage>
             children: [
               const Icon(Icons.history_rounded, size: 16, color: AppColors.primary),
               const SizedBox(width: 8),
-              Text('Recent Lineage Events', style: AppTextStyles.titleSmall),
-              const Spacer(),
-              TextButton(
-                onPressed: () {},
-                child: Text('View all',
-                    style: AppTextStyles.buttonSmall
-                        .copyWith(color: AppColors.primary)),
+              Text(
+                widget.entityId != null ? 'Entity Lineage' : 'Recent Lineage Events',
+                style: AppTextStyles.titleSmall,
               ),
+              const Spacer(),
+              if (widget.entityId != null)
+                TextButton.icon(
+                  onPressed: () => _loadEntityLineage(widget.entityId!),
+                  icon: const Icon(Icons.refresh_rounded, size: 14),
+                  label: Text('Refresh',
+                      style: AppTextStyles.buttonSmall.copyWith(color: AppColors.primary)),
+                ),
             ],
           ),
           const SizedBox(height: 12),
           const Divider(color: AppColors.divider, height: 1),
           const SizedBox(height: 8),
-          ...events.asMap().entries.map((e) => _buildEventRow(e.value, e.key)),
+          bodyContent,
         ],
       ),
     )
         .animate(delay: 300.ms)
         .fadeIn(duration: AppAnimations.slow)
         .slideY(begin: 0.04, end: 0, curve: AppAnimations.easeOutQuint);
+  }
+
+  Color _lineageTypeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'derived':       return AppColors.primary;
+      case 'merged':        return const Color(0xFF8B5CF6);
+      case 'transformed':   return const Color(0xFF3B82F6);
+      case 'replicated':    return const Color(0xFF00C896);
+      default:              return AppColors.secondaryText;
+    }
+  }
+
+  String _formatAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24)   return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   Widget _buildEventRow(_LineageEvent event, int index) {
@@ -433,6 +642,58 @@ class _LineagePageState extends State<LineagePage>
         ],
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // BL-068: Entity Lineage DAG
+  // ---------------------------------------------------------------------------
+
+  Widget _buildEntityLineageGraph() {
+    if (_graphLoading) {
+      return Container(
+        height: 80,
+        alignment: Alignment.center,
+        child: const CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+    if (_graphData.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.account_tree_rounded, size: 16, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Text('Entity Relationship Graph', style: AppTextStyles.titleSmall),
+              const Spacer(),
+              Text(
+                '${_graphData.nodes.length} nodes · ${_graphData.edges.length} edges',
+                style: AppTextStyles.labelSmall.copyWith(color: AppColors.secondaryText),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 320,
+            child: _EntityDagWidget(
+              nodes: _graphData.nodes,
+              edges: _graphData.edges,
+            ),
+          ),
+        ],
+      ),
+    )
+        .animate(delay: 250.ms)
+        .fadeIn(duration: AppAnimations.slow)
+        .slideY(begin: 0.04, end: 0, curve: AppAnimations.easeOutQuint);
   }
 }
 
@@ -538,4 +799,183 @@ class _FlowLanePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_FlowLanePainter old) => old.progress != progress;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BL-068 — Entity DAG widget + painters
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EntityDagWidget extends StatelessWidget {
+  final List<LineageGraphNode> nodes;
+  final List<LineageGraphEdge> edges;
+
+  const _EntityDagWidget({required this.nodes, required this.edges});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final w = constraints.maxWidth;
+      final h = constraints.maxHeight;
+      const nodeW = 130.0;
+      const nodeH = 48.0;
+
+      final sourceIds = edges.map((e) => e.source).toSet();
+      final targetIds = edges.map((e) => e.target).toSet();
+
+      final sourceOnly = nodes.where((n) => sourceIds.contains(n.id) && !targetIds.contains(n.id)).toList();
+      final targetOnly = nodes.where((n) => targetIds.contains(n.id) && !sourceIds.contains(n.id)).toList();
+      final middle     = nodes.where((n) => sourceIds.contains(n.id) && targetIds.contains(n.id)).toList();
+      final isolated   = nodes.where((n) => !sourceIds.contains(n.id) && !targetIds.contains(n.id)).toList();
+
+      final Map<String, Offset> positions = {};
+
+      void layoutColumn(List<LineageGraphNode> col, double cx) {
+        if (col.isEmpty) return;
+        final spacing = h / (col.length + 1);
+        for (int i = 0; i < col.length; i++) {
+          positions[col[i].id] = Offset(cx - nodeW / 2, spacing * (i + 1) - nodeH / 2);
+        }
+      }
+
+      layoutColumn(sourceOnly + isolated, nodeW / 2 + 16);
+      layoutColumn(middle, w / 2);
+      layoutColumn(targetOnly, w - nodeW / 2 - 16);
+
+      return Stack(
+        children: [
+          CustomPaint(
+            size: Size(w, h),
+            painter: _DagEdgePainter(
+              edges: edges,
+              positions: positions,
+              nodeW: nodeW,
+              nodeH: nodeH,
+            ),
+          ),
+          ...nodes.map((node) {
+            final pos = positions[node.id];
+            if (pos == null) return const SizedBox.shrink();
+            return Positioned(
+              left: pos.dx,
+              top: pos.dy,
+              width: nodeW,
+              height: nodeH,
+              child: _DagNodeBox(node: node),
+            );
+          }),
+        ],
+      );
+    });
+  }
+}
+
+class _DagNodeBox extends StatelessWidget {
+  final LineageGraphNode node;
+  const _DagNodeBox({required this.node});
+
+  static Color _typeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'customer':     return AppColors.primary;
+      case 'product':      return const Color(0xFF00C896);
+      case 'vendor':       return const Color(0xFFFF6B35);
+      case 'location':     return const Color(0xFF3B82F6);
+      case 'employee':     return const Color(0xFF8B5CF6);
+      case 'organization': return const Color(0xFFFFB800);
+      default:             return AppColors.secondaryText;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _typeColor(node.entityType);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.elevatedCard,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.6), width: 1.5),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(node.label,
+              style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis),
+          Text(node.entityType,
+              style: AppTextStyles.labelSmall.copyWith(color: color, fontSize: 9),
+              overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
+class _DagEdgePainter extends CustomPainter {
+  final List<LineageGraphEdge> edges;
+  final Map<String, Offset> positions;
+  final double nodeW;
+  final double nodeH;
+
+  const _DagEdgePainter({
+    required this.edges,
+    required this.positions,
+    required this.nodeW,
+    required this.nodeH,
+  });
+
+  static Color _edgeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'derived':     return AppColors.primary;
+      case 'merged':      return const Color(0xFF8B5CF6);
+      case 'transformed': return const Color(0xFF3B82F6);
+      case 'replicated':  return const Color(0xFF00C896);
+      default:            return AppColors.secondaryText;
+    }
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final edge in edges) {
+      final srcPos = positions[edge.source];
+      final tgtPos = positions[edge.target];
+      if (srcPos == null || tgtPos == null) continue;
+
+      final src = Offset(srcPos.dx + nodeW, srcPos.dy + nodeH / 2);
+      final tgt = Offset(tgtPos.dx, tgtPos.dy + nodeH / 2);
+      final color = _edgeColor(edge.lineageType);
+      final ctrl = (tgt.dx - src.dx) / 3;
+
+      final path = Path()
+        ..moveTo(src.dx, src.dy)
+        ..cubicTo(
+          src.dx + ctrl, src.dy,
+          tgt.dx - ctrl, tgt.dy,
+          tgt.dx, tgt.dy,
+        );
+
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = color.withValues(alpha: 0.55)
+          ..strokeWidth = 1.5
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round,
+      );
+
+      // Arrowhead at target
+      const aSize = 6.0;
+      final arrow = Path()
+        ..moveTo(tgt.dx, tgt.dy)
+        ..lineTo(tgt.dx - aSize, tgt.dy - aSize / 2)
+        ..lineTo(tgt.dx - aSize, tgt.dy + aSize / 2)
+        ..close();
+      canvas.drawPath(arrow,
+          Paint()..color = color.withValues(alpha: 0.8)..style = PaintingStyle.fill);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DagEdgePainter old) =>
+      old.edges != edges || old.positions != positions;
 }

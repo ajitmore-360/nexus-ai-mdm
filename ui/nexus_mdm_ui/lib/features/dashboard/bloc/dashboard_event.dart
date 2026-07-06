@@ -32,3 +32,15 @@ class DashboardPeriodChanged extends DashboardEvent {
 class DashboardAutoRefresh extends DashboardEvent {
   const DashboardAutoRefresh();
 }
+
+/// Internal event: fired when a real-time WebSocket event arrives that
+/// affects dashboard data (entity ingested, match approved/rejected, etc.).
+/// Triggers a silent stat refresh without showing a loading spinner.
+class DashboardRealtimeUpdate extends DashboardEvent {
+  final String eventType;
+
+  const DashboardRealtimeUpdate(this.eventType);
+
+  @override
+  List<Object?> get props => [eventType];
+}
