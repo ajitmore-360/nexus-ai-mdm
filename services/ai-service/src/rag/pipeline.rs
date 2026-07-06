@@ -28,15 +28,23 @@ impl RagPipeline {
     #[instrument(skip(self, question), fields(tenant_id=%tenant_id))]
     pub async fn answer(
         &self,
-        tenant_id:   Uuid,
-        tenant_name: &str,
-        question:    &str,
-        doc_type:    Option<&str>,
+        tenant_id:    Uuid,
+        tenant_name:  &str,
+        question:     &str,
+        doc_type:     Option<&str>,
+        role:         &str,
+        entity_types: &[String],
+        fmt:          &str,
     ) -> Result<RagAnswer> {
-        // 1. Embed query + fetch live stats in parallel
+        // 1. Embed query + fetch live stats in parallel (scoped for stewards)
+        let scoped_types: Option<&[String]> = if role == "steward" && !entity_types.is_empty() {
+            Some(entity_types)
+        } else {
+            None
+        };
         let (query_embedding, live_stats) = tokio::join!(
             self.encoder.encode(question),
-            self.retriever.fetch_live_stats(tenant_id),
+            self.retriever.fetch_live_stats_scoped(tenant_id, scoped_types),
         );
         let query_embedding = query_embedding?;
 
@@ -46,12 +54,12 @@ impl RagPipeline {
             .retrieve(tenant_id, &query_embedding, doc_type)
             .await?;
 
-        // 3. Build augmented prompt (RAG context + live counts)
+        // 3. Build augmented prompt (RAG context + live counts + role context)
         let context = self.retriever.format_context(&docs);
-        let prompt  = Prompts::copilot_rag(question, &context, tenant_name, &live_stats);
+        let prompt  = Prompts::copilot_rag(question, &context, tenant_name, &live_stats, role, entity_types, fmt);
 
-        // 4. Generate
-        let answer = self.llm.generate(&prompt).await?;
+        // 4. Generate (JSON mode when table format is expected)
+        let answer = self.llm.generate(&prompt, fmt == "table").await?;
 
         Ok(RagAnswer {
             answer,
@@ -67,19 +75,27 @@ impl RagPipeline {
     /// to `OllamaClient::generate_stream()` directly.
     pub async fn build_prompt(
         &self,
-        tenant_id:   Uuid,
-        tenant_name: &str,
-        question:    &str,
-        doc_type:    Option<&str>,
+        tenant_id:    Uuid,
+        tenant_name:  &str,
+        question:     &str,
+        doc_type:     Option<&str>,
+        role:         &str,
+        entity_types: &[String],
+        fmt:          &str,
     ) -> Result<String> {
+        let scoped_types: Option<&[String]> = if role == "steward" && !entity_types.is_empty() {
+            Some(entity_types)
+        } else {
+            None
+        };
         let (query_embedding, live_stats) = tokio::join!(
             self.encoder.encode(question),
-            self.retriever.fetch_live_stats(tenant_id),
+            self.retriever.fetch_live_stats_scoped(tenant_id, scoped_types),
         );
         let query_embedding = query_embedding?;
         let docs    = self.retriever.retrieve(tenant_id, &query_embedding, doc_type).await?;
         let context = self.retriever.format_context(&docs);
-        Ok(Prompts::copilot_rag(question, &context, tenant_name, &live_stats))
+        Ok(Prompts::copilot_rag(question, &context, tenant_name, &live_stats, role, entity_types, fmt))
     }
 
     /// Index a document (plain text) into the knowledge base.

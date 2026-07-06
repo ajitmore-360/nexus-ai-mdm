@@ -28,6 +28,9 @@ pub struct MCPRequest {
 
     /// Tool arguments (for structured calls).
     pub args: Option<serde_json::Value>,
+
+    /// Response format hint: "auto" (server detects from query) | "prose" | "table".
+    pub response_format: Option<String>,
 }
 
 //

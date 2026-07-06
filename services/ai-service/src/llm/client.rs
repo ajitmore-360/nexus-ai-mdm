@@ -6,28 +6,6 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument, warn};
 
-/// Request to Ollama `/api/generate`.
-#[derive(Debug, Serialize)]
-struct GenerateRequest<'a> {
-    model:   &'a str,
-    prompt:  &'a str,
-    stream:  bool,
-    options: GenerateOptions,
-}
-
-#[derive(Debug, Serialize)]
-struct GenerateOptions {
-    temperature: f32,
-    num_predict: u32,
-    /// Context window size. Smaller = faster prompt eval; 4096 covers typical MDM queries.
-    num_ctx:     u32,
-    /// CPU threads for Ollama inference. 0 = Ollama auto-detect (omitted from JSON).
-    #[serde(skip_serializing_if = "is_zero_u32")]
-    num_thread:  u32,
-}
-
-fn is_zero_u32(v: &u32) -> bool { *v == 0 }
-
 /// Response from Ollama `/api/generate`.
 #[derive(Debug, Deserialize)]
 struct GenerateResponse {
@@ -94,21 +72,29 @@ impl OllamaClient {
     }
 
     /// Generate text from a prompt. Returns the full response string.
+    ///
+    /// Pass `json_mode: true` to enable Ollama's constrained JSON output —
+    /// the model is forced to emit valid JSON (use when `fmt == "table"`).
     #[instrument(skip(self, prompt), fields(model=%self.llm_model))]
-    pub async fn generate(&self, prompt: &str) -> Result<String> {
+    pub async fn generate(&self, prompt: &str, json_mode: bool) -> Result<String> {
         let url = format!("{}/api/generate", self.base_url);
 
-        let body = GenerateRequest {
-            model:  &self.llm_model,
-            prompt,
-            stream: false,
-            options: GenerateOptions {
-                temperature: self.temperature,
-                num_predict: self.max_tokens,
-                num_ctx:     self.num_ctx,
-                num_thread:  self.num_thread,
-            },
-        };
+        let mut body = serde_json::json!({
+            "model":  self.llm_model,
+            "prompt": prompt,
+            "stream": false,
+            "options": {
+                "temperature": self.temperature,
+                "num_predict": self.max_tokens,
+                "num_ctx":     self.num_ctx,
+            }
+        });
+        if self.num_thread != 0 {
+            body["options"]["num_thread"] = serde_json::json!(self.num_thread);
+        }
+        if json_mode {
+            body["format"] = serde_json::json!("json");
+        }
 
         let resp = self
             .http
@@ -125,7 +111,7 @@ impl OllamaClient {
         }
 
         let gen: GenerateResponse = resp.json().await.context("failed to parse Ollama response")?;
-        debug!(done=%gen.done, len=gen.response.len(), "LLM generation complete");
+        debug!(json_mode, done=%gen.done, len=gen.response.len(), "LLM generation complete");
         Ok(gen.response.trim().to_string())
     }
 
@@ -163,13 +149,14 @@ impl OllamaClient {
     /// Returns a stream of token strings.  Each item is one or more characters
     /// as Ollama yields them.  The stream closes when Ollama reports `done: true`
     /// or when the caller drops the receiver.
+    /// Pass `json_mode: true` to constrain output to valid JSON.
     pub async fn generate_stream(
         &self,
-        prompt: &str,
+        prompt:    &str,
+        json_mode: bool,
     ) -> Result<impl futures::Stream<Item = Result<String>> + Send + 'static> {
         let url = format!("{}/api/generate", self.base_url);
 
-        // Build the JSON body manually to avoid lifetime issues with struct borrows.
         let mut options = serde_json::json!({
             "temperature": self.temperature,
             "num_predict": self.max_tokens,
@@ -178,12 +165,15 @@ impl OllamaClient {
         if self.num_thread != 0 {
             options["num_thread"] = serde_json::json!(self.num_thread);
         }
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "model":   self.llm_model,
             "prompt":  prompt,
             "stream":  true,
             "options": options,
         });
+        if json_mode {
+            body["format"] = serde_json::json!("json");
+        }
 
         let resp = self
             .http

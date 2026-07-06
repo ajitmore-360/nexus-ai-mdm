@@ -17,16 +17,32 @@ use crate::state::AppState;
 /// An inbound MCP request from the Flutter client / api-gateway.
 #[derive(Debug, Deserialize)]
 pub struct McpRequest {
-    pub tenant_id:      Uuid,
+    pub tenant_id:       Uuid,
     /// The authenticated user making this request. Injected by the gateway
     /// from the validated JWT so callers cannot self-assign an identity.
     /// Included in every tracing span for audit correlation.
-    pub user_id:        Option<Uuid>,
+    pub user_id:         Option<Uuid>,
+    /// Role injected by the API gateway from JWT claims.
+    /// Deserialized for completeness but the handler reads role from the
+    /// x-user-role header instead (authoritative, JWT-derived).
+    #[allow(dead_code)]
+    pub role:            Option<String>,
     /// Explicit tool call, or None for free-form RAG Q&A.
-    pub tool:           Option<String>,
-    pub args:           Option<Value>,
-    pub prompt:         Option<String>,
-    pub correlation_id: Option<String>,
+    pub tool:            Option<String>,
+    pub args:            Option<Value>,
+    pub prompt:          Option<String>,
+    pub correlation_id:  Option<String>,
+    /// Client hint: "auto" (default) | "prose" | "table".
+    pub response_format: Option<String>,
+}
+
+/// Server-resolved identity context built by the handler — never from the
+/// client body directly.
+#[derive(Debug)]
+pub struct RoleContext {
+    pub role:         String,
+    pub entity_types: Vec<String>,
+    pub fmt:          String, // "prose" | "table"
 }
 
 /// The response returned to the client.
@@ -61,10 +77,10 @@ pub struct SourceDocSummary {
         user_id   = ?request.user_id,
     )
 )]
-pub async fn route(state: &AppState, request: McpRequest) -> McpResponse {
+pub async fn route(state: &AppState, request: McpRequest, ctx: RoleContext) -> McpResponse {
     let cid = request.correlation_id.clone();
 
-    match dispatch(state, &request).await {
+    match dispatch(state, &request, &ctx).await {
         Ok(response) => response,
         Err(e) => {
             tracing::error!(error=%e, "MCP dispatch failed");
@@ -81,7 +97,7 @@ pub async fn route(state: &AppState, request: McpRequest) -> McpResponse {
     }
 }
 
-async fn dispatch(state: &AppState, request: &McpRequest) -> Result<McpResponse> {
+async fn dispatch(state: &AppState, request: &McpRequest, ctx: &RoleContext) -> Result<McpResponse> {
     let cid = request.correlation_id.clone();
 
     // ── Explicit tool call ───────────────────────────────────────────────────
@@ -167,7 +183,7 @@ async fn dispatch(state: &AppState, request: &McpRequest) -> Result<McpResponse>
     let tenant_name = state.tenant_name(request.tenant_id).await;
     let rag_answer  = state
         .rag_pipeline
-        .answer(request.tenant_id, &tenant_name, &prompt, None)
+        .answer(request.tenant_id, &tenant_name, &prompt, None, &ctx.role, &ctx.entity_types, &ctx.fmt)
         .await?;
 
     let source_docs: Vec<SourceDocSummary> = rag_answer
