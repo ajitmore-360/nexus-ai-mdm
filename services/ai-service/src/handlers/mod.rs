@@ -418,3 +418,106 @@ pub async fn scan_anomalies(
         ),
     }
 }
+
+// =========================================================================
+// INTERNAL SUGGEST  — internal only, called by mdm-core on Docker network
+// Privacy: caller strips PII before sending. This handler is stateless.
+// =========================================================================
+
+#[derive(Deserialize)]
+pub struct SuggestRequest {
+    pub suggestion_type: String,
+    pub entity_type:     String,
+    pub safe_fields:     serde_json::Map<String, serde_json::Value>,
+    #[serde(default)]
+    pub target_fields:   Vec<String>,
+}
+
+pub async fn internal_suggest(
+    State(state): State<AppState>,
+    Json(req):    Json<SuggestRequest>,
+) -> impl IntoResponse {
+    let prompt = build_suggest_prompt(&req);
+    match state.llm.generate(&prompt, true).await {
+        Ok(raw) => {
+            let (suggestions, rationale) = parse_suggest_response(&raw);
+            (StatusCode::OK, Json(json!({
+                "success":     true,
+                "suggestions": suggestions,
+                "rationale":   rationale,
+            })))
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "success": false, "error": e.to_string() })),
+        ),
+    }
+}
+
+fn build_suggest_prompt(req: &SuggestRequest) -> String {
+    let fields_json = serde_json::to_string_pretty(&req.safe_fields).unwrap_or_default();
+    let targets = if req.target_fields.is_empty() {
+        "all fields that appear incomplete or inconsistent".to_string()
+    } else {
+        req.target_fields.join(", ")
+    };
+
+    match req.suggestion_type.as_str() {
+        "address_parse" => format!(
+            "You are a data quality assistant. Parse the raw address into structured fields.\n\
+             Entity type: {etype}\nRaw data (non-PII): {fields}\n\n\
+             Return ONLY JSON:\n\
+             {{\"suggestions\":[{{\"field\":\"street\",\"proposed_value\":\"...\",\"confidence\":0.9,\"rationale\":\"...\"}}],\
+             \"rationale\":\"...\"}}\n\
+             Fields to extract: street, city, state, postal_code, country.\n\
+             If a field cannot be determined set proposed_value to \"\" and confidence to 0.",
+            etype  = req.entity_type,
+            fields = fields_json,
+        ),
+        "anomaly" => format!(
+            "You are a data quality analyst. Review this entity for anomalies.\n\
+             Entity type: {etype}\nField values (non-PII): {fields}\n\n\
+             Return ONLY JSON:\n\
+             {{\"suggestions\":[{{\"field\":\"name\",\"proposed_value\":\"fix\",\"confidence\":0.85,\"rationale\":\"why\"}}],\
+             \"rationale\":\"...\"}}\n\
+             Only flag genuine data issues. Return empty suggestions array if data looks correct.",
+            etype  = req.entity_type,
+            fields = fields_json,
+        ),
+        _ => format!(
+            "You are a data enrichment assistant. Suggest values for missing fields.\n\
+             Entity type: {etype}\nKnown non-PII fields: {fields}\n\
+             Missing fields needing values: {targets}\n\n\
+             Return ONLY JSON:\n\
+             {{\"suggestions\":[{{\"field\":\"name\",\"proposed_value\":\"value\",\"confidence\":0.8,\"rationale\":\"source\"}}],\
+             \"rationale\":\"...\"}}\n\
+             Only suggest values you can reasonably infer from context.",
+            etype   = req.entity_type,
+            fields  = fields_json,
+            targets = targets,
+        ),
+    }
+}
+
+fn parse_suggest_response(raw: &str) -> (serde_json::Value, String) {
+    let json_str = raw.find('{').and_then(|start| {
+        let tail = &raw[start..];
+        let mut depth = 0i32;
+        let mut end   = None;
+        for (i, c) in tail.char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => { depth -= 1; if depth == 0 { end = Some(i + 1); break; } }
+                _   => {}
+            }
+        }
+        end.map(|e| &tail[..e])
+    }).unwrap_or("{}");
+
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(json_str) {
+        let rationale   = v["rationale"].as_str().unwrap_or("").to_string();
+        let suggestions = v["suggestions"].clone();
+        return (suggestions, rationale);
+    }
+    (serde_json::Value::Array(vec![]), "LLM response could not be parsed".to_string())
+}

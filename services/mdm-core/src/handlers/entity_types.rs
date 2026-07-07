@@ -493,6 +493,7 @@ pub async fn list_attributes(
             a.display_order,
             a.enum_values,
             a.default_value,
+            a.submaster_code,
             a.created_at
         FROM core_mdm.attribute_schemas a
         WHERE a.tenant_id = $1
@@ -529,6 +530,7 @@ pub async fn list_attributes(
                         "display_order":    r.get::<i32, _>("display_order"),
                         "enum_values":      enum_values,
                         "default_value":    r.get::<Option<String>, _>("default_value"),
+                        "submaster_code":   r.get::<Option<String>, _>("submaster_code"),
                         "created_at":       r.get::<chrono::DateTime<chrono::Utc>, _>("created_at").to_rfc3339(),
                     })
                 })
@@ -594,16 +596,17 @@ pub async fn create_attribute(
     let is_pii        = body.get("is_pii").and_then(|v| v.as_bool()).unwrap_or(false);
     let is_searchable = body.get("is_searchable").and_then(|v| v.as_bool()).unwrap_or(true);
     let display_order = body.get("display_order").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-    let default_value = body.get("default_value").and_then(|v| v.as_str()).map(str::to_owned);
-    let enum_values   = body.get("enum_values").cloned();
+    let default_value  = body.get("default_value").and_then(|v| v.as_str()).map(str::to_owned);
+    let enum_values    = body.get("enum_values").cloned();
+    let submaster_code = body.get("submaster_code").and_then(|v| v.as_str()).map(str::to_owned);
 
     let row = sqlx::query(
         r#"
         INSERT INTO core_mdm.attribute_schemas
             (tenant_id, entity_type, attribute_key, display_name,
              data_type, is_required, is_pii, is_searchable, display_order,
-             enum_values, default_value)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             enum_values, default_value, submaster_code)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING
             schema_id  AS id,
             tenant_id,
@@ -618,6 +621,7 @@ pub async fn create_attribute(
             display_order,
             enum_values,
             default_value,
+            submaster_code,
             created_at
         "#,
     )
@@ -632,6 +636,7 @@ pub async fn create_attribute(
     .bind(display_order)
     .bind(enum_values.map(sqlx::types::Json))
     .bind(&default_value)
+    .bind(&submaster_code)
     .fetch_one(&state.db)
     .await;
 
@@ -671,6 +676,7 @@ pub async fn create_attribute(
                 "display_order":    r.get::<i32, _>("display_order"),
                 "enum_values":      enum_values,
                 "default_value":    r.get::<Option<String>, _>("default_value"),
+                "submaster_code":   r.get::<Option<String>, _>("submaster_code"),
                 "created_at":       r.get::<chrono::DateTime<chrono::Utc>, _>("created_at").to_rfc3339(),
             });
             (

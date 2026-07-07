@@ -140,6 +140,8 @@ class _ShellPageState extends State<ShellPage> {
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
         _NavItem(icon: Icons.admin_panel_settings_outlined, label: 'Data Governance', route: '/dashboard/org/data-governance',
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+        _NavItem(icon: Icons.list_alt_outlined,             label: 'Reference Data',  route: '/dashboard/org/reference-data',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
         _NavItem(icon: Icons.policy_outlined,               label: 'Domain Policies', route: '/dashboard/org/domain-policies',
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
       ],
@@ -962,6 +964,7 @@ class _ShellPageState extends State<ShellPage> {
     if (location.startsWith('/dashboard/org/sources')) return 'Source Systems';
     if (location.startsWith('/dashboard/org/domain-policies')) return 'Domain Policies';
     if (location.startsWith('/dashboard/org/data-governance')) return 'Data Governance';
+    if (location.startsWith('/dashboard/org/reference-data')) return 'Reference Data';
     if (location.startsWith('/dashboard/entities/create')) return 'Create Entity';
     if (location.startsWith('/dashboard/entities/ingest')) return 'Ingest Data';
     if (location.startsWith('/dashboard/entities')) return 'Entity Explorer';

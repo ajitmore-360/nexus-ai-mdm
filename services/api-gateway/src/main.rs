@@ -88,6 +88,9 @@ use routes::{
         // notification inbox
         list_notifications, notifications_unread_count,
         mark_notification_read, mark_all_notifications_read,
+        // submasters (reference data)
+        list_submaster_types, create_submaster_type, update_submaster_type,
+        list_submaster_values, create_submaster_value, update_submaster_value, delete_submaster_value,
         // data governance
         list_governance_assignments, my_governance_assigned_types,
         create_governance_assignment, delete_governance_assignment,
@@ -98,6 +101,13 @@ use routes::{
         update_policy_rule, delete_policy_rule, toggle_policy_rule,
         // survivorship suggestions + GDPR request log
         policy_survivorship_suggestions, policy_gdpr_requests,
+        // quality rules engine
+        list_quality_rules, create_quality_rule, update_quality_rule, delete_quality_rule,
+        reorder_quality_rules, run_quality_rules,
+        list_quality_violations, resolve_quality_violation, bulk_resolve_violations,
+        // AI suggestions (approval-gated LLM proposals)
+        list_ai_suggestions, approve_ai_suggestion, reject_ai_suggestion,
+        trigger_address_parse, trigger_anomaly_detection, trigger_enrichment,
     },
 };
 
@@ -422,6 +432,12 @@ async fn main() {
             .route("/golden-records/:id/attributes",     patch(patch_golden_record_attributes))
             .route("/policy/consent",                    post(record_consent))
             .route("/policy/consent/:id/withdraw",       post(withdraw_consent))
+            // AI suggestion triggers + approve/reject (steward minimum)
+            .route("/entities/:id/ai-suggestions/address-parse", post(trigger_address_parse))
+            .route("/entities/:id/ai-suggestions/anomaly",       post(trigger_anomaly_detection))
+            .route("/entities/:id/ai-suggestions/enrichment",    post(trigger_enrichment))
+            .route("/ai-suggestions/:id/approve",                patch(approve_ai_suggestion))
+            .route("/ai-suggestions/:id/reject",                 patch(reject_ai_suggestion))
             .layer(axum_middleware::from_fn(require_steward))
     );
 
@@ -465,6 +481,19 @@ async fn main() {
             .route("/relationship-types/:type_id",     delete(delete_relationship_type))
             // Tenant branding (write)
             .route("/tenant/branding",                 put(upsert_tenant_branding))
+            // Submasters / reference data (writes)
+            .route("/admin/submasters",                post(create_submaster_type))
+            .route("/admin/submasters/:code",          patch(update_submaster_type))
+            .route("/admin/submasters/:code/values",   post(create_submaster_value))
+            .route("/admin/submasters/:code/values/:value_id",
+                patch(update_submaster_value).delete(delete_submaster_value))
+            // Quality rules engine (writes)
+            .route("/admin/quality-rules",                             post(create_quality_rule))
+            .route("/admin/quality-rules/reorder",                     post(reorder_quality_rules))
+            .route("/admin/quality-rules/run",                         post(run_quality_rules))
+            .route("/admin/quality-rules/:id",                         patch(update_quality_rule).delete(delete_quality_rule))
+            .route("/admin/quality-violations/:id/resolve",            patch(resolve_quality_violation))
+            .route("/admin/quality-violations/bulk-resolve",           post(bulk_resolve_violations))
             .layer(axum_middleware::from_fn(require_admin))
     );
 
@@ -554,6 +583,14 @@ async fn main() {
             .route("/license",                       get(get_my_license))
             // Tenant branding (read; put in admin_config_routes)
             .route("/tenant/branding",               get(get_tenant_branding))
+            // Submasters / reference data (reads — all authenticated users need this for dropdowns)
+            .route("/admin/submasters",                        get(list_submaster_types))
+            .route("/admin/submasters/:code/values",           get(list_submaster_values))
+            // Quality rules engine (reads — available to all authenticated users)
+            .route("/admin/quality-rules",                     get(list_quality_rules))
+            .route("/admin/quality-violations",                get(list_quality_violations))
+            // AI suggestions (read — any authenticated user can view suggestions for their entities)
+            .route("/ai-suggestions",                          get(list_ai_suggestions))
             // User notification inbox
             .route("/notifications",                 get(list_notifications))
             .route("/notifications/unread-count",    get(notifications_unread_count))

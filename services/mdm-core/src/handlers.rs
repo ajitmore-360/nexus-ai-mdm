@@ -18,6 +18,9 @@ pub mod merge;
 pub mod policy;
 pub mod relationships;
 pub mod review;
+pub mod ai_suggestions;
+pub mod quality_rules;
+pub mod submasters;
 pub mod users;
 
 /// Standard API response wrapper used by all handlers.

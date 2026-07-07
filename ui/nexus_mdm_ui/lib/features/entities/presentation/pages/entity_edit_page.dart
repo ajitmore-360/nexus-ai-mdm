@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/auth/auth_manager.dart';
 import '../../../../core/network/api_client.dart' hide ApiException;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -8,6 +9,8 @@ import '../../../../shared/models/api_responses.dart';
 import '../../../../shared/models/entity.dart';
 import '../../data/entity_repository.dart';
 import '../../../../shared/widgets/nexus_dialog.dart';
+import '../../../../features/admin/data/entity_type_repository.dart';
+import '../../../../features/admin/data/submaster_repository.dart';
 
 // ──────────────────────────────────────────────
 // Local enums – mirrors entity_create_page
@@ -97,6 +100,16 @@ extension _EditStatusExt on _EditStatus {
 }
 
 // ──────────────────────────────────────────────
+// Submaster dropdown option
+// ──────────────────────────────────────────────
+
+class _SubmasterOption {
+  final String code;
+  final String label;
+  const _SubmasterOption({required this.code, required this.label});
+}
+
+// ──────────────────────────────────────────────
 // Attribute row
 // ──────────────────────────────────────────────
 
@@ -105,9 +118,15 @@ class _AttrRow {
   String type;
   final TextEditingController keyCtrl;
   final TextEditingController valueCtrl;
+  // When non-null this attribute is backed by a submaster — render as dropdown.
+  List<_SubmasterOption>? dropdownOptions;
 
-  _AttrRow({required this.key, required String value, required this.type})
-      : keyCtrl   = TextEditingController(text: key),
+  _AttrRow({
+    required this.key,
+    required String value,
+    required this.type,
+    this.dropdownOptions,
+  })  : keyCtrl   = TextEditingController(text: key),
         valueCtrl = TextEditingController(text: value);
 
   void dispose() {
@@ -136,19 +155,26 @@ class EntityEditPage extends StatefulWidget {
 
 class _EntityEditPageState extends State<EntityEditPage> {
   final _formKey = GlobalKey<FormState>();
-  late final EntityRepository _repository;
+  late final EntityRepository    _repository;
+  late final EntityTypeRepository _entityTypeRepo;
+  late final SubmasterRepository  _submasterRepo;
 
-  _EditEntityType _selectedType = _EditEntityType.customer;
+  _EditEntityType _selectedType   = _EditEntityType.customer;
   _EditStatus     _selectedStatus = _EditStatus.active;
-  List<_AttrRow>  _attributes = [];
+  List<_AttrRow>  _attributes     = [];
 
-  bool _isSaving = false;
+  bool _isSaving        = false;
+  bool _loadingSchemas  = false;
 
   @override
   void initState() {
     super.initState();
-    _repository = EntityRepository(ApiClient());
+    final api       = ApiClient();
+    _repository     = EntityRepository(api);
+    _entityTypeRepo = EntityTypeRepository(api);
+    _submasterRepo  = SubmasterRepository(api);
     _prefillFromEntity(widget.entity);
+    _loadAttributeSchemas();
   }
 
   void _prefillFromEntity(CanonicalEntity? entity) {
@@ -160,6 +186,66 @@ class _EntityEditPageState extends State<EntityEditPage> {
       final value = attr.value?.toString() ?? '';
       return _AttrRow(key: e.key, value: value, type: 'string');
     }).toList();
+  }
+
+  /// Fetches attribute schemas for the current entity type and overlays
+  /// submaster dropdown options onto matching _AttrRow entries.
+  Future<void> _loadAttributeSchemas() async {
+    if (!mounted) return;
+    setState(() => _loadingSchemas = true);
+    try {
+      final tenantId = await AuthManager.getTenantId() ?? '';
+      final typeCode = _selectedType.name;
+
+      final schemasResult =
+          await _entityTypeRepo.listAttributes(tenantId, typeCode);
+      if (!mounted) return;
+      if (schemasResult is! Success<List<AttributeSchemaModel>>) {
+        setState(() => _loadingSchemas = false);
+        return;
+      }
+
+      final schemas = schemasResult.data;
+      final submasterCodes = schemas
+          .where((s) => s.submasterCode != null)
+          .map((s) => s.submasterCode!)
+          .toSet();
+
+      final Map<String, List<_SubmasterOption>> optionsByCode = {};
+      await Future.wait(submasterCodes.map((smCode) async {
+        final result = await _submasterRepo.listValues(tenantId, smCode);
+        if (result is Success<List<SubmasterValueModel>>) {
+          optionsByCode[smCode] = result.data
+              .map((v) => _SubmasterOption(code: v.code, label: v.label))
+              .toList();
+        }
+      }));
+
+      if (!mounted) return;
+
+      // Build attribute_key → options lookup
+      final Map<String, List<_SubmasterOption>> attrOptions = {};
+      for (final schema in schemas) {
+        if (schema.submasterCode != null &&
+            optionsByCode.containsKey(schema.submasterCode)) {
+          attrOptions[schema.attributeKey] =
+              optionsByCode[schema.submasterCode!]!;
+        }
+      }
+
+      setState(() {
+        for (final attr in _attributes) {
+          if (attrOptions.containsKey(attr.key)) {
+            attr.dropdownOptions = attrOptions[attr.key];
+            // If the current value is not a valid code, keep it as-is so
+            // existing free-text data is not silently discarded.
+          }
+        }
+        _loadingSchemas = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingSchemas = false);
+    }
   }
 
   @override
@@ -426,11 +512,32 @@ class _EntityEditPageState extends State<EntityEditPage> {
           const SizedBox(width: 10),
           Expanded(
             flex: 3,
-            child: TextFormField(
-              controller: attr.valueCtrl,
-              decoration: _inputDecoration(hintText: 'Enter value…'),
-              style: AppTextStyles.inputText,
-            ),
+            child: attr.dropdownOptions != null
+                ? DropdownButtonFormField<String>(
+                    initialValue: attr.dropdownOptions!
+                            .any((o) => o.code == attr.valueCtrl.text)
+                        ? attr.valueCtrl.text
+                        : null,
+                    decoration: _inputDecoration(hintText: 'Select…'),
+                    style: AppTextStyles.inputText,
+                    isExpanded: true,
+                    items: attr.dropdownOptions!
+                        .map((opt) => DropdownMenuItem<String>(
+                              value: opt.code,
+                              child: Text(opt.label,
+                                  overflow: TextOverflow.ellipsis),
+                            ))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => attr.valueCtrl.text = v);
+                    },
+                  )
+                : TextFormField(
+                    controller: attr.valueCtrl,
+                    decoration: _inputDecoration(hintText: 'Enter value…'),
+                    style: AppTextStyles.inputText,
+                  ),
           ),
           const SizedBox(width: 10),
           SizedBox(

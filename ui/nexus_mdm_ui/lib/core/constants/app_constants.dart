@@ -66,7 +66,7 @@ class AppConstants {
   static const String auditEventsPath    = '/v1/audit/events';
   // Admin
   static const String entityTypesPath    = '/v1/entity-types';
-  static const String sourceSystemsPath  = '/v1/source-systems';
+  static const String sourceSystemsPath  = '/v1/admin/source-systems';
   static const String adminPath          = '/v1/admin';
   // Governance, analytics, settings (served by policy/search services)
   static const String dataQualityPath    = '/v1/anomalies';
@@ -75,6 +75,11 @@ class AppConstants {
   static const String governancePath     = '/v1/policy/rules';
   static const String analyticsPath      = '/v1/search';
   static const String settingsPath       = '/v1/policy/weights';
+  // Quality rules engine
+  static const String qualityRulesPath      = '/v1/admin/quality-rules';
+  static const String qualityViolationsPath = '/v1/admin/quality-violations';
+  // AI suggestions (approval-gated LLM proposals)
+  static const String aiSuggestionsPath     = '/v1/ai-suggestions';
   // Notifications & webhooks
   static const String notificationsPath  = '/v1/notifications';
   static const String webhooksPath       = '/v1/webhooks';
