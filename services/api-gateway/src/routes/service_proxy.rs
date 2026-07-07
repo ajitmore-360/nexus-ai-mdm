@@ -43,6 +43,37 @@ async fn forward_get_with_service_auth(
     forward_get_with_auth(http, base_url, path, headers, Some(mdm_service_auth())).await
 }
 
+/// Forward a GET, optionally appending a raw query string (e.g. `"key=val&key2=val2"`).
+async fn forward_get_with_query(
+    http:      &reqwest::Client,
+    base_url:  &str,
+    path:      &str,
+    query:     Option<&str>,
+    headers:   &HeaderMap,
+) -> Response {
+    let base = format!("{}{}", base_url.trim_end_matches('/'), path);
+    let url = match query {
+        Some(q) if !q.is_empty() => format!("{}?{}", base, q),
+        _ => base,
+    };
+    let mut req = http.get(&url);
+    for (k, v) in headers.iter() {
+        if k.as_str() == "authorization" { continue; }
+        if let Ok(v) = v.to_str() { req = req.header(k.as_str(), v); }
+    }
+    match req.send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            (status, Json(body)).into_response()
+        }
+        Err(e) => {
+            tracing::error!(error=%e, url=%url, "upstream GET failed");
+            (StatusCode::BAD_GATEWAY, Json(json!({ "error": "upstream unavailable" }))).into_response()
+        }
+    }
+}
+
 async fn forward_get_with_auth(
     http:      &reqwest::Client,
     base_url:  &str,
@@ -1407,5 +1438,219 @@ pub async fn mark_all_notifications_read(
     body:         Bytes,
 ) -> impl IntoResponse {
     forward_post(&state, &state.settings.mdm_core_url, "/notifications/read-all", &headers, bytes_to_value(body)).await
+}
+
+// ── Submasters (reference data) ─────────────────────────────────────────────
+
+pub async fn list_submaster_types(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, "/submasters", &headers).await
+}
+
+pub async fn create_submaster_type(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/submasters", &headers, bytes_to_value(body)).await
+}
+
+pub async fn update_submaster_type(
+    State(state):    State<AppState>,
+    Path(code):      Path<String>,
+    headers:         HeaderMap,
+    body:            Bytes,
+) -> impl IntoResponse {
+    let path = format!("/submasters/{}", code);
+    forward_patch(&state.services.http, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn list_submaster_values(
+    State(state): State<AppState>,
+    Path(code):   Path<String>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/submasters/{}/values", code);
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn create_submaster_value(
+    State(state): State<AppState>,
+    Path(code):   Path<String>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    let path = format!("/submasters/{}/values", code);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn update_submaster_value(
+    State(state):           State<AppState>,
+    Path((code, value_id)): Path<(String, Uuid)>,
+    headers:                HeaderMap,
+    body:                   Bytes,
+) -> impl IntoResponse {
+    let path = format!("/submasters/{}/values/{}", code, value_id);
+    forward_patch(&state.services.http, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn delete_submaster_value(
+    State(state):          State<AppState>,
+    Path((code, value_id)): Path<(String, Uuid)>,
+    headers:               HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/submasters/{}/values/{}", code, value_id);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+// ── Quality rules ─────────────────────────────────────────────────────────────
+
+pub async fn list_quality_rules(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, "/quality-rules", &headers).await
+}
+
+pub async fn create_quality_rule(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/quality-rules", &headers, bytes_to_value(body)).await
+}
+
+pub async fn update_quality_rule(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    let path = format!("/quality-rules/{}", id);
+    forward_patch(&state.services.http, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn delete_quality_rule(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/quality-rules/{}", id);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn reorder_quality_rules(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/quality-rules/reorder", &headers, bytes_to_value(body)).await
+}
+
+pub async fn run_quality_rules(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/quality-rules/run", &headers, serde_json::Value::Null).await
+}
+
+// ── Quality violations ────────────────────────────────────────────────────────
+
+pub async fn list_quality_violations(
+    State(state):                   State<AppState>,
+    headers:                        HeaderMap,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        "/quality-violations",
+        query.as_deref(),
+        &headers,
+    )
+    .await
+}
+
+pub async fn resolve_quality_violation(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/quality-violations/{}/resolve", id);
+    forward_patch(&state.services.http, &state.settings.mdm_core_url, &path, &headers, serde_json::Value::Null).await
+}
+
+pub async fn bulk_resolve_violations(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/quality-violations/bulk-resolve", &headers, bytes_to_value(body)).await
+}
+
+// ── AI Suggestions (approval-gated LLM proposals) ────────────────────────────
+
+pub async fn list_ai_suggestions(
+    State(state):                   State<AppState>,
+    headers:                        HeaderMap,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        "/ai-suggestions",
+        query.as_deref(),
+        &headers,
+    )
+    .await
+}
+
+pub async fn approve_ai_suggestion(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/ai-suggestions/{}/approve", id);
+    forward_patch(&state.services.http, &state.settings.mdm_core_url, &path, &headers, serde_json::Value::Null).await
+}
+
+pub async fn reject_ai_suggestion(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/ai-suggestions/{}/reject", id);
+    forward_patch(&state.services.http, &state.settings.mdm_core_url, &path, &headers, serde_json::Value::Null).await
+}
+
+pub async fn trigger_address_parse(
+    State(state):    State<AppState>,
+    Path(entity_id): Path<Uuid>,
+    headers:         HeaderMap,
+    body:            Bytes,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/ai-suggestions/address-parse", entity_id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn trigger_anomaly_detection(
+    State(state):    State<AppState>,
+    Path(entity_id): Path<Uuid>,
+    headers:         HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/ai-suggestions/anomaly", entity_id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, serde_json::Value::Null).await
+}
+
+pub async fn trigger_enrichment(
+    State(state):    State<AppState>,
+    Path(entity_id): Path<Uuid>,
+    headers:         HeaderMap,
+    body:            Bytes,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/ai-suggestions/enrichment", entity_id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
 }
 

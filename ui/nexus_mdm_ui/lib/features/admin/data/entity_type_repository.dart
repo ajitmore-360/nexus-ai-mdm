@@ -75,6 +75,7 @@ class AttributeSchemaModel {
   final bool isPii;
   final int displayOrder;
   final List<String> enumValues;
+  final String? submasterCode;
 
   const AttributeSchemaModel({
     required this.id,
@@ -88,6 +89,7 @@ class AttributeSchemaModel {
     required this.isPii,
     required this.displayOrder,
     required this.enumValues,
+    this.submasterCode,
   });
 
   factory AttributeSchemaModel.fromJson(Map<String, dynamic> json) {
@@ -105,6 +107,7 @@ class AttributeSchemaModel {
       enumValues: (json['enum_values'] as List<dynamic>? ?? [])
           .map((e) => e as String? ?? '')
           .toList(),
+      submasterCode: json['submaster_code'] as String?,
     );
   }
 
@@ -120,6 +123,7 @@ class AttributeSchemaModel {
         'is_pii': isPii,
         'display_order': displayOrder,
         'enum_values': enumValues,
+        if (submasterCode != null) 'submaster_code': submasterCode,
       };
 }
 
@@ -227,21 +231,26 @@ class EntityTypeRepository {
     required bool isPii,
     required int displayOrder,
     List<String> enumValues = const [],
+    String? submasterCode,
   }) async {
     try {
+      final body = <String, dynamic>{
+        'tenant_id': tenantId,
+        'attribute_key': attributeKey,
+        'display_name': displayName,
+        'data_type': dataType,
+        'is_required': isRequired,
+        'is_pii': isPii,
+        'display_order': displayOrder,
+        'enum_values': enumValues,
+      };
+      if (submasterCode != null && submasterCode.isNotEmpty) {
+        body['submaster_code'] = submasterCode;
+      }
       final response = await _apiClient.post<Map<String, dynamic>>(
         '/admin/entity-types/$entityTypeCode/attributes',
         options: _tenantOpts(tenantId),
-        data: {
-          'tenant_id': tenantId,
-          'attribute_key': attributeKey,
-          'display_name': displayName,
-          'data_type': dataType,
-          'is_required': isRequired,
-          'is_pii': isPii,
-          'display_order': displayOrder,
-          'enum_values': enumValues,
-        },
+        data: body,
       );
       final data = response.data;
       if (data == null) return const Failure(ApiException(message: 'Empty response'));

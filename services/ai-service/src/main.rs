@@ -38,8 +38,8 @@ use rag::{RagPipeline, RagRetriever};
 use state::AppState;
 
 use handlers::{
-    copilot, copilot_stream, embed, health, index_document, record_feedback,
-    recommend_weights, scan_anomalies, semantic_match,
+    copilot, copilot_stream, embed, health, index_document, internal_suggest,
+    record_feedback, recommend_weights, scan_anomalies, semantic_match,
 };
 
 #[tokio::main]
@@ -252,6 +252,8 @@ async fn main() {
         .route("/weights/recommend",     get(recommend_weights))
         // Anomaly detection
         .route("/anomalies",             get(scan_anomalies))
+        // Internal — mdm-core calls this on the Docker-internal network (no JWT required)
+        .route("/internal/suggest",      post(internal_suggest))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state);

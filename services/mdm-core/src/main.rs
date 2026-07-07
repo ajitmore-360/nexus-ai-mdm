@@ -115,12 +115,27 @@ use handlers::{
     },
     users::{accept_invite, change_password, change_role, invite_info, invite_user, list_users,
             login, request_password_reset, reset_password, sso_exchange},
+    submasters::{
+        create_submaster_type, create_submaster_value, delete_submaster_value,
+        list_submaster_types, list_submaster_values, update_submaster_type,
+        update_submaster_value,
+    },
+    quality_rules::{
+        list_quality_rules, create_quality_rule, update_quality_rule, delete_quality_rule,
+        reorder_quality_rules, run_quality_rules,
+        list_quality_violations, resolve_quality_violation, bulk_resolve_violations,
+    },
+    ai_suggestions::{
+        trigger_address_parse, trigger_anomaly, trigger_enrichment,
+        list_suggestions, approve_suggestion, reject_suggestion,
+    },
 };
 use middleware::{
     auth::auth_middleware,
     tenant::tenant_middleware,
 };
 use services::{
+    ai_suggestion_service::AiSuggestionService,
     audit_service::AuditService,
     branding_service::BrandingService,
     data_quality_service::DataQualityService,
@@ -209,6 +224,9 @@ pub struct AppState {
 
     pub data_quality_service:
         Arc<DataQualityService>,
+
+    pub ai_suggestion_service:
+        Arc<AiSuggestionService>,
 
     pub distribution_service:
         Arc<DistributionService>,
@@ -596,6 +614,15 @@ fn build_router(
             get(get_distribution_job).delete(cancel_distribution_job))
         .route("/distribution/jobs/:id/queue",
             post(queue_distribution_job))
+        // ── Submaster (reference data) management — Business Admin / Admin only ─
+        .route("/submasters",
+            get(list_submaster_types).post(create_submaster_type))
+        .route("/submasters/:code",
+            patch(update_submaster_type))
+        .route("/submasters/:code/values",
+            get(list_submaster_values).post(create_submaster_value))
+        .route("/submasters/:code/values/:value_id",
+            patch(update_submaster_value).delete(delete_submaster_value))
         // ── Data Governance — assignment CRUD (BusinessAdmin/Admin only) ──────
         .route("/governance/assignments",
             get(list_assignments).post(create_assignment))
@@ -603,6 +630,34 @@ fn build_router(
             get(my_assigned_types))
         .route("/governance/assignments/:id",
             delete(delete_assignment))
+        // ── Quality rules & violations ────────────────────────────────────────
+        .route("/quality-rules",
+            get(list_quality_rules).post(create_quality_rule))
+        .route("/quality-rules/reorder",
+            post(reorder_quality_rules))
+        .route("/quality-rules/run",
+            post(run_quality_rules))
+        .route("/quality-rules/:id",
+            patch(update_quality_rule).delete(delete_quality_rule))
+        .route("/quality-violations",
+            get(list_quality_violations))
+        .route("/quality-violations/bulk-resolve",
+            post(bulk_resolve_violations))
+        .route("/quality-violations/:id/resolve",
+            patch(resolve_quality_violation))
+        // ── AI suggestions (approval-gated LLM proposals) ─────────────────────
+        .route("/ai-suggestions",
+            get(list_suggestions))
+        .route("/ai-suggestions/:id/approve",
+            patch(approve_suggestion))
+        .route("/ai-suggestions/:id/reject",
+            patch(reject_suggestion))
+        .route("/entities/:entity_id/ai-suggestions/address-parse",
+            post(trigger_address_parse))
+        .route("/entities/:entity_id/ai-suggestions/anomaly",
+            post(trigger_anomaly))
+        .route("/entities/:entity_id/ai-suggestions/enrichment",
+            post(trigger_enrichment))
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
 
@@ -981,6 +1036,9 @@ async fn main() {
     let notification_service  = Arc::new(NotificationService::new(db.clone()));
     let data_quality_service  = Arc::new(DataQualityService::new(db.clone()));
     let distribution_service  = Arc::new(DistributionService::new(db.clone()));
+    let ai_service_url        = std::env::var("AI_SERVICE_URL")
+        .unwrap_or_else(|_| "http://ai-service:8082".to_string());
+    let ai_suggestion_service = Arc::new(AiSuggestionService::new(db.clone(), ai_service_url));
 
     //
     // ====================================
@@ -1018,6 +1076,7 @@ async fn main() {
             audit_service,
             notification_service,
             data_quality_service,
+            ai_suggestion_service,
             distribution_service,
             matching_policy:    live_policy,
             redis_rate_limiter: login_rate_limiter,

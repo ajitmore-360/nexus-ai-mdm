@@ -48,4 +48,8 @@ infra/redis/data/
 
 # Logs
 *.log
+*.err
 logs/
+
+# Claude Code internal working directories
+.claude/worktrees/

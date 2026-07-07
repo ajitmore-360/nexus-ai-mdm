@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import '../../../../core/auth/auth_manager.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/entity_type_repository.dart';
+import '../../data/submaster_repository.dart';
 import '../../../../shared/models/api_responses.dart';
 import '../widgets/admin_form_widgets.dart';
 
@@ -16,6 +18,7 @@ class AttributeSchemaPage extends StatefulWidget {
 
 class _AttributeSchemaPageState extends State<AttributeSchemaPage> {
   final _repo = GetIt.instance<EntityTypeRepository>();
+  late final SubmasterRepository _submasterRepo;
 
   String _tenantId = '';
 
@@ -26,6 +29,9 @@ class _AttributeSchemaPageState extends State<AttributeSchemaPage> {
   bool _loadingAttrs = false;
   String? _error;
 
+  // Submaster types for the dropdown
+  List<SubmasterTypeModel> _submasterTypes = [];
+
   // Add attribute form
   bool _showAddRow = false;
   final _addFormKey = GlobalKey<FormState>();
@@ -34,17 +40,28 @@ class _AttributeSchemaPageState extends State<AttributeSchemaPage> {
   String _dataType = 'string';
   bool _isRequired = false;
   bool _isPii = false;
+  String? _selectedSubmasterCode;
   bool _addSubmitting = false;
 
   @override
   void initState() {
     super.initState();
+    _submasterRepo = SubmasterRepository(ApiClient());
     _initTenantAndLoad();
   }
 
   Future<void> _initTenantAndLoad() async {
     _tenantId = await AuthManager.getTenantId() ?? '';
     _loadEntityTypes();
+    _loadSubmasterTypes();
+  }
+
+  Future<void> _loadSubmasterTypes() async {
+    final result = await _submasterRepo.listTypes(_tenantId);
+    if (!mounted) return;
+    if (result is Success<List<SubmasterTypeModel>>) {
+      setState(() => _submasterTypes = result.data);
+    }
   }
 
   @override
@@ -131,6 +148,7 @@ class _AttributeSchemaPageState extends State<AttributeSchemaPage> {
       isRequired: _isRequired,
       isPii: _isPii,
       displayOrder: _attributes.length + 1,
+      submasterCode: _selectedSubmasterCode,
     );
     if (!mounted) return;
     setState(() => _addSubmitting = false);
@@ -142,6 +160,7 @@ class _AttributeSchemaPageState extends State<AttributeSchemaPage> {
           _displayNameCtrl.clear();
           _isRequired = false;
           _isPii = false;
+          _selectedSubmasterCode = null;
         });
         _loadAttributes();
       case Failure(:final exception):
@@ -406,6 +425,67 @@ class _AttributeSchemaPageState extends State<AttributeSchemaPage> {
               ],
             ),
             const SizedBox(height: 16),
+            // Reference data linkage — optional
+            if (_submasterTypes.isNotEmpty)
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('REFERENCE DATA',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              fontSize: 10,
+                              letterSpacing: 0.8,
+                              color: AppColors.mutedText,
+                            )),
+                        const SizedBox(height: 6),
+                        DropdownButtonFormField<String?>(
+                          initialValue: _selectedSubmasterCode,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: 'None (free text)',
+                            hintStyle: AppTextStyles.bodySmall
+                                .copyWith(color: AppColors.mutedText),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide:
+                                  const BorderSide(color: AppColors.divider),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide:
+                                  const BorderSide(color: AppColors.divider),
+                            ),
+                          ),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('None (free text)'),
+                            ),
+                            ..._submasterTypes.map((t) =>
+                                DropdownMenuItem<String?>(
+                                  value: t.code,
+                                  child: Text(t.name,
+                                      overflow: TextOverflow.ellipsis),
+                                )),
+                          ],
+                          onChanged: (v) =>
+                              setState(() => _selectedSubmasterCode = v),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(child: SizedBox()),
+                  const SizedBox(width: 16),
+                  const Expanded(child: SizedBox()),
+                ],
+              ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 _ToggleChip(
@@ -500,6 +580,10 @@ class _AttrRow extends StatelessWidget {
           ),
           _TypeChip(type: attr.dataType),
           const SizedBox(width: 8),
+          if (attr.submasterCode != null) ...[
+            _BadgePill(label: attr.submasterCode!, color: AppColors.cyan),
+            const SizedBox(width: 4),
+          ],
           if (attr.isRequired)
             const _BadgePill(label: 'req', color: AppColors.error),
           if (attr.isPii) ...[

@@ -38,6 +38,7 @@ import '../../features/match_queue/presentation/pages/matching_rules_page.dart';
 import '../../features/admin/presentation/pages/data_governance_page.dart';
 import '../../features/admin/presentation/pages/approval_queue_page.dart';
 import '../../features/admin/presentation/pages/domain_policy_page.dart';
+import '../../features/admin/presentation/pages/submasters_page.dart';
 import '../../features/auth/presentation/pages/auth_callback_page.dart';
 
 class AppRouter {
@@ -374,6 +375,14 @@ class AppRouter {
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
               child: const DomainPolicyPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/org/reference-data',
+            name: 'reference-data',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const SubmastersPage(),
             ),
           ),
         ],

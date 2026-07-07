@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
+import '../../../../core/auth/auth_manager.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/license/licensed_module.dart';
 import '../../../../core/network/api_client.dart';
@@ -41,32 +43,39 @@ extension _RuleActionX on _RuleAction {
 enum _ConditionOperator {
   isNotEmpty, isEmpty, equals, notEquals,
   contains, startsWith, matches, greaterThan, lessThan,
+  ibanValid, postalFormatValid, postalCityMatch,
 }
 
 extension _ConditionOperatorX on _ConditionOperator {
   String get label {
     switch (this) {
-      case _ConditionOperator.isNotEmpty:   return 'is not empty';
-      case _ConditionOperator.isEmpty:      return 'is empty';
-      case _ConditionOperator.equals:       return 'equals';
-      case _ConditionOperator.notEquals:    return 'not equals';
-      case _ConditionOperator.contains:     return 'contains';
-      case _ConditionOperator.startsWith:   return 'starts with';
-      case _ConditionOperator.matches:      return 'matches regex';
-      case _ConditionOperator.greaterThan:  return '> greater than';
-      case _ConditionOperator.lessThan:     return '< less than';
+      case _ConditionOperator.isNotEmpty:       return 'is not empty';
+      case _ConditionOperator.isEmpty:          return 'is empty';
+      case _ConditionOperator.equals:           return 'equals';
+      case _ConditionOperator.notEquals:        return 'not equals';
+      case _ConditionOperator.contains:         return 'contains';
+      case _ConditionOperator.startsWith:       return 'starts with';
+      case _ConditionOperator.matches:          return 'matches regex';
+      case _ConditionOperator.greaterThan:      return '> greater than';
+      case _ConditionOperator.lessThan:         return '< less than';
+      case _ConditionOperator.ibanValid:        return 'IBAN valid (MOD-97)';
+      case _ConditionOperator.postalFormatValid: return 'postal format valid';
+      case _ConditionOperator.postalCityMatch:  return 'postal matches city';
     }
   }
-  bool get needsValue => this != _ConditionOperator.isNotEmpty &&
-      this != _ConditionOperator.isEmpty;
+  bool get needsValue =>
+      this != _ConditionOperator.isNotEmpty &&
+      this != _ConditionOperator.isEmpty &&
+      this != _ConditionOperator.ibanValid;
 }
 
 class _Condition {
   String field;
   _ConditionOperator operator;
   String value;
-  _Condition({required this.field, required this.operator, this.value = ''});
-  _Condition copy() => _Condition(field: field, operator: operator, value: value);
+  String? referenceField;
+  _Condition({required this.field, required this.operator, this.value = '', this.referenceField});
+  _Condition copy() => _Condition(field: field, operator: operator, value: value, referenceField: referenceField);
 }
 
 class _QualityRule {
@@ -103,6 +112,7 @@ class _QualityRule {
 }
 
 class _Violation {
+  final String id;
   final String entityId;
   final String entityType;
   final String ruleName;
@@ -110,8 +120,9 @@ class _Violation {
   final String field;
   final String message;
   final String when;
-  bool resolved = false;
+  bool resolved;
   _Violation({
+    this.id = '',
     required this.entityId,
     required this.entityType,
     required this.ruleName,
@@ -119,6 +130,7 @@ class _Violation {
     required this.field,
     required this.message,
     required this.when,
+    this.resolved = false,
   });
 }
 
@@ -189,7 +201,7 @@ class _DataQualityPageState extends State<DataQualityPage>
   int _vbCounter = 0;
 
   // Rules
-  late List<_QualityRule> _rules;
+  final List<_QualityRule> _rules = [];
 
   // AI builder
   final _aiCtrl = TextEditingController();
@@ -218,10 +230,15 @@ class _DataQualityPageState extends State<DataQualityPage>
 
   Future<void> _loadLiveData() async {
     final client = GetIt.instance<ApiClient>();
+    final tenantId = await AuthManager.getTenantId() ?? '';
+    final opts = tenantId.isNotEmpty
+        ? Options(headers: {AppConstants.tenantHeaderKey: tenantId})
+        : null;
     // Load quality dimensions
     try {
       final dimResp = await client.get<Map<String, dynamic>>(
         AppConstants.qualityDimensionsPath,
+        options: opts,
       );
       final dims = (dimResp.data?['dimensions'] as Map<String, dynamic>?) ?? {};
       if (dims.isNotEmpty && mounted) {
@@ -238,36 +255,36 @@ class _DataQualityPageState extends State<DataQualityPage>
       }
     } catch (_) {}
 
-    // Load violations from anomaly scan
+    // Load quality rules from API
     try {
-      final anomResp = await client.get<Map<String, dynamic>>(
-        AppConstants.aiAnomaliesPath,
+      final rulesResp = await client.get<Map<String, dynamic>>(
+        AppConstants.qualityRulesPath,
+        options: opts,
       );
-      final anomalies = (anomResp.data?['anomalies'] as List<dynamic>?) ?? [];
-      if (anomalies.isNotEmpty && mounted) {
-        final violations = anomalies.map((a) {
-          final map = a as Map<String, dynamic>;
-          final sev = switch ((map['severity'] as String?) ?? 'low') {
-            'critical' => _RuleSeverity.critical,
-            'high'     => _RuleSeverity.high,
-            'medium'   => _RuleSeverity.medium,
-            _          => _RuleSeverity.low,
-          };
-          return _Violation(
-            entityId:  'Tenant-wide',
-            entityType: (map['entity_type'] as String?) ?? 'All',
-            ruleName:  (map['category']    as String?) ?? 'Anomaly',
-            severity:  sev,
-            field:     (map['field_name']  as String?) ?? 'multiple',
-            message:   (map['description'] as String?) ?? '',
-            when:      _relativeTime(map['detected_at'] as String?),
-          );
-        }).toList();
-        if (mounted) setState(() => _violations = violations);
+      final items = (rulesResp.data?['data'] as List<dynamic>?) ?? [];
+      if (mounted) {
+        setState(() {
+          _rules.clear();
+          _rules.addAll(items.map((j) => _ruleFromJson(j as Map<String, dynamic>)));
+        });
       }
-    } catch (_) {
-      // violations stay as defaults
-    }
+    } catch (_) {}
+
+    // Load quality violations from API (falls back to empty if endpoint not yet seeded)
+    try {
+      final vResp = await client.get<Map<String, dynamic>>(
+        AppConstants.qualityViolationsPath,
+        options: opts,
+      );
+      final vitems = (vResp.data?['data'] as List<dynamic>?) ?? [];
+      if (mounted) {
+        setState(() {
+          _violations = vitems
+              .map((j) => _violationFromJson(j as Map<String, dynamic>))
+              .toList();
+        });
+      }
+    } catch (_) {}
   }
 
   static String _relativeTime(String? iso) {
@@ -280,6 +297,228 @@ class _DataQualityPageState extends State<DataQualityPage>
       if (diff.inHours   < 24) return '${diff.inHours} hr ago';
       return '${diff.inDays}d ago';
     } catch (_) { return 'recently'; }
+  }
+
+  // ── Condition ↔ API string mapping ────────────────────────────────────────
+
+  static String _opToString(_ConditionOperator op) {
+    switch (op) {
+      case _ConditionOperator.isNotEmpty:        return 'is_not_empty';
+      case _ConditionOperator.isEmpty:           return 'is_empty';
+      case _ConditionOperator.equals:            return 'equals';
+      case _ConditionOperator.notEquals:         return 'not_equals';
+      case _ConditionOperator.contains:          return 'contains';
+      case _ConditionOperator.startsWith:        return 'starts_with';
+      case _ConditionOperator.matches:           return 'matches';
+      case _ConditionOperator.greaterThan:       return 'greater_than';
+      case _ConditionOperator.lessThan:          return 'less_than';
+      case _ConditionOperator.ibanValid:         return 'iban_valid';
+      case _ConditionOperator.postalFormatValid: return 'postal_format_valid';
+      case _ConditionOperator.postalCityMatch:   return 'postal_city_match';
+    }
+  }
+
+  static _ConditionOperator _opFromString(String s) {
+    switch (s) {
+      case 'is_empty':            return _ConditionOperator.isEmpty;
+      case 'equals':              return _ConditionOperator.equals;
+      case 'not_equals':          return _ConditionOperator.notEquals;
+      case 'contains':            return _ConditionOperator.contains;
+      case 'starts_with':         return _ConditionOperator.startsWith;
+      case 'matches':             return _ConditionOperator.matches;
+      case 'greater_than':        return _ConditionOperator.greaterThan;
+      case 'less_than':           return _ConditionOperator.lessThan;
+      case 'iban_valid':          return _ConditionOperator.ibanValid;
+      case 'postal_format_valid': return _ConditionOperator.postalFormatValid;
+      case 'postal_city_match':   return _ConditionOperator.postalCityMatch;
+      default:                    return _ConditionOperator.isNotEmpty;
+    }
+  }
+
+  static List<Map<String, dynamic>> _conditionsToJson(List<_Condition> conds) =>
+      conds.map((c) => {
+        'field':    c.field,
+        'operator': _opToString(c.operator),
+        if (c.value.isNotEmpty)          'value':           c.value,
+        if (c.referenceField != null &&
+            c.referenceField!.isNotEmpty) 'reference_field': c.referenceField,
+      }).toList();
+
+  static List<_Condition> _conditionsFromJson(dynamic json) {
+    final list = json as List<dynamic>? ?? [];
+    return list.map((c) {
+      final m = c as Map<String, dynamic>;
+      return _Condition(
+        field:          (m['field']           as String?) ?? '',
+        operator:       _opFromString((m['operator'] as String?) ?? 'is_not_empty'),
+        value:          (m['value']           as String?) ?? '',
+        referenceField: m['reference_field']  as String?,
+      );
+    }).toList();
+  }
+
+  static _QualityRule _ruleFromJson(Map<String, dynamic> m) {
+    final action = switch ((m['action'] as String?) ?? 'flag') {
+      'reject'     => _RuleAction.reject,
+      'quarantine' => _RuleAction.quarantine,
+      'enrich'     => _RuleAction.enrich,
+      _            => _RuleAction.flag,
+    };
+    final severity = switch ((m['severity'] as String?) ?? 'medium') {
+      'critical' => _RuleSeverity.critical,
+      'high'     => _RuleSeverity.high,
+      'low'      => _RuleSeverity.low,
+      _          => _RuleSeverity.medium,
+    };
+    return _QualityRule(
+      id:         (m['id']          as String?) ?? '',
+      name:       (m['name']        as String?) ?? '',
+      entityType: (m['entity_type'] as String?) ?? 'all',
+      dimension:  (m['dimension']   as String?) ?? 'validity',
+      conditions: _conditionsFromJson(m['conditions']),
+      logicalOp:  (m['logical_op']  as String?) ?? 'AND',
+      action:     action,
+      severity:   severity,
+      isActive:   (m['is_active']   as bool?)   ?? true,
+    );
+  }
+
+  static _Violation _violationFromJson(Map<String, dynamic> m) {
+    final sev = switch ((m['severity'] as String?) ?? 'medium') {
+      'critical' => _RuleSeverity.critical,
+      'high'     => _RuleSeverity.high,
+      'low'      => _RuleSeverity.low,
+      _          => _RuleSeverity.medium,
+    };
+    final snap = m['rule_snapshot'];
+    final ruleName = (snap is Map<String, dynamic>)
+        ? (snap['name'] as String?) ?? 'Rule'
+        : 'Rule';
+    final fields = m['violated_fields'] as List<dynamic>? ?? [];
+    String fieldStr = 'multiple';
+    if (fields.isNotEmpty) {
+      final first = fields.first as Map<String, dynamic>?;
+      fieldStr = (first?['field'] as String?) ?? 'multiple';
+    }
+    return _Violation(
+      id:         (m['id']          as String?) ?? '',
+      entityId:   (m['entity_id']   as String?) ?? '—',
+      entityType: (m['entity_type'] as String?) ?? 'All',
+      ruleName:   ruleName,
+      severity:   sev,
+      field:      fieldStr,
+      message:    (m['action_taken'] as String?) ?? '',
+      when:       _relativeTime(m['detected_at'] as String?),
+      resolved:   (m['is_resolved']  as bool?)   ?? false,
+    );
+  }
+
+  // ── API actions ───────────────────────────────────────────────────────────
+
+  Future<Options?> _authOpts() async {
+    final tenantId = await AuthManager.getTenantId() ?? '';
+    return tenantId.isNotEmpty
+        ? Options(headers: {AppConstants.tenantHeaderKey: tenantId})
+        : null;
+  }
+
+  Future<void> _createRuleApi(_QualityRule rule) async {
+    try {
+      final client = GetIt.instance<ApiClient>();
+      final opts   = await _authOpts();
+      final resp   = await client.post<Map<String, dynamic>>(
+        AppConstants.qualityRulesPath,
+        data: {
+          'name':        rule.name,
+          'entity_type': rule.entityType.toLowerCase(),
+          'dimension':   rule.dimension.toLowerCase(),
+          'conditions':  _conditionsToJson(rule.conditions),
+          'logical_op':  rule.logicalOp,
+          'action':      rule.action.name,
+          'severity':    rule.severity.name,
+          'priority':    rule.violations, // reuse field as priority placeholder
+        },
+        options: opts,
+      );
+      final created = resp.data?['data'] as Map<String, dynamic>?;
+      if (created != null && mounted) {
+        final serverRule = _ruleFromJson(created);
+        setState(() {
+          final idx = _rules.indexWhere((r) => r.id == rule.id);
+          if (idx >= 0) _rules[idx] = serverRule;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _updateRuleApi(_QualityRule rule) async {
+    try {
+      final client = GetIt.instance<ApiClient>();
+      final opts   = await _authOpts();
+      await client.patch<void>(
+        '${AppConstants.qualityRulesPath}/${rule.id}',
+        data: {
+          'name':        rule.name,
+          'entity_type': rule.entityType.toLowerCase(),
+          'dimension':   rule.dimension.toLowerCase(),
+          'conditions':  _conditionsToJson(rule.conditions),
+          'logical_op':  rule.logicalOp,
+          'action':      rule.action.name,
+          'severity':    rule.severity.name,
+          'is_active':   rule.isActive,
+        },
+        options: opts,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _toggleRuleActive(_QualityRule rule, bool active) async {
+    if (!mounted) return;
+    setState(() => rule.isActive = active);
+    try {
+      final client = GetIt.instance<ApiClient>();
+      final opts   = await _authOpts();
+      await client.patch<void>(
+        '${AppConstants.qualityRulesPath}/${rule.id}',
+        data: {'is_active': active},
+        options: opts,
+      );
+    } catch (_) {
+      // revert optimistic update on failure
+      if (mounted) setState(() => rule.isActive = !active);
+    }
+  }
+
+  Future<void> _deleteRuleConfirmed(_QualityRule rule) async {
+    if (!mounted) return;
+    setState(() => _rules.removeWhere((r) => r.id == rule.id));
+    try {
+      final client = GetIt.instance<ApiClient>();
+      final opts   = await _authOpts();
+      await client.delete<void>(
+        '${AppConstants.qualityRulesPath}/${rule.id}',
+        options: opts,
+      );
+    } catch (_) {
+      // revert on failure
+      if (mounted) setState(() => _rules.add(rule));
+    }
+  }
+
+  Future<void> _resolveViolationApi(_Violation v) async {
+    if (!mounted) return;
+    setState(() => v.resolved = true);
+    if (v.id.isEmpty) return;
+    try {
+      final client = GetIt.instance<ApiClient>();
+      final opts   = await _authOpts();
+      await client.patch<void>(
+        '${AppConstants.qualityViolationsPath}/${v.id}/resolve',
+        options: opts,
+      );
+    } catch (_) {
+      if (mounted) setState(() => v.resolved = false);
+    }
   }
 
   @override
@@ -1017,6 +1256,7 @@ class _DataQualityPageState extends State<DataQualityPage>
       _canvasBlocks.clear();
       _builderTab = 1; // jump to Manual Builder to show the new rule
     });
+    _createRuleApi(rule);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1137,7 +1377,7 @@ class _DataQualityPageState extends State<DataQualityPage>
                 // Toggle
                 Switch(
                   value: rule.isActive,
-                  onChanged: (v) => setState(() => rule.isActive = v),
+                  onChanged: (v) => _toggleRuleActive(rule, v),
                   activeThumbColor: AppColors.primary,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -1155,8 +1395,7 @@ class _DataQualityPageState extends State<DataQualityPage>
                 // Delete
                 IconButton(
                   icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                  onPressed: () =>
-                      setState(() => _rules.removeWhere((r) => r.id == rule.id)),
+                  onPressed: () => _deleteRuleConfirmed(rule),
                   color: AppColors.error,
                   tooltip: 'Delete rule',
                   padding: EdgeInsets.zero,
@@ -1629,8 +1868,7 @@ class _DataQualityPageState extends State<DataQualityPage>
           const SizedBox(width: 10),
           if (!resolved)
             OutlinedButton(
-              onPressed: () =>
-                  setState(() => v.resolved = true),
+              onPressed: () => _resolveViolationApi(v),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primary,
                 side: const BorderSide(color: AppColors.primary),
@@ -1696,6 +1934,11 @@ class _DataQualityPageState extends State<DataQualityPage>
                     _rules.insert(0, rule);
                   }
                 });
+                if (isEdit) {
+                  _updateRuleApi(rule);
+                } else {
+                  _createRuleApi(rule);
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
@@ -1709,7 +1952,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     );
   }
 
-  void _runAllRules() {
+  Future<void> _runAllRules() async {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(children: [
@@ -1724,6 +1967,14 @@ class _DataQualityPageState extends State<DataQualityPage>
         duration: const Duration(seconds: 3),
       ),
     );
+    try {
+      final client = GetIt.instance<ApiClient>();
+      final opts   = await _authOpts();
+      await client.post<void>(
+        '${AppConstants.qualityRulesPath}/run',
+        options: opts,
+      );
+    } catch (_) {}
   }
 }
 
@@ -1976,13 +2227,29 @@ class _RuleEditorState extends State<_RuleEditor> {
               controller: TextEditingController(text: cond.value)
                 ..selection = TextSelection.collapsed(offset: cond.value.length),
               onChanged: (v) => setState(() => cond.value = v),
-              decoration: _deco('value or regex…'),
+              decoration: _deco(cond.operator == _ConditionOperator.postalFormatValid
+                  ? 'country code (GB, US…)'
+                  : 'value or regex…'),
               style: AppTextStyles.inputText
                   .copyWith(fontSize: 12, fontFamily: 'monospace'),
             ),
           )
         else
           const Spacer(),
+        // Reference field (postal_city_match only)
+        if (cond.operator == _ConditionOperator.postalCityMatch) ...[
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: TextEditingController(text: cond.referenceField ?? '')
+                ..selection = TextSelection.collapsed(offset: (cond.referenceField ?? '').length),
+              onChanged: (v) => setState(() => cond.referenceField = v),
+              decoration: _deco('city field name'),
+              style: AppTextStyles.inputText
+                  .copyWith(fontSize: 12, fontFamily: 'monospace'),
+            ),
+          ),
+        ],
         const SizedBox(width: 6),
         // Remove
         if (r.conditions.length > 1)

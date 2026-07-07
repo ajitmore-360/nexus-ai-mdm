@@ -14,6 +14,8 @@ import '../../../../core/validation/validators.dart';
 import '../../../../shared/widgets/nexus_dialog.dart';
 import '../../../../features/admin/data/governance_repository.dart';
 import '../../../../features/admin/data/source_systems_repository.dart';
+import '../../../../features/admin/data/entity_type_repository.dart';
+import '../../../../features/admin/data/submaster_repository.dart';
 // ──────────────────────────────────────────────
 // Domain enums / models
 // ──────────────────────────────────────────────
@@ -217,12 +219,17 @@ class _AttributeRow {
   final bool isCustom;
   final TextEditingController keyController;
   final TextEditingController valueController;
+  // When non-null, this attribute is backed by a submaster — render as dropdown.
+  String? submasterCode;
+  List<_SubmasterOption>? dropdownOptions;
 
   _AttributeRow({
     required this.key,
     required this.value,
     required this.type,
     this.isCustom = false,
+    this.submasterCode,
+    this.dropdownOptions,
   })  : keyController = TextEditingController(text: key),
         valueController = TextEditingController(text: value);
 
@@ -230,6 +237,16 @@ class _AttributeRow {
     keyController.dispose();
     valueController.dispose();
   }
+}
+
+// ──────────────────────────────────────────────
+// Submaster dropdown option
+// ──────────────────────────────────────────────
+
+class _SubmasterOption {
+  final String code;
+  final String label;
+  const _SubmasterOption({required this.code, required this.label});
 }
 
 // ──────────────────────────────────────────────
@@ -266,6 +283,9 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
 
   late final EntityRepository _repository;
   late final GovernanceRepository _governanceRepo;
+  late final EntityTypeRepository _entityTypeRepo;
+  late final SubmasterRepository _submasterRepo;
+  bool _loadingSchemas = false;
 
   static final SourceSystemModel _manualEntry = SourceSystemModel(
     id: '', tenantId: '', name: 'Manual Entry', code: 'nexus-mdm',
@@ -303,9 +323,12 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     final api = ApiClient();
     _repository = EntityRepository(api);
     _governanceRepo = GovernanceRepository(api);
+    _entityTypeRepo = EntityTypeRepository(api);
+    _submasterRepo  = SubmasterRepository(api);
     _attributes = List.from(_selectedType.defaultAttributes);
     _loadRole();
     _loadSourceSystems();
+    _loadAttributeSchemas();
   }
 
   Future<void> _loadRole() async {
@@ -345,6 +368,72 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     super.dispose();
   }
 
+  /// Loads attribute schemas from the DB and overlays submaster dropdown options
+  /// onto the matching _AttributeRow entries for the current entity type.
+  Future<void> _loadAttributeSchemas() async {
+    if (!mounted) return;
+    setState(() => _loadingSchemas = true);
+    try {
+      final tenantId = await AuthManager.getTenantId() ?? '';
+      final typeCode = _selectedType.name; // enum name matches entity type code
+
+      final schemasResult = await _entityTypeRepo.listAttributes(tenantId, typeCode);
+      if (!mounted) return;
+      if (schemasResult is! Success<List<AttributeSchemaModel>>) return;
+
+      final schemas = (schemasResult as Success<List<AttributeSchemaModel>>).data;
+
+      // Collect unique submaster codes that have a linked attribute
+      final submasterCodes = schemas
+          .where((s) => s.submasterCode != null)
+          .map((s) => s.submasterCode!)
+          .toSet();
+
+      // Fetch values for each unique submaster code in parallel
+      final Map<String, List<_SubmasterOption>> optionsByCode = {};
+      await Future.wait(submasterCodes.map((smCode) async {
+        final result = await _submasterRepo.listValues(tenantId, smCode);
+        if (result is Success<List<SubmasterValueModel>>) {
+          optionsByCode[smCode] = (result as Success<List<SubmasterValueModel>>)
+              .data
+              .map((v) => _SubmasterOption(code: v.code, label: v.label))
+              .toList();
+        }
+      }));
+
+      if (!mounted) return;
+
+      // Build a quick lookup: attribute_key → submaster options
+      final Map<String, List<_SubmasterOption>> attrOptions = {};
+      for (final schema in schemas) {
+        if (schema.submasterCode != null && optionsByCode.containsKey(schema.submasterCode)) {
+          attrOptions[schema.attributeKey] = optionsByCode[schema.submasterCode!]!;
+        }
+      }
+
+      setState(() {
+        for (final attr in _attributes) {
+          if (attrOptions.containsKey(attr.key)) {
+            attr.submasterCode   = schemas
+                .firstWhere((s) => s.attributeKey == attr.key)
+                .submasterCode;
+            attr.dropdownOptions = attrOptions[attr.key];
+            // Seed the current value to a valid option code if it matches;
+            // otherwise reset to empty so the form is clean.
+            final codes = attr.dropdownOptions!.map((o) => o.code).toList();
+            if (!codes.contains(attr.value)) {
+              attr.value = '';
+              attr.valueController.text = '';
+            }
+          }
+        }
+        _loadingSchemas = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _loadingSchemas = false);
+    }
+  }
+
   void _onTypeChanged(_EntityType? type) {
     if (type == null) return;
     for (final a in _attributes) {
@@ -356,6 +445,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
       _dupCheckDone = false;
       _dupHits = [];
     });
+    _loadAttributeSchemas();
   }
 
   void _addAttribute(String key, String type) {
@@ -858,16 +948,38 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
           const SizedBox(width: 10),
           Expanded(
             flex: 3,
-            child: TextFormField(
-              controller: attr.valueController,
-              onChanged: (v) {
-                attr.value = v;
-                if (v.length >= 2) _triggerDupCheck();
-              },
-              validator: attr.type == 'email' ? Validators.emailOptional : null,
-              decoration: _inputDecoration(hintText: 'Enter value…'),
-              style: AppTextStyles.inputText,
-            ),
+            child: attr.dropdownOptions != null
+                ? DropdownButtonFormField<String>(
+                    initialValue: attr.value.isEmpty ? null : attr.value,
+                    decoration: _inputDecoration(hintText: 'Select…'),
+                    style: AppTextStyles.inputText,
+                    isExpanded: true,
+                    items: attr.dropdownOptions!
+                        .map((opt) => DropdownMenuItem<String>(
+                              value: opt.code,
+                              child: Text(opt.label,
+                                  overflow: TextOverflow.ellipsis),
+                            ))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() {
+                        attr.value = v;
+                        attr.valueController.text = v;
+                      });
+                    },
+                  )
+                : TextFormField(
+                    controller: attr.valueController,
+                    onChanged: (v) {
+                      attr.value = v;
+                      if (v.length >= 2) _triggerDupCheck();
+                    },
+                    validator:
+                        attr.type == 'email' ? Validators.emailOptional : null,
+                    decoration: _inputDecoration(hintText: 'Enter value…'),
+                    style: AppTextStyles.inputText,
+                  ),
           ),
           const SizedBox(width: 10),
           SizedBox(

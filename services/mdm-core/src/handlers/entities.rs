@@ -97,8 +97,50 @@ pub async fn create_entity(
         .and_then(|v| v.to_str().ok())
         .and_then(|s| Uuid::parse_str(s).ok());
 
+    // ── Quality rules check ───────────────────────────────────────────────────
+    // Run active quality rules against incoming attributes before persisting.
+    // Blocking actions (reject/quarantine) return 422; non-blocking violations
+    // are saved asynchronously after the entity is written.
+    let entity_type_str = request.entity.entity_type.to_string().to_lowercase();
+    let attrs_map: std::collections::HashMap<String, serde_json::Value> = request.entity
+        .attributes
+        .iter()
+        .map(|a| (a.key.clone(), a.value.clone()))
+        .collect();
+    let quality_outcome = state.data_quality_service
+        .check_entity(tenant_ctx.tenant_id, &entity_type_str, &attrs_map)
+        .await;
+
+    if quality_outcome.blocking {
+        let rule_names: Vec<String> = quality_outcome.violations.iter()
+            .map(|v| v.rule_name.clone())
+            .collect();
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ApiResponse::<CreateEntityResponse> {
+                success: false,
+                data:    None,
+                error:   Some(format!(
+                    "Entity rejected by quality rules: {}",
+                    rule_names.join(", ")
+                )),
+            }),
+        );
+    }
+
+    let non_blocking_violations = quality_outcome.violations;
+
     match state.entity_service.create_entity(ctx, request).await {
         Ok(response) => {
+            // Persist any non-blocking violations captured before creation.
+            if !non_blocking_violations.is_empty() {
+                state.data_quality_service.save_violations_background(
+                    tenant_ctx.tenant_id,
+                    response.entity_id,
+                    entity_type_str.clone(),
+                    non_blocking_violations,
+                );
+            }
             // Kick off completeness scoring without blocking the response.
             state.data_quality_service.compute_and_update_background(
                 tenant_ctx.tenant_id,

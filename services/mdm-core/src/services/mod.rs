@@ -1,3 +1,4 @@
+pub mod ai_suggestion_service;
 pub mod audit_service;
 pub mod branding_service;
 pub mod data_quality_service;
