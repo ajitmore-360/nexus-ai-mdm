@@ -90,6 +90,7 @@ use handlers::{
     },
     notifications::{
         list_notifications, mark_all_read, mark_notification_read, unread_count,
+        create_subscription, list_subscriptions, delete_subscription,
     },
     admin::embed_migration,
     license::{activate_license, admin_upsert_license, get_my_license, internal_get_license},
@@ -148,6 +149,11 @@ use handlers::{
     tasks::{list_tasks, create_task, update_task, check_sla_breaches},
     temporal::{get_version_history, get_entity_as_of, get_entity_bitemporal},
     xref::{delete_entity_xref, list_entity_xrefs, lookup_by_xref, upsert_entity_xref},
+    transformations::{
+        list_transformation_rules, create_transformation_rule,
+        toggle_transformation_rule, delete_transformation_rule, preview_transformation,
+    },
+    party_roles::{list_party_roles, upsert_party_role, delete_party_role, entities_by_role},
 };
 use middleware::{
     auth::auth_middleware,
@@ -177,6 +183,8 @@ use services::{
     survivorship_service::SurvivorshipService,
     task_service::TaskService,
     temporal_service::TemporalService,
+    transformation_service::TransformationService,
+    party_role_service::PartyRoleService,
     unmerge_service::UnmergeService,
     xref_service::XrefService,
 };
@@ -289,6 +297,12 @@ pub struct AppState {
 
     pub temporal_service:
         Arc<TemporalService>,
+
+    pub transformation_service:
+        Arc<TransformationService>,
+
+    pub party_role_service:
+        Arc<PartyRoleService>,
 
     pub unmerge_service:
         Arc<UnmergeService>,
@@ -615,6 +629,9 @@ fn build_router(
         .route("/entities/:id/history",           get(get_version_history))
         .route("/entities/:id/as-of",             get(get_entity_as_of))
         .route("/entities/:id/bitemporal",        get(get_entity_bitemporal))
+        // Party role management (per entity)
+        .route("/entities/:id/roles",             get(list_party_roles).post(upsert_party_role))
+        .route("/entities/:id/roles/:role_code",  delete(delete_party_role))
         // /search is served by the dedicated search-service via api-gateway
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
@@ -692,6 +709,11 @@ fn build_router(
             patch(mark_notification_read))
         .route("/notifications/read-all",
             post(mark_all_read))
+        // ── Notification subscriptions ────────────────────────────────────────
+        .route("/notification-subscriptions",
+            get(list_subscriptions).post(create_subscription))
+        .route("/notification-subscriptions/:id",
+            delete(delete_subscription))
         // ── Distribution jobs ─────────────────────────────────────────────────
         .route("/distribution/jobs",
             get(list_distribution_jobs).post(create_distribution_job))
@@ -769,6 +791,18 @@ fn build_router(
             post(bulk_import_values))
         .route("/reference-data/:list_id/values/:value_id",
             delete(delete_reference_value))
+        // ── Transformation rules (Data Stewardship DSL) ───────────────────────
+        .route("/transformation-rules",
+            get(list_transformation_rules).post(create_transformation_rule))
+        .route("/transformation-rules/preview",
+            post(preview_transformation))
+        .route("/transformation-rules/:id/toggle",
+            put(toggle_transformation_rule))
+        .route("/transformation-rules/:id",
+            delete(delete_transformation_rule))
+        // ── Party role management ─────────────────────────────────────────────
+        .route("/party-roles/by-role",
+            get(entities_by_role))
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
 
@@ -1157,6 +1191,8 @@ async fn main() {
     let reference_data_service      = Arc::new(ReferenceDataService::new(db.clone()));
     let task_service                = Arc::new(TaskService::new(db.clone()));
     let temporal_service            = Arc::new(TemporalService::new(db.clone()));
+    let transformation_service      = Arc::new(TransformationService::new(db.clone()));
+    let party_role_service          = Arc::new(PartyRoleService::new(db.clone()));
     let ai_service_url        = std::env::var("AI_SERVICE_URL")
         .unwrap_or_else(|_| "http://ai-service:8082".to_string());
     let ai_suggestion_service = Arc::new(AiSuggestionService::new(db.clone(), ai_service_url));
@@ -1207,6 +1243,8 @@ async fn main() {
             reference_data_service,
             task_service,
             temporal_service,
+            transformation_service,
+            party_role_service,
             unmerge_service,
             xref_service,
             matching_policy:    live_policy,

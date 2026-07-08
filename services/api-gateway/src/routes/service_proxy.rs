@@ -2104,3 +2104,89 @@ pub async fn proxy_delete_reference_value(
     let path = format!("/reference-data/{}/values/{}", list_id, val_id);
     forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
 }
+
+// ── Transformation Rules ──────────────────────────────────────────────────────
+
+pub async fn proxy_list_transformation_rules(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let qs = params.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<_>>().join("&");
+    let qs_opt = if qs.is_empty() { None } else { Some(qs.as_str()) };
+    forward_get_with_query(&state.services.http, &state.settings.mdm_core_url, "/transformation-rules", qs_opt, &headers).await
+}
+
+pub async fn proxy_create_transformation_rule(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/transformation-rules", &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_preview_transformation(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/transformation-rules/preview", &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_toggle_transformation_rule(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/transformation-rules/{}/toggle", id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, serde_json::Value::Null).await
+}
+
+pub async fn proxy_delete_transformation_rule(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/transformation-rules/{}", id);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+// ── Party Roles ───────────────────────────────────────────────────────────────
+
+pub async fn proxy_list_party_roles(
+    State(state):    State<AppState>,
+    Path(entity_id): Path<Uuid>,
+    headers:         HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/roles", entity_id);
+    forward_get(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_upsert_party_role(
+    State(state):    State<AppState>,
+    Path(entity_id): Path<Uuid>,
+    headers:         HeaderMap,
+    body:            Bytes,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/roles", entity_id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_delete_party_role(
+    State(state):                     State<AppState>,
+    Path((entity_id, role_code)):     Path<(Uuid, String)>,
+    headers:                          HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/roles/{}", entity_id, role_code);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_entities_by_role(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let qs = params.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<_>>().join("&");
+    let qs_opt = if qs.is_empty() { None } else { Some(qs.as_str()) };
+    forward_get_with_query(&state.services.http, &state.settings.mdm_core_url, "/party-roles/by-role", qs_opt, &headers).await
+}

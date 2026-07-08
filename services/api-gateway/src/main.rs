@@ -134,6 +134,13 @@ use routes::{
         proxy_list_reference_lists, proxy_create_reference_list,
         proxy_get_reference_values, proxy_upsert_reference_value,
         proxy_bulk_import_ref_values, proxy_delete_reference_value,
+        // Transformation rules DSL
+        proxy_list_transformation_rules, proxy_create_transformation_rule,
+        proxy_preview_transformation, proxy_toggle_transformation_rule,
+        proxy_delete_transformation_rule,
+        // Party role management
+        proxy_list_party_roles, proxy_upsert_party_role,
+        proxy_delete_party_role, proxy_entities_by_role,
     },
 };
 
@@ -485,6 +492,11 @@ async fn main() {
             .route("/reference-data/:list_id/values",            post(proxy_upsert_reference_value))
             .route("/reference-data/:list_id/values/bulk",       post(proxy_bulk_import_ref_values))
             .route("/reference-data/:list_id/values/:value_id",  delete(proxy_delete_reference_value))
+            // Transformation rules preview (dry-run — steward minimum)
+            .route("/transformation-rules/preview",              post(proxy_preview_transformation))
+            // Party role writes (steward minimum)
+            .route("/entities/:id/roles",                        post(proxy_upsert_party_role))
+            .route("/entities/:id/roles/:role_code",             delete(proxy_delete_party_role))
             .layer(axum_middleware::from_fn(require_steward))
     );
 
@@ -549,6 +561,10 @@ async fn main() {
             .route("/tasks/check-sla",                                 post(proxy_check_sla))
             // Reference data list management (admin creates/manages code lists)
             .route("/reference-data",                                  post(proxy_create_reference_list))
+            // Transformation rules CRUD (admin manages the DSL rules)
+            .route("/transformation-rules",                            post(proxy_create_transformation_rule))
+            .route("/transformation-rules/:id/toggle",                 put(proxy_toggle_transformation_rule))
+            .route("/transformation-rules/:id",                        delete(proxy_delete_transformation_rule))
             .layer(axum_middleware::from_fn(require_admin))
     );
 
@@ -615,6 +631,11 @@ async fn main() {
             // Reference data (reads — all authenticated users need for dropdowns)
             .route("/reference-data",                    get(proxy_list_reference_lists))
             .route("/reference-data/:list_id/values",   get(proxy_get_reference_values))
+            // Transformation rules (reads)
+            .route("/transformation-rules",              get(proxy_list_transformation_rules))
+            // Party roles (reads)
+            .route("/entities/:id/roles",                get(proxy_list_party_roles))
+            .route("/party-roles/by-role",               get(proxy_entities_by_role))
     );
 
     // ── 3. Shared routes — any authenticated user ─────────────────────────────

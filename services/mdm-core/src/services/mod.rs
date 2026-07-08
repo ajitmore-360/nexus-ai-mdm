@@ -21,5 +21,7 @@ pub mod review_service;
 pub mod survivorship_service;
 pub mod task_service;
 pub mod temporal_service;
+pub mod transformation_service;
+pub mod party_role_service;
 pub mod unmerge_service;
 pub mod xref_service;

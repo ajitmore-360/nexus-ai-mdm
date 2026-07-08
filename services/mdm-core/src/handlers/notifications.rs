@@ -122,3 +122,73 @@ pub async fn mark_all_read(
     )
         .into_response()
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Subscription management
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct CreateSubscriptionBody {
+    pub subscriber_id:    Uuid,
+    pub subscriber_type:  Option<String>,
+    pub event_types:      Vec<String>,
+    pub entity_type:      Option<String>,
+    pub entity_id:        Option<Uuid>,
+    pub delivery_channel: String,
+    pub delivery_target:  Option<String>,
+}
+
+// POST /notification-subscriptions
+pub async fn create_subscription(
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    Json(body):            Json<CreateSubscriptionBody>,
+) -> impl IntoResponse {
+    let sub_type = body.subscriber_type.as_deref().unwrap_or("User");
+    match state.notification_service.create_subscription(
+        tenant_ctx.tenant_id,
+        body.subscriber_id,
+        sub_type,
+        body.event_types,
+        body.entity_type.as_deref(),
+        body.entity_id,
+        &body.delivery_channel,
+        body.delivery_target.as_deref(),
+    ).await {
+        Ok(sub) => (StatusCode::CREATED, Json(serde_json::json!({ "success": true, "subscription": sub }))).into_response(),
+        Err(e)  => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "success": false, "error": e.to_string() }))).into_response(),
+    }
+}
+
+// GET /notification-subscriptions?subscriber_id=<uuid>
+#[derive(Deserialize)]
+pub struct SubListQuery {
+    pub subscriber_id: Option<Uuid>,
+}
+
+pub async fn list_subscriptions(
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    Query(q):              Query<SubListQuery>,
+) -> impl IntoResponse {
+    match state.notification_service.list_subscriptions(tenant_ctx.tenant_id, q.subscriber_id).await {
+        Ok(subs) => {
+            let count = subs.len();
+            Json(serde_json::json!({ "success": true, "items": subs, "count": count })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "success": false, "error": e.to_string() }))).into_response(),
+    }
+}
+
+// DELETE /notification-subscriptions/:id
+pub async fn delete_subscription(
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    Path(id):              Path<Uuid>,
+) -> impl IntoResponse {
+    match state.notification_service.delete_subscription(tenant_ctx.tenant_id, id).await {
+        Ok(true)  => Json(serde_json::json!({ "success": true })).into_response(),
+        Ok(false) => (StatusCode::NOT_FOUND, Json(serde_json::json!({ "success": false, "error": "not found" }))).into_response(),
+        Err(e)    => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "success": false, "error": e.to_string() }))).into_response(),
+    }
+}

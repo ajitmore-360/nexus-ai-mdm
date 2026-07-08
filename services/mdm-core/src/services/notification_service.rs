@@ -502,11 +502,212 @@ impl NotificationService {
         .fetch_one(&self.db)
         .await
     }
+
+    // ── Subscription management ───────────────────────────────────────────────
+
+    pub async fn create_subscription(
+        &self,
+        tenant_id:        Uuid,
+        subscriber_id:    Uuid,
+        subscriber_type:  &str,
+        event_types:      Vec<String>,
+        entity_type:      Option<&str>,
+        entity_id:        Option<Uuid>,
+        delivery_channel: &str,
+        delivery_target:  Option<&str>,
+    ) -> Result<serde_json::Value, sqlx::Error> {
+        let row = sqlx::query(
+            r#"
+            INSERT INTO core_mdm.notification_subscriptions
+                (tenant_id, subscriber_id, subscriber_type, event_types, entity_type,
+                 entity_id, delivery_channel, delivery_target)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+            ON CONFLICT DO NOTHING
+            RETURNING id, subscriber_id, subscriber_type, event_types, entity_type,
+                      entity_id, delivery_channel, delivery_target, is_active, created_at
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(subscriber_id)
+        .bind(subscriber_type)
+        .bind(&event_types)
+        .bind(entity_type)
+        .bind(entity_id)
+        .bind(delivery_channel)
+        .bind(delivery_target)
+        .fetch_optional(&self.db)
+        .await?;
+
+        match row {
+            Some(r) => Ok(subscription_row_to_json(&r)),
+            None    => Ok(serde_json::json!({ "duplicate": true })),
+        }
+    }
+
+    pub async fn list_subscriptions(
+        &self,
+        tenant_id:     Uuid,
+        subscriber_id: Option<Uuid>,
+    ) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, subscriber_id, subscriber_type, event_types, entity_type,
+                   entity_id, delivery_channel, delivery_target, is_active, created_at
+            FROM core_mdm.notification_subscriptions
+            WHERE tenant_id = $1
+              AND ($2::uuid IS NULL OR subscriber_id = $2)
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(subscriber_id)
+        .fetch_all(&self.db)
+        .await?;
+
+        Ok(rows.iter().map(|r| subscription_row_to_json(r)).collect())
+    }
+
+    pub async fn delete_subscription(
+        &self,
+        tenant_id: Uuid,
+        id:        Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        let r = sqlx::query(
+            "DELETE FROM core_mdm.notification_subscriptions WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&self.db)
+        .await?;
+        Ok(r.rows_affected() > 0)
+    }
+
+    // ── Event dispatch — routes events to all matching subscribers ────────────
+
+    /// Dispatch an event to all active subscriptions that match it.
+    /// Called fire-and-forget from entity_service, merge_service, etc.
+    pub async fn dispatch_event(
+        &self,
+        tenant_id:   Uuid,
+        event_type:  &str,
+        entity_type: Option<&str>,
+        entity_id:   Option<Uuid>,
+        title:       &str,
+        body:        &str,
+        metadata:    serde_json::Value,
+    ) {
+        let rows = sqlx::query(
+            r#"
+            SELECT subscriber_id, subscriber_type, delivery_channel, delivery_target
+            FROM core_mdm.notification_subscriptions
+            WHERE tenant_id = $1
+              AND is_active  = true
+              AND ($2 = ANY(event_types) OR event_types = '{}')
+              AND (entity_type IS NULL OR $3::text IS NULL OR entity_type = $3)
+              AND (entity_id   IS NULL OR $4::uuid IS NULL OR entity_id   = $4)
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(event_type)
+        .bind(entity_type)
+        .bind(entity_id)
+        .fetch_all(&self.db)
+        .await
+        .unwrap_or_default();
+
+        for row in rows {
+            use sqlx::Row;
+            let subscriber_id:   Uuid   = row.get("subscriber_id");
+            let delivery_channel: String = row.get("delivery_channel");
+            let delivery_target: Option<String> = row.get("delivery_target");
+
+            match delivery_channel.as_str() {
+                "InApp" => {
+                    let _ = self.notify(
+                        tenant_id,
+                        Some(subscriber_id),
+                        event_type,
+                        title,
+                        body,
+                        "info",
+                        metadata.clone(),
+                    ).await;
+                }
+                "Email" => {
+                    if let (Some(email_client), Some(target)) = (&self.email_client, &delivery_target) {
+                        let email_client = std::sync::Arc::clone(email_client);
+                        let subject = format!("[Nexus MDM] {}", title);
+                        let to      = target.clone();
+                        let body_s  = body.to_owned();
+                        tokio::spawn(async move {
+                            email_client.send(&to, &subject, &body_s).await;
+                        });
+                    }
+                }
+                "Slack" => {
+                    if let Some(slack_client) = &self.slack_client {
+                        let slack = std::sync::Arc::clone(slack_client);
+                        let t = title.to_owned();
+                        let b = body.to_owned();
+                        tokio::spawn(async move {
+                            slack.send(&t, &b, "info").await;
+                        });
+                    } else if let Some(target) = &delivery_target {
+                        // Per-subscription Slack webhook URL override
+                        let http   = reqwest::Client::new();
+                        let target = target.clone();
+                        let t      = title.to_owned();
+                        let b      = body.to_owned();
+                        tokio::spawn(async move {
+                            let payload = serde_json::json!({
+                                "text": format!("*{}*\n{}", t, b)
+                            });
+                            let _ = http.post(&target).json(&payload).send().await;
+                        });
+                    }
+                }
+                "Webhook" => {
+                    if let Some(target) = &delivery_target {
+                        let http    = reqwest::Client::new();
+                        let target  = target.clone();
+                        let payload = serde_json::json!({
+                            "event_type":  event_type,
+                            "entity_type": entity_type,
+                            "entity_id":   entity_id,
+                            "title":       title,
+                            "body":        body,
+                            "metadata":    metadata.clone(),
+                        });
+                        tokio::spawn(async move {
+                            let _ = http.post(&target).json(&payload).send().await;
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
+
+fn subscription_row_to_json(r: &sqlx::postgres::PgRow) -> serde_json::Value {
+    use sqlx::Row;
+    serde_json::json!({
+        "id":               r.get::<Uuid, _>("id"),
+        "subscriber_id":    r.get::<Uuid, _>("subscriber_id"),
+        "subscriber_type":  r.get::<String, _>("subscriber_type"),
+        "event_types":      r.get::<Vec<String>, _>("event_types"),
+        "entity_type":      r.get::<Option<String>, _>("entity_type"),
+        "entity_id":        r.get::<Option<Uuid>, _>("entity_id"),
+        "delivery_channel": r.get::<String, _>("delivery_channel"),
+        "delivery_target":  r.get::<Option<String>, _>("delivery_target"),
+        "is_active":        r.get::<bool, _>("is_active"),
+        "created_at":       r.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+    })
+}
 
 /// Fetch email addresses to notify for a given event.
 ///
