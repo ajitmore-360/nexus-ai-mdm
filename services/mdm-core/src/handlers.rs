@@ -19,9 +19,19 @@ pub mod policy;
 pub mod relationships;
 pub mod review;
 pub mod ai_suggestions;
+pub mod bulk;
+pub mod comments;
+pub mod data_profiling;
+pub mod hierarchy;
+pub mod quality_analytics;
 pub mod quality_rules;
+pub mod reference_data;
 pub mod submasters;
+pub mod tasks;
+pub mod temporal;
+pub mod unmerge;
 pub mod users;
+pub mod xref;
 
 /// Standard API response wrapper used by all handlers.
 #[derive(Debug, Serialize)]

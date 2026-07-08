@@ -1654,3 +1654,453 @@ pub async fn trigger_enrichment(
     forward_post(&state, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
 }
 
+// ── Cross-Reference / ID Mapping ──────────────────────────────────────────────
+
+pub async fn proxy_list_entity_xrefs(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/xrefs", id);
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_upsert_entity_xref(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/xrefs", id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_delete_entity_xref(
+    State(state):                   State<AppState>,
+    Path((entity_id, xref_id)):     Path<(Uuid, Uuid)>,
+    headers:                        HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/xrefs/{}", entity_id, xref_id);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_lookup_by_xref(
+    State(state):                        State<AppState>,
+    headers:                             HeaderMap,
+    axum::extract::RawQuery(query):      axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        "/xrefs/lookup",
+        query.as_deref(),
+        &headers,
+    ).await
+}
+
+// ── Entity Comments & Collaboration ──────────────────────────────────────────
+
+pub async fn proxy_list_entity_comments(
+    State(state):                        State<AppState>,
+    Path(id):                            Path<Uuid>,
+    headers:                             HeaderMap,
+    axum::extract::RawQuery(query):      axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        &format!("/entities/{}/comments", id),
+        query.as_deref(),
+        &headers,
+    ).await
+}
+
+pub async fn proxy_add_entity_comment(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/comments", id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_edit_entity_comment(
+    State(state):                   State<AppState>,
+    Path((entity_id, comment_id)):  Path<(Uuid, Uuid)>,
+    headers:                        HeaderMap,
+    body:                           Bytes,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/comments/{}", entity_id, comment_id);
+    forward_patch(&state.services.http, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_delete_entity_comment(
+    State(state):                   State<AppState>,
+    Path((entity_id, comment_id)):  Path<(Uuid, Uuid)>,
+    headers:                        HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/comments/{}", entity_id, comment_id);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+// ── Unmerge / Entity Split ───────────────────────────────────────────────────
+
+pub async fn proxy_unmerge_entity(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/unmerge", id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_get_unmerge_history(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/unmerge-history", id);
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+// ── Bulk Operations ──────────────────────────────────────────────────────────
+
+pub async fn proxy_bulk_update_status(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/entities/bulk/status", &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_bulk_export(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    // Pass-through: mdm-core returns text/csv with Content-Disposition headers.
+    // We forward the raw upstream response so the CSV download works end-to-end.
+    let url = format!("{}/entities/bulk/export", state.settings.mdm_core_url.trim_end_matches('/'));
+    let svc_auth = crate::proxy::mdm_proxy::mdm_service_auth();
+    let req_body: serde_json::Value = serde_json::from_slice(&body).unwrap_or(serde_json::Value::Object(Default::default()));
+    match state.services.http.post(&url)
+        .json(&req_body)
+        .header("authorization", svc_auth.as_str())
+        .send().await
+    {
+        Ok(resp) => {
+            let status = resp.status();
+            let ct     = resp.headers().get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("application/octet-stream")
+                .to_owned();
+            let cd     = resp.headers().get("content-disposition")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_owned();
+            let bytes  = resp.bytes().await.unwrap_or_default();
+            axum::response::Response::builder()
+                .status(status)
+                .header("Content-Type", ct)
+                .header("Content-Disposition", cd)
+                .body(axum::body::Body::from(bytes))
+                .unwrap_or_else(|_| (axum::http::StatusCode::BAD_GATEWAY,
+                    axum::Json(serde_json::json!({ "error": "response build error" }))).into_response())
+        }
+        Err(e) => {
+            tracing::error!(error=%e, "bulk export upstream failed");
+            (axum::http::StatusCode::BAD_GATEWAY,
+             axum::Json(serde_json::json!({ "success": false, "error": "upstream unavailable" }))).into_response()
+        }
+    }
+}
+
+pub async fn proxy_bulk_tag(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/entities/bulk/tag", &headers, bytes_to_value(body)).await
+}
+
+// ── Quality Analytics & Trend Scorecards ─────────────────────────────────────
+
+pub async fn proxy_quality_trends(
+    State(state):                        State<AppState>,
+    headers:                             HeaderMap,
+    axum::extract::RawQuery(query):      axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        "/analytics/quality-trends",
+        query.as_deref(),
+        &headers,
+    ).await
+}
+
+pub async fn proxy_quality_dimensions(
+    State(state):                        State<AppState>,
+    headers:                             HeaderMap,
+    axum::extract::RawQuery(query):      axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        "/analytics/quality-dimensions",
+        query.as_deref(),
+        &headers,
+    ).await
+}
+
+pub async fn proxy_source_quality(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_get_with_service_auth(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        "/analytics/source-quality",
+        &headers,
+    ).await
+}
+
+pub async fn proxy_trigger_quality_snapshot(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/analytics/quality-snapshot", &headers, bytes_to_value(body)).await
+}
+
+// ── Hierarchy Management ─────────────────────────────────────────────────────
+
+pub async fn proxy_hierarchy_roots(
+    State(state):                        State<AppState>,
+    headers:                             HeaderMap,
+    axum::extract::RawQuery(query):      axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        "/entities/hierarchy/roots",
+        query.as_deref(),
+        &headers,
+    ).await
+}
+
+pub async fn proxy_entity_children(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/children", id);
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_entity_ancestors(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/ancestors", id);
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_entity_subtree(
+    State(state):                        State<AppState>,
+    Path(id):                            Path<Uuid>,
+    headers:                             HeaderMap,
+    axum::extract::RawQuery(query):      axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        &format!("/entities/{}/subtree", id),
+        query.as_deref(),
+        &headers,
+    ).await
+}
+
+pub async fn proxy_set_entity_parent(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    let path = format!("/entities/{}/parent", id);
+    forward_patch(&state.services.http, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+// ── Temporal / Bitemporal Records ────────────────────────────────────────────
+
+pub async fn proxy_entity_history(
+    State(state):                   State<AppState>,
+    Path(id):                       Path<Uuid>,
+    headers:                        HeaderMap,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        &format!("/entities/{}/history", id),
+        query.as_deref(),
+        &headers,
+    ).await
+}
+
+pub async fn proxy_entity_as_of(
+    State(state):                   State<AppState>,
+    Path(id):                       Path<Uuid>,
+    headers:                        HeaderMap,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        &format!("/entities/{}/as-of", id),
+        query.as_deref(),
+        &headers,
+    ).await
+}
+
+pub async fn proxy_entity_bitemporal(
+    State(state):                   State<AppState>,
+    Path(id):                       Path<Uuid>,
+    headers:                        HeaderMap,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        &format!("/entities/{}/bitemporal", id),
+        query.as_deref(),
+        &headers,
+    ).await
+}
+
+// ── Data Profiling ───────────────────────────────────────────────────────────
+
+pub async fn proxy_get_profile(
+    State(state):  State<AppState>,
+    Path(et):      Path<String>,
+    headers:       HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/data-profiling/{}", et);
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_run_profile(
+    State(state): State<AppState>,
+    Path(et):     Path<String>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    let path = format!("/data-profiling/{}/run", et);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+// ── Task Assignment & SLA ────────────────────────────────────────────────────
+
+pub async fn proxy_list_tasks(
+    State(state):                   State<AppState>,
+    headers:                        HeaderMap,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        "/tasks",
+        query.as_deref(),
+        &headers,
+    ).await
+}
+
+pub async fn proxy_create_task(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/tasks", &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_update_task(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    let path = format!("/tasks/{}", id);
+    forward_patch(&state.services.http, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_check_sla(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/tasks/check-sla", &headers, bytes_to_value(body)).await
+}
+
+// ── Reference Data Management ────────────────────────────────────────────────
+
+pub async fn proxy_list_reference_lists(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_get_with_service_auth(&state.services.http, &state.settings.mdm_core_url, "/reference-data", &headers).await
+}
+
+pub async fn proxy_create_reference_list(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/reference-data", &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_get_reference_values(
+    State(state):                   State<AppState>,
+    Path(list_id):                  Path<Uuid>,
+    headers:                        HeaderMap,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+) -> impl IntoResponse {
+    forward_get_with_query(
+        &state.services.http,
+        &state.settings.mdm_core_url,
+        &format!("/reference-data/{}/values", list_id),
+        query.as_deref(),
+        &headers,
+    ).await
+}
+
+pub async fn proxy_upsert_reference_value(
+    State(state): State<AppState>,
+    Path(list_id): Path<Uuid>,
+    headers:       HeaderMap,
+    body:          Bytes,
+) -> impl IntoResponse {
+    let path = format!("/reference-data/{}/values", list_id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_bulk_import_ref_values(
+    State(state): State<AppState>,
+    Path(list_id): Path<Uuid>,
+    headers:       HeaderMap,
+    body:          Bytes,
+) -> impl IntoResponse {
+    let path = format!("/reference-data/{}/values/bulk", list_id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, bytes_to_value(body)).await
+}
+
+pub async fn proxy_delete_reference_value(
+    State(state):           State<AppState>,
+    Path((list_id, val_id)): Path<(Uuid, Uuid)>,
+    headers:                HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/reference-data/{}/values/{}", list_id, val_id);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}

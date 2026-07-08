@@ -108,6 +108,32 @@ use routes::{
         // AI suggestions (approval-gated LLM proposals)
         list_ai_suggestions, approve_ai_suggestion, reject_ai_suggestion,
         trigger_address_parse, trigger_anomaly_detection, trigger_enrichment,
+        // Cross-reference / ID mapping
+        proxy_list_entity_xrefs, proxy_upsert_entity_xref,
+        proxy_delete_entity_xref, proxy_lookup_by_xref,
+        // Entity comments
+        proxy_list_entity_comments, proxy_add_entity_comment,
+        proxy_edit_entity_comment, proxy_delete_entity_comment,
+        // Unmerge / entity split
+        proxy_unmerge_entity, proxy_get_unmerge_history,
+        // Bulk operations
+        proxy_bulk_update_status, proxy_bulk_export, proxy_bulk_tag,
+        // Quality analytics & scorecards
+        proxy_quality_trends, proxy_quality_dimensions,
+        proxy_source_quality, proxy_trigger_quality_snapshot,
+        // Hierarchy management
+        proxy_hierarchy_roots, proxy_entity_children, proxy_entity_ancestors,
+        proxy_entity_subtree, proxy_set_entity_parent,
+        // Temporal / bitemporal records
+        proxy_entity_history, proxy_entity_as_of, proxy_entity_bitemporal,
+        // Data profiling
+        proxy_get_profile, proxy_run_profile,
+        // Task assignment & SLA
+        proxy_list_tasks, proxy_create_task, proxy_update_task, proxy_check_sla,
+        // Reference data management
+        proxy_list_reference_lists, proxy_create_reference_list,
+        proxy_get_reference_values, proxy_upsert_reference_value,
+        proxy_bulk_import_ref_values, proxy_delete_reference_value,
     },
 };
 
@@ -438,6 +464,27 @@ async fn main() {
             .route("/entities/:id/ai-suggestions/enrichment",    post(trigger_enrichment))
             .route("/ai-suggestions/:id/approve",                patch(approve_ai_suggestion))
             .route("/ai-suggestions/:id/reject",                 patch(reject_ai_suggestion))
+            // Cross-reference writes
+            .route("/entities/:id/xrefs",                        post(proxy_upsert_entity_xref))
+            .route("/entities/:entity_id/xrefs/:xref_id",        delete(proxy_delete_entity_xref))
+            // Entity comment writes
+            .route("/entities/:id/comments",                     post(proxy_add_entity_comment))
+            .route("/entities/:entity_id/comments/:comment_id",  patch(proxy_edit_entity_comment).delete(proxy_delete_entity_comment))
+            // Unmerge (write — steward minimum)
+            .route("/entities/:id/unmerge",                      post(proxy_unmerge_entity))
+            // Bulk operations (steward minimum)
+            .route("/entities/bulk/status",                      post(proxy_bulk_update_status))
+            .route("/entities/bulk/export",                      post(proxy_bulk_export))
+            .route("/entities/bulk/tag",                         post(proxy_bulk_tag))
+            // Hierarchy parent assignment (write)
+            .route("/entities/:id/parent",                       patch(proxy_set_entity_parent))
+            // Task management (steward minimum — create + update own tasks)
+            .route("/tasks",                                     post(proxy_create_task))
+            .route("/tasks/:id",                                 patch(proxy_update_task))
+            // Reference data writes (steward can add values; list creation is admin)
+            .route("/reference-data/:list_id/values",            post(proxy_upsert_reference_value))
+            .route("/reference-data/:list_id/values/bulk",       post(proxy_bulk_import_ref_values))
+            .route("/reference-data/:list_id/values/:value_id",  delete(proxy_delete_reference_value))
             .layer(axum_middleware::from_fn(require_steward))
     );
 
@@ -494,12 +541,24 @@ async fn main() {
             .route("/admin/quality-rules/:id",                         patch(update_quality_rule).delete(delete_quality_rule))
             .route("/admin/quality-violations/:id/resolve",            patch(resolve_quality_violation))
             .route("/admin/quality-violations/bulk-resolve",           post(bulk_resolve_violations))
+            // Quality analytics: manual snapshot trigger (admin only)
+            .route("/analytics/quality-snapshot",                      post(proxy_trigger_quality_snapshot))
+            // Data profiling: run profiling job (admin/steward-lead)
+            .route("/data-profiling/:entity_type/run",                 post(proxy_run_profile))
+            // Task SLA breach check (admin/scheduled job)
+            .route("/tasks/check-sla",                                 post(proxy_check_sla))
+            // Reference data list management (admin creates/manages code lists)
+            .route("/reference-data",                                  post(proxy_create_reference_list))
             .layer(axum_middleware::from_fn(require_admin))
     );
 
     // ── 2g. Tenant data routes — read-only, any authenticated tenant role ─────
     let tenant_data_routes = common_layers(
         Router::new()
+            // Hierarchy reads — must come BEFORE /:id routes
+            .route("/entities/hierarchy/roots",          get(proxy_hierarchy_roots))
+            // XRef lookup — must come before /:id
+            .route("/xrefs/lookup",                      get(proxy_lookup_by_xref))
             // Entity reads
             .route("/entities",                          get(list_entities))
             .route("/entities/:id",                      get(get_entity_by_id))
@@ -531,6 +590,31 @@ async fn main() {
             // Distribution reads
             .route("/distribution/jobs",                 get(list_distribution_jobs))
             .route("/distribution/jobs/:id",             get(get_distribution_job))
+            // Cross-reference reads
+            .route("/entities/:id/xrefs",                get(proxy_list_entity_xrefs))
+            // Entity comments reads
+            .route("/entities/:id/comments",             get(proxy_list_entity_comments))
+            // Unmerge history (read)
+            .route("/entities/:id/unmerge-history",      get(proxy_get_unmerge_history))
+            // Hierarchy reads
+            .route("/entities/:id/children",             get(proxy_entity_children))
+            .route("/entities/:id/ancestors",            get(proxy_entity_ancestors))
+            .route("/entities/:id/subtree",              get(proxy_entity_subtree))
+            // Quality analytics reads
+            .route("/analytics/quality-trends",          get(proxy_quality_trends))
+            .route("/analytics/quality-dimensions",      get(proxy_quality_dimensions))
+            .route("/analytics/source-quality",          get(proxy_source_quality))
+            // Temporal / bitemporal records (reads — any authenticated user)
+            .route("/entities/:id/history",              get(proxy_entity_history))
+            .route("/entities/:id/as-of",                get(proxy_entity_as_of))
+            .route("/entities/:id/bitemporal",           get(proxy_entity_bitemporal))
+            // Data profiling (reads)
+            .route("/data-profiling/:entity_type",       get(proxy_get_profile))
+            // Tasks (reads — user sees own tasks; admin sees all via query param)
+            .route("/tasks",                             get(proxy_list_tasks))
+            // Reference data (reads — all authenticated users need for dropdowns)
+            .route("/reference-data",                    get(proxy_list_reference_lists))
+            .route("/reference-data/:list_id/values",   get(proxy_get_reference_values))
     );
 
     // ── 3. Shared routes — any authenticated user ─────────────────────────────

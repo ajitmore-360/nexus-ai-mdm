@@ -78,9 +78,15 @@ use handlers::{
         list_pending_approvals, my_assigned_types, reject_entity, submit_for_review,
     },
     branding::{get_branding, upsert_branding},
+    bulk::{bulk_export_entities, bulk_tag_entities, bulk_update_entity_status},
+    comments::{add_entity_comment, delete_entity_comment, edit_entity_comment, list_entity_comments},
     distribution::{
         cancel_distribution_job, create_distribution_job, get_distribution_job,
         list_distribution_jobs, queue_distribution_job,
+    },
+    hierarchy::{
+        get_entity_ancestors, get_entity_children, get_entity_subtree,
+        get_hierarchy_roots, set_entity_parent,
     },
     notifications::{
         list_notifications, mark_all_read, mark_notification_read, unread_count,
@@ -105,6 +111,10 @@ use handlers::{
     matching::execute_match,
     merge::execute_merge,
     policy::{get_weights, update_weights, get_survivorship_suggestions, list_gdpr_requests},
+    quality_analytics::{
+        get_dimension_breakdown, get_quality_trends, get_source_quality_ranking,
+        trigger_quality_snapshot,
+    },
     relationships::{
         list_relationship_types, create_relationship_type, delete_relationship_type,
         list_entity_relationships, create_entity_relationship, delete_entity_relationship,
@@ -113,6 +123,7 @@ use handlers::{
         approve_match, get_review_queue, reject_match,
         queue_metrics, bulk_approve_matches, bulk_reject_matches, defer_match, assign_review,
     },
+    unmerge::{get_unmerge_history, unmerge_entity},
     users::{accept_invite, change_password, change_role, invite_info, invite_user, list_users,
             login, request_password_reset, reset_password, sso_exchange},
     submasters::{
@@ -129,6 +140,14 @@ use handlers::{
         trigger_address_parse, trigger_anomaly, trigger_enrichment,
         list_suggestions, approve_suggestion, reject_suggestion,
     },
+    data_profiling::{get_profile, run_profile},
+    reference_data::{
+        list_reference_lists, create_reference_list,
+        get_reference_values, upsert_reference_value, bulk_import_values, delete_reference_value,
+    },
+    tasks::{list_tasks, create_task, update_task, check_sla_breaches},
+    temporal::{get_version_history, get_entity_as_of, get_entity_bitemporal},
+    xref::{delete_entity_xref, list_entity_xrefs, lookup_by_xref, upsert_entity_xref},
 };
 use middleware::{
     auth::auth_middleware,
@@ -138,8 +157,11 @@ use services::{
     ai_suggestion_service::AiSuggestionService,
     audit_service::AuditService,
     branding_service::BrandingService,
+    bulk_service::BulkService,
+    comment_service::CommentService,
     data_quality_service::DataQualityService,
     distribution_service::DistributionService,
+    hierarchy_service::HierarchyService,
     license_service::LicenseService,
     notification_service::NotificationService,
     domain_policy_service::DomainPolicyService,
@@ -147,9 +169,16 @@ use services::{
     golden_record_service::GoldenRecordService,
     matching_service::MatchingService,
     merge_service::MergeService,
+    data_profile_service::DataProfileService,
+    quality_analytics_service::QualityAnalyticsService,
+    reference_data_service::ReferenceDataService,
     relationship_service::RelationshipService,
     review_service::ReviewService,
     survivorship_service::SurvivorshipService,
+    task_service::TaskService,
+    temporal_service::TemporalService,
+    unmerge_service::UnmergeService,
+    xref_service::XrefService,
 };
 use matching::{
     Matcher,
@@ -236,6 +265,36 @@ pub struct AppState {
 
     pub notification_service:
         Arc<NotificationService>,
+
+    pub bulk_service:
+        Arc<BulkService>,
+
+    pub comment_service:
+        Arc<CommentService>,
+
+    pub hierarchy_service:
+        Arc<HierarchyService>,
+
+    pub quality_analytics_service:
+        Arc<QualityAnalyticsService>,
+
+    pub data_profile_service:
+        Arc<DataProfileService>,
+
+    pub reference_data_service:
+        Arc<ReferenceDataService>,
+
+    pub task_service:
+        Arc<TaskService>,
+
+    pub temporal_service:
+        Arc<TemporalService>,
+
+    pub unmerge_service:
+        Arc<UnmergeService>,
+
+    pub xref_service:
+        Arc<XrefService>,
 
     /// Live matching policy — can be updated at runtime via PATCH /policy/weights
     /// without restarting the service.
@@ -499,6 +558,14 @@ fn build_router(
             .allow_credentials(true);
 
     let protected = Router::new()
+        // Hierarchy — static routes BEFORE /:id
+        .route("/entities/hierarchy/roots",   get(get_hierarchy_roots))
+        // Bulk operations — static routes BEFORE /:id to avoid route collision
+        .route("/entities/bulk/status",       post(bulk_update_entity_status))
+        .route("/entities/bulk/export",       post(bulk_export_entities))
+        .route("/entities/bulk/tag",          post(bulk_tag_entities))
+        // XRef lookup — static route BEFORE /:id
+        .route("/xrefs/lookup",               get(lookup_by_xref))
         // Approval workflow — static routes BEFORE /:id to avoid Axum ambiguity
         .route("/entities/pending-approvals", get(list_pending_approvals))
         .route("/entities/bulk-approve",      post(bulk_approve_entities))
@@ -530,6 +597,24 @@ fn build_router(
         // Entity relationship routes
         .route("/entities/:id/relationships",     get(list_entity_relationships).post(create_entity_relationship))
         .route("/relationships/:id",              delete(delete_entity_relationship))
+        // Cross-reference / ID mapping
+        .route("/entities/:id/xrefs",             get(list_entity_xrefs).post(upsert_entity_xref))
+        .route("/entities/:entity_id/xrefs/:xref_id", delete(delete_entity_xref))
+        // Entity comments & collaboration
+        .route("/entities/:id/comments",                           get(list_entity_comments).post(add_entity_comment))
+        .route("/entities/:entity_id/comments/:comment_id",        patch(edit_entity_comment).delete(delete_entity_comment))
+        // Unmerge / entity split
+        .route("/entities/:id/unmerge",           post(unmerge_entity))
+        .route("/entities/:id/unmerge-history",   get(get_unmerge_history))
+        // Hierarchy
+        .route("/entities/:id/children",          get(get_entity_children))
+        .route("/entities/:id/ancestors",         get(get_entity_ancestors))
+        .route("/entities/:id/subtree",           get(get_entity_subtree))
+        .route("/entities/:id/parent",            patch(set_entity_parent))
+        // Temporal / bitemporal records
+        .route("/entities/:id/history",           get(get_version_history))
+        .route("/entities/:id/as-of",             get(get_entity_as_of))
+        .route("/entities/:id/bitemporal",        get(get_entity_bitemporal))
         // /search is served by the dedicated search-service via api-gateway
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
@@ -630,6 +715,11 @@ fn build_router(
             get(my_assigned_types))
         .route("/governance/assignments/:id",
             delete(delete_assignment))
+        // ── Quality analytics & trend scorecards ─────────────────────────────
+        .route("/analytics/quality-trends",       axum::routing::get(get_quality_trends))
+        .route("/analytics/quality-dimensions",   axum::routing::get(get_dimension_breakdown))
+        .route("/analytics/source-quality",       axum::routing::get(get_source_quality_ranking))
+        .route("/analytics/quality-snapshot",     axum::routing::post(trigger_quality_snapshot))
         // ── Quality rules & violations ────────────────────────────────────────
         .route("/quality-rules",
             get(list_quality_rules).post(create_quality_rule))
@@ -658,6 +748,27 @@ fn build_router(
             post(trigger_anomaly))
         .route("/entities/:entity_id/ai-suggestions/enrichment",
             post(trigger_enrichment))
+        // ── Data profiling (attribute-level statistics + outliers) ─────────────
+        .route("/data-profiling/:entity_type",
+            get(get_profile))
+        .route("/data-profiling/:entity_type/run",
+            post(run_profile))
+        // ── Task assignment & SLA ─────────────────────────────────────────────
+        .route("/tasks",
+            get(list_tasks).post(create_task))
+        .route("/tasks/:id",
+            patch(update_task))
+        .route("/tasks/check-sla",
+            post(check_sla_breaches))
+        // ── Reference data management (code lists) ────────────────────────────
+        .route("/reference-data",
+            get(list_reference_lists).post(create_reference_list))
+        .route("/reference-data/:list_id/values",
+            get(get_reference_values).post(upsert_reference_value))
+        .route("/reference-data/:list_id/values/bulk",
+            post(bulk_import_values))
+        .route("/reference-data/:list_id/values/:value_id",
+            delete(delete_reference_value))
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
 
@@ -1030,12 +1141,22 @@ async fn main() {
         Arc::new(matching_repository.clone()),
     ));
 
-    let license_service       = Arc::new(LicenseService::new(db.clone()));
-    let branding_service      = Arc::new(BrandingService::new(db.clone()));
-    let audit_service         = Arc::new(AuditService::new(db.clone()));
-    let notification_service  = Arc::new(NotificationService::new(db.clone()));
-    let data_quality_service  = Arc::new(DataQualityService::new(db.clone()));
-    let distribution_service  = Arc::new(DistributionService::new(db.clone()));
+    let license_service             = Arc::new(LicenseService::new(db.clone()));
+    let branding_service            = Arc::new(BrandingService::new(db.clone()));
+    let audit_service               = Arc::new(AuditService::new(db.clone()));
+    let notification_service        = Arc::new(NotificationService::new(db.clone()));
+    let data_quality_service        = Arc::new(DataQualityService::new(db.clone()));
+    let distribution_service        = Arc::new(DistributionService::new(db.clone()));
+    let bulk_service                = Arc::new(BulkService::new(db.clone()));
+    let comment_service             = Arc::new(CommentService::new(db.clone()));
+    let hierarchy_service           = Arc::new(HierarchyService::new(db.clone()));
+    let quality_analytics_service   = Arc::new(QualityAnalyticsService::new(db.clone()));
+    let unmerge_service             = Arc::new(UnmergeService::new(db.clone()));
+    let xref_service                = Arc::new(XrefService::new(db.clone()));
+    let data_profile_service        = Arc::new(DataProfileService::new(db.clone()));
+    let reference_data_service      = Arc::new(ReferenceDataService::new(db.clone()));
+    let task_service                = Arc::new(TaskService::new(db.clone()));
+    let temporal_service            = Arc::new(TemporalService::new(db.clone()));
     let ai_service_url        = std::env::var("AI_SERVICE_URL")
         .unwrap_or_else(|_| "http://ai-service:8082".to_string());
     let ai_suggestion_service = Arc::new(AiSuggestionService::new(db.clone(), ai_service_url));
@@ -1078,6 +1199,16 @@ async fn main() {
             data_quality_service,
             ai_suggestion_service,
             distribution_service,
+            bulk_service,
+            comment_service,
+            hierarchy_service,
+            quality_analytics_service,
+            data_profile_service,
+            reference_data_service,
+            task_service,
+            temporal_service,
+            unmerge_service,
+            xref_service,
             matching_policy:    live_policy,
             redis_rate_limiter: login_rate_limiter,
             task_queue:         task_queue_for_state,
