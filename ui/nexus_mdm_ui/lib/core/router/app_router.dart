@@ -40,6 +40,15 @@ import '../../features/admin/presentation/pages/approval_queue_page.dart';
 import '../../features/admin/presentation/pages/domain_policy_page.dart';
 import '../../features/admin/presentation/pages/submasters_page.dart';
 import '../../features/auth/presentation/pages/auth_callback_page.dart';
+import '../../features/tasks/presentation/pages/tasks_page.dart';
+import '../../features/entities/presentation/pages/entity_xrefs_page.dart';
+import '../../features/entities/presentation/pages/entity_comments_page.dart';
+import '../../features/entities/presentation/pages/entity_history_page.dart';
+import '../../features/entities/presentation/pages/entity_hierarchy_page.dart';
+import '../../features/entities/presentation/pages/entity_unmerge_page.dart';
+import '../../features/entities/presentation/pages/bulk_operations_page.dart';
+import '../../features/analytics/presentation/pages/quality_analytics_page.dart';
+import '../../features/data_quality/presentation/pages/data_profiling_page.dart';
 
 class AppRouter {
   AppRouter._();
@@ -144,6 +153,14 @@ class AppRouter {
             ),
           ),
           GoRoute(
+            path: '/dashboard/entities/bulk',
+            name: 'entity-bulk',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const BulkOperationsPage(),
+            ),
+          ),
+          GoRoute(
             path: '/dashboard/entities',
             name: 'entities',
             pageBuilder: (context, state) => _buildFadePage(
@@ -170,6 +187,49 @@ class AppRouter {
                         entityId: state.pathParameters['id']!,
                         entity: state.extra as CanonicalEntity?,
                       ),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'xrefs',
+                    name: 'entity-xrefs',
+                    pageBuilder: (context, state) => _buildFadePage(
+                      state: state,
+                      child: EntityXrefsPage(entityId: state.pathParameters['id']!),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'comments',
+                    name: 'entity-comments',
+                    pageBuilder: (context, state) => _buildFadePage(
+                      state: state,
+                      child: EntityCommentsPage(entityId: state.pathParameters['id']!),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'history',
+                    name: 'entity-history',
+                    pageBuilder: (context, state) => _buildFadePage(
+                      state: state,
+                      child: EntityHistoryPage(entityId: state.pathParameters['id']!),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'hierarchy',
+                    name: 'entity-hierarchy',
+                    pageBuilder: (context, state) => _buildFadePage(
+                      state: state,
+                      child: EntityHierarchyPage(
+                        entityId: state.pathParameters['id']!,
+                        entityName: state.uri.queryParameters['name'] ?? '',
+                      ),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'unmerge',
+                    name: 'entity-unmerge',
+                    pageBuilder: (context, state) => _buildFadePage(
+                      state: state,
+                      child: EntityUnmergePage(entityId: state.pathParameters['id']!),
                     ),
                   ),
                 ],
@@ -383,6 +443,30 @@ class AppRouter {
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
               child: const SubmastersPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/tasks',
+            name: 'tasks',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const TasksPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/quality-analytics',
+            name: 'quality-analytics',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const QualityAnalyticsPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/data-profiling',
+            name: 'data-profiling',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const DataProfilingPage(),
             ),
           ),
         ],

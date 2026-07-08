@@ -83,6 +83,24 @@ class AppConstants {
   // Notifications & webhooks
   static const String notificationsPath  = '/v1/notifications';
   static const String webhooksPath       = '/v1/webhooks';
+  // Phase 1/2 feature paths
+  static const String xrefsPath              = '/v1/entities';   // + /:id/xrefs
+  static const String commentsPath           = '/v1/entities';   // + /:id/comments
+  static const String temporalHistoryPath    = '/v1/entities';   // + /:id/history
+  static const String hierarchyPath         = '/v1/entities';    // + /:id/children|ancestors
+  static const String hierarchyRootsPath    = '/v1/entities/hierarchy/roots';
+  static const String unmergeBasePath       = '/v1/entities';    // + /:id/unmerge
+  static const String bulkStatusPath        = '/v1/entities/bulk/status';
+  static const String bulkExportPath        = '/v1/entities/bulk/export';
+  static const String bulkTagPath           = '/v1/entities/bulk/tag';
+  static const String qualityTrendsPath     = '/v1/analytics/quality-trends';
+  static const String qualityDimensionPath  = '/v1/analytics/quality-dimensions';
+  static const String sourceQualityPath     = '/v1/analytics/source-quality';
+  static const String dataProfilingBase     = '/v1/data-profiling';  // + /:entity_type
+  static const String tasksPath             = '/v1/tasks';
+  static const String refDataPath           = '/v1/reference-data';
+  static const String transformationRulesPath = '/v1/transformation-rules';
+  static const String partyRolesBase        = '/v1/entities';    // + /:id/roles
   // License & domain management
   static const String licensePath        = '/v1/license';
   static const String brandingPath       = '/v1/tenant/branding';

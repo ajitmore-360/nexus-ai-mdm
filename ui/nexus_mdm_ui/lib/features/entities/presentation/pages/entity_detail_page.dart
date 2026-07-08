@@ -494,6 +494,29 @@ class _EntityDetailPageState extends State<EntityDetailPage>
                     icon: const Icon(Icons.edit_outlined, size: 16),
                     label: const Text('Edit'),
                   ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert),
+                    tooltip: 'More actions',
+                    color: AppColors.surface,
+                    onSelected: (v) {
+                      final id = _entity!.id;
+                      final name = Uri.encodeQueryComponent(entity.displayName);
+                      switch (v) {
+                        case 'xrefs':     context.push('/dashboard/entities/$id/xrefs');
+                        case 'comments':  context.push('/dashboard/entities/$id/comments');
+                        case 'history':   context.push('/dashboard/entities/$id/history');
+                        case 'hierarchy': context.push('/dashboard/entities/$id/hierarchy?name=$name');
+                        case 'unmerge':   context.push('/dashboard/entities/$id/unmerge');
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'xrefs',     child: ListTile(leading: Icon(Icons.link_outlined),           title: Text('Cross-References'), dense: true)),
+                      PopupMenuItem(value: 'comments',  child: ListTile(leading: Icon(Icons.chat_bubble_outline),     title: Text('Comments'),         dense: true)),
+                      PopupMenuItem(value: 'history',   child: ListTile(leading: Icon(Icons.history),                 title: Text('Version History'),  dense: true)),
+                      PopupMenuItem(value: 'hierarchy', child: ListTile(leading: Icon(Icons.account_tree_outlined),   title: Text('Hierarchy'),         dense: true)),
+                      PopupMenuItem(value: 'unmerge',   child: ListTile(leading: Icon(Icons.call_split_outlined),     title: Text('Unmerge'),          dense: true)),
+                    ],
+                  ),
                 ],
               ).animate(delay: 200.ms).fadeIn(),
             ],
