@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Query, State},
+    extract::State,
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Extension, Json,

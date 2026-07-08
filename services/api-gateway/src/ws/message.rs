@@ -12,6 +12,7 @@ use uuid::Uuid;
 //
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct WsClientMessage {
 
     pub tenant_id: Uuid,
@@ -30,6 +31,7 @@ pub struct WsClientMessage {
 //
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct WsServerMessage {
 
     pub event: String,

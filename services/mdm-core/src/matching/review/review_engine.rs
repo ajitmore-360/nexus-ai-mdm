@@ -14,10 +14,12 @@ use crate::matching::{
     policy::MatchingPolicy,
 };
 
+#[allow(dead_code)]
 pub struct ReviewEngine {
     policy: Arc<MatchingPolicy>,
 }
 
+#[allow(dead_code)]
 impl ReviewEngine {
     pub fn new(policy: Arc<MatchingPolicy>) -> Self {
         Self { policy }

@@ -16,6 +16,7 @@ use nexus_auth::{Claims, Role};
 ///
 /// Service-to-service calls (API_BEARER_TOKEN without JWT claims) are allowed
 /// through because they originate from trusted internal services, not end users.
+#[allow(dead_code)]
 pub async fn block_super_admin(
     request: Request,
     next:    Next,

@@ -37,6 +37,7 @@ struct LicenseApiResponse {
 }
 
 /// In-process license cache type alias for use in AppState.
+#[allow(dead_code)]
 pub type LicenseCache = Arc<DashMap<Uuid, (LicenseCacheEntry, Instant)>>;
 
 /// Returns the minimum tier required to use the given feature.

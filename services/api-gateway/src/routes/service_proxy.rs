@@ -1777,7 +1777,7 @@ pub async fn proxy_bulk_update_status(
 
 pub async fn proxy_bulk_export(
     State(state): State<AppState>,
-    headers:      HeaderMap,
+    _headers:     HeaderMap,
     body:         Bytes,
 ) -> impl IntoResponse {
     // Pass-through: mdm-core returns text/csv with Content-Disposition headers.

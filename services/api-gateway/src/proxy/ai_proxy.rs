@@ -4,7 +4,6 @@ use futures_util::TryStreamExt;
 use reqwest::StatusCode;
 use serde_json::{json, Value};
 
-use crate::proxy::circuit_breaker::CircuitBreaker;
 use crate::state::AppState;
 
 const MAX_ATTEMPTS: u32 = 3;

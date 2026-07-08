@@ -32,6 +32,7 @@ pub async fn send_invite_email(
 // Push-notification email dispatch (existing, kept for webhook/notify flow)
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 pub async fn dispatch(pool: &PgPool, notif: &PushNotification, to: &str) -> Result<()> {
     let subject = &notif.title;
     let html    = format!("<p>{}</p>", &notif.body);

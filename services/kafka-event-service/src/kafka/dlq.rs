@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 /// Re-insert a single DLQ event back into `outbox_events` with retry_count=0
 /// so the worker picks it up on the next poll cycle.
+#[allow(dead_code)]
 pub async fn replay_dlq_event(pool: &PgPool, event_id: Uuid) -> Result<()> {
     let mut tx = pool.begin().await?;
 
@@ -39,6 +40,7 @@ pub async fn replay_dlq_event(pool: &PgPool, event_id: Uuid) -> Result<()> {
 
 /// Replay every event in the DLQ back into `outbox_events`.
 /// Returns the number of events re-queued.
+#[allow(dead_code)]
 pub async fn replay_all_dlq_events(pool: &PgPool) -> Result<usize> {
     let mut tx = pool.begin().await?;
 
@@ -68,6 +70,7 @@ pub async fn replay_all_dlq_events(pool: &PgPool) -> Result<usize> {
 }
 
 /// Return the number of events currently in the DLQ.
+#[allow(dead_code)]
 pub async fn dlq_depth(pool: &PgPool) -> Result<i64> {
     let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM event_store.outbox_dlq")
         .fetch_one(pool)

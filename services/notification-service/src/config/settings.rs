@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub struct NotificationSettings {
     pub port:             u16,
     pub database_url:     String,

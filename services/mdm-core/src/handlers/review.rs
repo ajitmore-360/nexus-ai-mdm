@@ -464,6 +464,7 @@ pub async fn bulk_reject_matches(
 #[derive(Deserialize)]
 pub struct DeferBody {
     pub reason:   Option<String>,
+    #[allow(dead_code)]
     pub due_date: Option<String>,
 }
 

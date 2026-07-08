@@ -108,6 +108,7 @@ struct CreateWebhookRequest {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct WebhookSubscription {
     subscription_id: Uuid,
     tenant_id:       Uuid,

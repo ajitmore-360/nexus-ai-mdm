@@ -7,6 +7,7 @@ use uuid::Uuid;
 /// Poll interval — conservative start; tune down to 5s once delivery_log grows.
 const POLL_INTERVAL_SECS: u64 = 10;
 /// Max attempts before a delivery is permanently marked failed.
+#[allow(dead_code)]
 const MAX_ATTEMPTS: i32 = 5;
 
 /// Background worker — runs forever, delivering pending webhook notifications.

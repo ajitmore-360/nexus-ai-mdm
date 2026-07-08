@@ -14,6 +14,7 @@ use crate::kafka::producer::apply_security;
 ///
 /// SASL/TLS settings are picked up from the same environment variables as the
 /// producer — see `kafka::producer::apply_security`.
+#[allow(dead_code)]
 pub fn create_consumer(brokers: &str, group_id: &str) -> Result<StreamConsumer> {
     let mut cfg = ClientConfig::new();
     cfg.set("bootstrap.servers", brokers)

@@ -129,6 +129,7 @@ impl Encoder {
 
     /// Embed a batch of texts, returning vectors in the same order.
     /// Errors on individual items are returned as empty vectors.
+    #[allow(dead_code)]
     pub async fn encode_batch(&self, texts: &[String]) -> Vec<Vec<f32>> {
         let mut results = Vec::with_capacity(texts.len());
         for text in texts {
@@ -139,6 +140,7 @@ impl Encoder {
     }
 
     /// Build entity text from attributes JSON and embed it.
+    #[allow(dead_code)]
     pub async fn embed_entity(&self, attributes: &Value) -> Result<Vec<f32>> {
         let text = entity_to_text(attributes);
         self.encode(&text).await

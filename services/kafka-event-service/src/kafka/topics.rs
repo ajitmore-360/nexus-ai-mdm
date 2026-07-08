@@ -2,6 +2,7 @@
 // These constants are used when writing outbox events in mdm-core, ingest-service, etc.
 // The kafka-event-service reads topic_name directly from each outbox row — it doesn't
 // need to reference these constants itself.  They live here as the single authoritative list.
+#![allow(dead_code)]
 
 pub const ENTITY_CREATED:   &str = "nexus.mdm.entity.created";
 pub const ENTITY_UPDATED:   &str = "nexus.mdm.entity.updated";

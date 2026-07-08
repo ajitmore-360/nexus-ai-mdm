@@ -112,6 +112,7 @@ impl PolicyRepository {
         Ok(result.rows_affected() > 0)
     }
 
+    #[allow(dead_code)]
     pub async fn update_status(
         &self,
         rule_id:   Uuid,
