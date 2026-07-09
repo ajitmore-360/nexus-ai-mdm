@@ -159,6 +159,19 @@ use handlers::{
         get_sso_config, upsert_sso_config, delete_sso_config,
         list_scim_tokens, create_scim_token, revoke_scim_token,
     },
+    workflows::{
+        list_step_types, list_workflows, get_workflow, create_workflow,
+        update_workflow, delete_workflow, toggle_workflow,
+        list_workflow_runs, trigger_workflow,
+    },
+    connectors::{
+        list_catalog, list_instances, get_instance, create_instance,
+        update_instance, delete_instance, test_instance,
+    },
+    enrichment::{
+        list_providers, list_configs, upsert_config, delete_config,
+        list_requests, trigger_provider_enrichment,
+    },
     scim::{
         scim_service_provider_config, scim_schemas, scim_resource_types,
         scim_list_users, scim_get_user, scim_create_user,
@@ -175,6 +188,9 @@ use services::{
     ai_suggestion_service::AiSuggestionService,
     sso_service::SsoService,
     scim_service::ScimService,
+    workflow_service::WorkflowService,
+    connector_service::ConnectorService,
+    enrichment_service::EnrichmentService,
     audit_service::AuditService,
     branding_service::BrandingService,
     bulk_service::BulkService,
@@ -329,6 +345,15 @@ pub struct AppState {
 
     pub scim_service:
         Arc<ScimService>,
+
+    pub workflow_service:
+        Arc<WorkflowService>,
+
+    pub connector_service:
+        Arc<ConnectorService>,
+
+    pub enrichment_service:
+        Arc<EnrichmentService>,
 
     /// Live matching policy — can be updated at runtime via PATCH /policy/weights
     /// without restarting the service.
@@ -833,6 +858,39 @@ fn build_router(
             get(list_scim_tokens).post(create_scim_token))
         .route("/scim/tokens/:id",
             delete(revoke_scim_token))
+        // ── Workflow Engine ───────────────────────────────────────────────────
+        .route("/workflow-step-types",
+            get(list_step_types))
+        .route("/workflows",
+            get(list_workflows).post(create_workflow))
+        .route("/workflows/:id",
+            get(get_workflow).put(update_workflow).delete(delete_workflow))
+        .route("/workflows/:id/toggle",
+            put(toggle_workflow))
+        .route("/workflows/:id/runs",
+            get(list_workflow_runs))
+        .route("/workflows/:id/trigger",
+            post(trigger_workflow))
+        // ── Certified Connectors ──────────────────────────────────────────────
+        .route("/connector-catalog",
+            get(list_catalog))
+        .route("/connectors",
+            get(list_instances).post(create_instance))
+        .route("/connectors/:id",
+            get(get_instance).put(update_instance).delete(delete_instance))
+        .route("/connectors/:id/test",
+            post(test_instance))
+        // ── Third-Party Enrichment ────────────────────────────────────────────
+        .route("/enrichment-providers",
+            get(list_providers))
+        .route("/enrichment-configs",
+            get(list_configs))
+        .route("/enrichment-configs/:provider_code",
+            put(upsert_config).delete(delete_config))
+        .route("/enrichment-requests",
+            get(list_requests))
+        .route("/entities/:entity_id/enrich/:provider_code",
+            post(trigger_provider_enrichment))
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
 
@@ -1255,8 +1313,11 @@ async fn main() {
 
     let base_url = std::env::var("BASE_URL")
         .unwrap_or_else(|_| "http://localhost:8081".to_string());
-    let sso_service  = Arc::new(SsoService::new(db.clone()));
-    let scim_service = Arc::new(ScimService::new(db.clone(), base_url));
+    let sso_service        = Arc::new(SsoService::new(db.clone()));
+    let scim_service       = Arc::new(ScimService::new(db.clone(), base_url));
+    let workflow_service   = Arc::new(WorkflowService::new(db.clone()));
+    let connector_service  = Arc::new(ConnectorService::new(db.clone()));
+    let enrichment_service = Arc::new(EnrichmentService::new(db.clone()));
 
     //
     // ====================================
@@ -1310,6 +1371,9 @@ async fn main() {
             xref_service,
             sso_service,
             scim_service,
+            workflow_service,
+            connector_service,
+            enrichment_service,
             matching_policy:    live_policy,
             redis_rate_limiter: login_rate_limiter,
             task_queue:         task_queue_for_state,

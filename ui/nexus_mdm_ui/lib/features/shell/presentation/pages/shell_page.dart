@@ -148,6 +148,12 @@ class _ShellPageState extends State<ShellPage> {
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
         _NavItem(icon: Icons.token_outlined,                label: 'SCIM Tokens',     route: '/dashboard/org/scim-tokens',
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+        _NavItem(icon: Icons.account_tree_outlined,        label: 'Workflows',        route: '/dashboard/org/workflows',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+        _NavItem(icon: Icons.extension_outlined,           label: 'Connectors',       route: '/dashboard/org/connectors',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+        _NavItem(icon: Icons.auto_awesome_outlined,        label: 'Enrichment',       route: '/dashboard/org/enrichment',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
       ],
     ),
 
@@ -993,6 +999,9 @@ class _ShellPageState extends State<ShellPage> {
     if (location.startsWith('/dashboard/settings')) return 'Settings';
     if (location.startsWith('/dashboard/org/sso')) return 'Enterprise SSO';
     if (location.startsWith('/dashboard/org/scim-tokens')) return 'SCIM 2.0 Provisioning';
+    if (location.startsWith('/dashboard/org/workflows')) return 'Workflow Engine';
+    if (location.startsWith('/dashboard/org/connectors')) return 'Connector Marketplace';
+    if (location.startsWith('/dashboard/org/enrichment')) return 'Third-Party Enrichment';
     return BrandingManager.productName;
   }
 

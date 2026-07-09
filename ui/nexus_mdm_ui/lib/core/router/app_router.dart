@@ -51,6 +51,9 @@ import '../../features/analytics/presentation/pages/quality_analytics_page.dart'
 import '../../features/data_quality/presentation/pages/data_profiling_page.dart';
 import '../../features/admin/presentation/pages/sso_config_page.dart';
 import '../../features/admin/presentation/pages/scim_tokens_page.dart';
+import '../../features/admin/presentation/pages/workflow_builder_page.dart';
+import '../../features/admin/presentation/pages/connector_marketplace_page.dart';
+import '../../features/admin/presentation/pages/enrichment_config_page.dart';
 
 class AppRouter {
   AppRouter._();
@@ -485,6 +488,30 @@ class AppRouter {
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
               child: const ScimTokensPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/org/workflows',
+            name: 'org-workflows',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const WorkflowBuilderPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/org/connectors',
+            name: 'org-connectors',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const ConnectorMarketplacePage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/org/enrichment',
+            name: 'org-enrichment',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const EnrichmentConfigPage(),
             ),
           ),
         ],

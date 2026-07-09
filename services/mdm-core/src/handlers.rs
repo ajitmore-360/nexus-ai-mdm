@@ -36,6 +36,9 @@ pub mod users;
 pub mod xref;
 pub mod sso;
 pub mod scim;
+pub mod workflows;
+pub mod connectors;
+pub mod enrichment;
 
 /// Standard API response wrapper used by all handlers.
 #[derive(Debug, Serialize)]

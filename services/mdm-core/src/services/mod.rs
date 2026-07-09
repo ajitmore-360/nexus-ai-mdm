@@ -27,3 +27,6 @@ pub mod unmerge_service;
 pub mod xref_service;
 pub mod sso_service;
 pub mod scim_service;
+pub mod workflow_service;
+pub mod connector_service;
+pub mod enrichment_service;
