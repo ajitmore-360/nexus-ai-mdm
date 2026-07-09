@@ -66,31 +66,30 @@ impl WorkflowService {
     }
 
     pub async fn list_definitions(&self, tenant_id: Uuid) -> Result<Vec<WorkflowDefinition>, StatusCode> {
-        sqlx::query_as!(
-            WorkflowDefinition,
-            r#"SELECT workflow_id, tenant_id, name, description, trigger_type,
-                      trigger_config, steps, is_active, version, created_by,
-                      created_at, updated_at
-               FROM core_mdm.workflow_definitions
-               WHERE tenant_id = $1
-               ORDER BY created_at DESC"#,
-            tenant_id
+        sqlx::query_as::<_, WorkflowDefinition>(
+            "SELECT workflow_id, tenant_id, name, description, trigger_type,
+                    trigger_config, steps, is_active, version, created_by,
+                    created_at, updated_at
+             FROM core_mdm.workflow_definitions
+             WHERE tenant_id = $1
+             ORDER BY created_at DESC"
         )
+        .bind(tenant_id)
         .fetch_all(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
 
     pub async fn get_definition(&self, tenant_id: Uuid, workflow_id: Uuid) -> Result<WorkflowDefinition, StatusCode> {
-        sqlx::query_as!(
-            WorkflowDefinition,
-            r#"SELECT workflow_id, tenant_id, name, description, trigger_type,
-                      trigger_config, steps, is_active, version, created_by,
-                      created_at, updated_at
-               FROM core_mdm.workflow_definitions
-               WHERE tenant_id = $1 AND workflow_id = $2"#,
-            tenant_id, workflow_id
+        sqlx::query_as::<_, WorkflowDefinition>(
+            "SELECT workflow_id, tenant_id, name, description, trigger_type,
+                    trigger_config, steps, is_active, version, created_by,
+                    created_at, updated_at
+             FROM core_mdm.workflow_definitions
+             WHERE tenant_id = $1 AND workflow_id = $2"
         )
+        .bind(tenant_id)
+        .bind(workflow_id)
         .fetch_optional(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -106,17 +105,22 @@ impl WorkflowService {
         let trigger_config = req.trigger_config.unwrap_or(serde_json::json!({}));
         let is_active = req.is_active.unwrap_or(true);
 
-        sqlx::query_as!(
-            WorkflowDefinition,
-            r#"INSERT INTO core_mdm.workflow_definitions
-                   (tenant_id, name, description, trigger_type, trigger_config, steps, is_active, created_by)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-               RETURNING workflow_id, tenant_id, name, description, trigger_type,
-                         trigger_config, steps, is_active, version, created_by,
-                         created_at, updated_at"#,
-            tenant_id, req.name, req.description, req.trigger_type,
-            trigger_config, req.steps, is_active, actor
+        sqlx::query_as::<_, WorkflowDefinition>(
+            "INSERT INTO core_mdm.workflow_definitions
+                 (tenant_id, name, description, trigger_type, trigger_config, steps, is_active, created_by)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+             RETURNING workflow_id, tenant_id, name, description, trigger_type,
+                       trigger_config, steps, is_active, version, created_by,
+                       created_at, updated_at"
         )
+        .bind(tenant_id)
+        .bind(req.name)
+        .bind(req.description)
+        .bind(req.trigger_type)
+        .bind(trigger_config)
+        .bind(req.steps)
+        .bind(is_active)
+        .bind(actor)
         .fetch_one(&self.db)
         .await
         .map_err(|e| {
@@ -133,18 +137,23 @@ impl WorkflowService {
         let trigger_config = req.trigger_config.unwrap_or(serde_json::json!({}));
         let is_active = req.is_active.unwrap_or(true);
 
-        sqlx::query_as!(
-            WorkflowDefinition,
-            r#"UPDATE core_mdm.workflow_definitions
-               SET name=$3, description=$4, trigger_type=$5, trigger_config=$6,
-                   steps=$7, is_active=$8, version=version+1, updated_at=NOW()
-               WHERE tenant_id=$1 AND workflow_id=$2
-               RETURNING workflow_id, tenant_id, name, description, trigger_type,
-                         trigger_config, steps, is_active, version, created_by,
-                         created_at, updated_at"#,
-            tenant_id, workflow_id, req.name, req.description,
-            req.trigger_type, trigger_config, req.steps, is_active
+        sqlx::query_as::<_, WorkflowDefinition>(
+            "UPDATE core_mdm.workflow_definitions
+             SET name=$3, description=$4, trigger_type=$5, trigger_config=$6,
+                 steps=$7, is_active=$8, version=version+1, updated_at=NOW()
+             WHERE tenant_id=$1 AND workflow_id=$2
+             RETURNING workflow_id, tenant_id, name, description, trigger_type,
+                       trigger_config, steps, is_active, version, created_by,
+                       created_at, updated_at"
         )
+        .bind(tenant_id)
+        .bind(workflow_id)
+        .bind(req.name)
+        .bind(req.description)
+        .bind(req.trigger_type)
+        .bind(trigger_config)
+        .bind(req.steps)
+        .bind(is_active)
         .fetch_optional(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -152,10 +161,11 @@ impl WorkflowService {
     }
 
     pub async fn delete_definition(&self, tenant_id: Uuid, workflow_id: Uuid) -> Result<(), StatusCode> {
-        let rows = sqlx::query!(
-            "DELETE FROM core_mdm.workflow_definitions WHERE tenant_id=$1 AND workflow_id=$2",
-            tenant_id, workflow_id
+        let rows = sqlx::query(
+            "DELETE FROM core_mdm.workflow_definitions WHERE tenant_id=$1 AND workflow_id=$2"
         )
+        .bind(tenant_id)
+        .bind(workflow_id)
         .execute(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -165,32 +175,33 @@ impl WorkflowService {
     }
 
     pub async fn toggle_definition(&self, tenant_id: Uuid, workflow_id: Uuid) -> Result<bool, StatusCode> {
-        let row = sqlx::query!(
-            r#"UPDATE core_mdm.workflow_definitions
-               SET is_active = NOT is_active, updated_at = NOW()
-               WHERE tenant_id=$1 AND workflow_id=$2
-               RETURNING is_active"#,
-            tenant_id, workflow_id
+        let is_active = sqlx::query_scalar::<_, bool>(
+            "UPDATE core_mdm.workflow_definitions
+             SET is_active = NOT is_active, updated_at = NOW()
+             WHERE tenant_id=$1 AND workflow_id=$2
+             RETURNING is_active"
         )
+        .bind(tenant_id)
+        .bind(workflow_id)
         .fetch_optional(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
 
-        Ok(row.is_active)
+        Ok(is_active)
     }
 
     pub async fn list_runs(&self, tenant_id: Uuid, workflow_id: Uuid) -> Result<Vec<WorkflowRun>, StatusCode> {
-        sqlx::query_as!(
-            WorkflowRun,
-            r#"SELECT run_id, workflow_id, tenant_id, trigger_event, trigger_payload,
-                      status, current_step, step_results, error_message,
-                      started_at, completed_at
-               FROM core_mdm.workflow_runs
-               WHERE tenant_id=$1 AND workflow_id=$2
-               ORDER BY started_at DESC LIMIT 100"#,
-            tenant_id, workflow_id
+        sqlx::query_as::<_, WorkflowRun>(
+            "SELECT run_id, workflow_id, tenant_id, trigger_event, trigger_payload,
+                    status, current_step, step_results, error_message,
+                    started_at, completed_at
+             FROM core_mdm.workflow_runs
+             WHERE tenant_id=$1 AND workflow_id=$2
+             ORDER BY started_at DESC LIMIT 100"
         )
+        .bind(tenant_id)
+        .bind(workflow_id)
         .fetch_all(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
@@ -202,28 +213,28 @@ impl WorkflowService {
         workflow_id: Uuid,
         payload: Value,
     ) -> Result<WorkflowRun, StatusCode> {
-        sqlx::query_as!(
-            WorkflowRun,
-            r#"INSERT INTO core_mdm.workflow_runs
-                   (workflow_id, tenant_id, trigger_event, trigger_payload)
-               VALUES ($1, $2, 'manual', $3)
-               RETURNING run_id, workflow_id, tenant_id, trigger_event, trigger_payload,
-                         status, current_step, step_results, error_message,
-                         started_at, completed_at"#,
-            workflow_id, tenant_id, payload
+        sqlx::query_as::<_, WorkflowRun>(
+            "INSERT INTO core_mdm.workflow_runs
+                 (workflow_id, tenant_id, trigger_event, trigger_payload)
+             VALUES ($1, $2, 'manual', $3)
+             RETURNING run_id, workflow_id, tenant_id, trigger_event, trigger_payload,
+                       status, current_step, step_results, error_message,
+                       started_at, completed_at"
         )
+        .bind(workflow_id)
+        .bind(tenant_id)
+        .bind(payload)
         .fetch_one(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
 
     pub async fn list_step_types(&self) -> Result<Vec<WorkflowStepType>, StatusCode> {
-        sqlx::query_as!(
-            WorkflowStepType,
-            r#"SELECT step_type_code, display_name, category,
-                      config_schema, icon, is_system
-               FROM core_mdm.workflow_step_types
-               ORDER BY category, display_name"#
+        sqlx::query_as::<_, WorkflowStepType>(
+            "SELECT step_type_code, display_name, category,
+                    config_schema, icon, is_system
+             FROM core_mdm.workflow_step_types
+             ORDER BY category, display_name"
         )
         .fetch_all(&self.db)
         .await

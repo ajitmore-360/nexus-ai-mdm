@@ -2,7 +2,7 @@
 
 enum LicensedModule {
   // Professional tier
-  aiCopilot,
+  aiPrism,
   dataQuality,
   analytics,
   governance,

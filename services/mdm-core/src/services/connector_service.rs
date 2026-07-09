@@ -53,14 +53,13 @@ impl ConnectorService {
     }
 
     pub async fn list_catalog(&self) -> Result<Vec<ConnectorCatalogEntry>, StatusCode> {
-        sqlx::query_as!(
-            ConnectorCatalogEntry,
-            r#"SELECT connector_code, display_name, vendor, category, connector_type,
-                      description, logo_url, config_schema, auth_type, is_certified,
-                      is_active, docs_url
-               FROM core_mdm.connector_catalog
-               WHERE is_active = TRUE
-               ORDER BY category, display_name"#
+        sqlx::query_as::<_, ConnectorCatalogEntry>(
+            "SELECT connector_code, display_name, vendor, category, connector_type,
+                    description, logo_url, config_schema, auth_type, is_certified,
+                    is_active, docs_url
+             FROM core_mdm.connector_catalog
+             WHERE is_active = TRUE
+             ORDER BY category, display_name"
         )
         .fetch_all(&self.db)
         .await
@@ -68,31 +67,30 @@ impl ConnectorService {
     }
 
     pub async fn list_instances(&self, tenant_id: Uuid) -> Result<Vec<TenantConnector>, StatusCode> {
-        sqlx::query_as!(
-            TenantConnector,
-            r#"SELECT connector_instance_id, tenant_id, connector_code, instance_name,
-                      config, is_active, last_sync_at, sync_status, sync_error,
-                      created_at, updated_at
-               FROM core_mdm.tenant_connectors
-               WHERE tenant_id = $1
-               ORDER BY created_at DESC"#,
-            tenant_id
+        sqlx::query_as::<_, TenantConnector>(
+            "SELECT connector_instance_id, tenant_id, connector_code, instance_name,
+                    config, is_active, last_sync_at, sync_status, sync_error,
+                    created_at, updated_at
+             FROM core_mdm.tenant_connectors
+             WHERE tenant_id = $1
+             ORDER BY created_at DESC"
         )
+        .bind(tenant_id)
         .fetch_all(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
 
     pub async fn get_instance(&self, tenant_id: Uuid, instance_id: Uuid) -> Result<TenantConnector, StatusCode> {
-        sqlx::query_as!(
-            TenantConnector,
-            r#"SELECT connector_instance_id, tenant_id, connector_code, instance_name,
-                      config, is_active, last_sync_at, sync_status, sync_error,
-                      created_at, updated_at
-               FROM core_mdm.tenant_connectors
-               WHERE tenant_id=$1 AND connector_instance_id=$2"#,
-            tenant_id, instance_id
+        sqlx::query_as::<_, TenantConnector>(
+            "SELECT connector_instance_id, tenant_id, connector_code, instance_name,
+                    config, is_active, last_sync_at, sync_status, sync_error,
+                    created_at, updated_at
+             FROM core_mdm.tenant_connectors
+             WHERE tenant_id=$1 AND connector_instance_id=$2"
         )
+        .bind(tenant_id)
+        .bind(instance_id)
         .fetch_optional(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -107,16 +105,19 @@ impl ConnectorService {
     ) -> Result<TenantConnector, StatusCode> {
         let config = req.config.unwrap_or(serde_json::json!({}));
 
-        sqlx::query_as!(
-            TenantConnector,
-            r#"INSERT INTO core_mdm.tenant_connectors
-                   (tenant_id, connector_code, instance_name, config, created_by)
-               VALUES ($1,$2,$3,$4,$5)
-               RETURNING connector_instance_id, tenant_id, connector_code, instance_name,
-                         config, is_active, last_sync_at, sync_status, sync_error,
-                         created_at, updated_at"#,
-            tenant_id, req.connector_code, req.instance_name, config, actor
+        sqlx::query_as::<_, TenantConnector>(
+            "INSERT INTO core_mdm.tenant_connectors
+                 (tenant_id, connector_code, instance_name, config, created_by)
+             VALUES ($1,$2,$3,$4,$5)
+             RETURNING connector_instance_id, tenant_id, connector_code, instance_name,
+                       config, is_active, last_sync_at, sync_status, sync_error,
+                       created_at, updated_at"
         )
+        .bind(tenant_id)
+        .bind(req.connector_code)
+        .bind(req.instance_name)
+        .bind(config)
+        .bind(actor)
         .fetch_one(&self.db)
         .await
         .map_err(|e| {
@@ -133,16 +134,17 @@ impl ConnectorService {
         instance_id: Uuid,
         config: Value,
     ) -> Result<TenantConnector, StatusCode> {
-        sqlx::query_as!(
-            TenantConnector,
-            r#"UPDATE core_mdm.tenant_connectors
-               SET config=$3, updated_at=NOW()
-               WHERE tenant_id=$1 AND connector_instance_id=$2
-               RETURNING connector_instance_id, tenant_id, connector_code, instance_name,
-                         config, is_active, last_sync_at, sync_status, sync_error,
-                         created_at, updated_at"#,
-            tenant_id, instance_id, config
+        sqlx::query_as::<_, TenantConnector>(
+            "UPDATE core_mdm.tenant_connectors
+             SET config=$3, updated_at=NOW()
+             WHERE tenant_id=$1 AND connector_instance_id=$2
+             RETURNING connector_instance_id, tenant_id, connector_code, instance_name,
+                       config, is_active, last_sync_at, sync_status, sync_error,
+                       created_at, updated_at"
         )
+        .bind(tenant_id)
+        .bind(instance_id)
+        .bind(config)
         .fetch_optional(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -150,10 +152,11 @@ impl ConnectorService {
     }
 
     pub async fn delete_instance(&self, tenant_id: Uuid, instance_id: Uuid) -> Result<(), StatusCode> {
-        let rows = sqlx::query!(
-            "DELETE FROM core_mdm.tenant_connectors WHERE tenant_id=$1 AND connector_instance_id=$2",
-            tenant_id, instance_id
+        let rows = sqlx::query(
+            "DELETE FROM core_mdm.tenant_connectors WHERE tenant_id=$1 AND connector_instance_id=$2"
         )
+        .bind(tenant_id)
+        .bind(instance_id)
         .execute(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
@@ -164,11 +167,10 @@ impl ConnectorService {
 
     /// Stub connectivity test — in production this would open a real connection.
     pub async fn test_instance(&self, _tenant_id: Uuid, instance_id: Uuid) -> Result<Value, StatusCode> {
-        // Mark as running, then idle (real implementation would call the connector SDK)
-        sqlx::query!(
-            "UPDATE core_mdm.tenant_connectors SET sync_status='idle', last_sync_at=NOW() WHERE connector_instance_id=$1",
-            instance_id
+        sqlx::query(
+            "UPDATE core_mdm.tenant_connectors SET sync_status='idle', last_sync_at=NOW() WHERE connector_instance_id=$1"
         )
+        .bind(instance_id)
         .execute(&self.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

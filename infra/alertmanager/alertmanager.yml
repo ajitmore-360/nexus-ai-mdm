@@ -39,7 +39,7 @@ receivers:
   - name: default
     webhook_configs:
       # Set ALERTMANAGER_WEBHOOK_URL in infra/.env to receive alerts
-      - url: '${ALERTMANAGER_WEBHOOK_URL:-http://localhost:9999/alert}'
+      - url: 'http://localhost:9999/alert'
         send_resolved: true
         http_config:
           follow_redirects: true
