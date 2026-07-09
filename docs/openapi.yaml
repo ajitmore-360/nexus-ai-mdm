@@ -1,162 +1,4122 @@
-openapi: 3.1.0
+openapi: "3.1.0"
 info:
   title: Nexus AI MDM API
-  version: 0.1.0
+  version: "3.1.0"
   description: |
-    Hub-and-spoke MDM platform. Entities can be authored in MDM (`mdm_authoritative`)
-    and distributed to downstream systems via outbox/Kafka events.
+    Nexus AI MDM is a hub-and-spoke Master Data Management platform built on Rust microservices.
+
+    ## Services
+    | Service | Port | Purpose |
+    |---------|------|---------|
+    | API Gateway | 8080 | Single entry point; auth + rate-limit + proxy |
+    | MDM Core | 8081 | Entities, matching, merge, approval, admin config |
+    | AI Service | 8082 | LLM copilot, embeddings, semantic matching, RAG |
+    | Policy Service | 8083 | Policy evaluation, GDPR, consent |
+    | Ingest Service | 8084 | Batch/CSV/REST ingestion, source systems |
+    | Search Service | 8085 | Full-text search, autocomplete |
+    | Notification Service | 8086 | In-app notifications, webhooks, email |
+
+    ## Authentication
+    All protected endpoints require a JWT Bearer token obtained from `POST /auth/login`.
+    SCIM 2.0 endpoints use a separate SCIM bearer token obtained from `POST /scim/tokens`.
+
+    Standard request headers:
+    - `Authorization: Bearer <jwt>` — JWT from login
+    - `x-tenant-id` — Tenant UUID (injected by gateway; required on direct calls)
+    - `x-correlation-id` — Optional idempotency / tracing ID
+
+  contact:
+    name: Nexus MDM Support
+    email: ajit.more@lithytree.com
+  license:
+    name: Proprietary
 
 servers:
-  - url: http://127.0.0.1:8080
-    description: API Gateway
-  - url: http://127.0.0.1:8081
+  - url: http://localhost:8080
+    description: API Gateway (recommended entry point)
+  - url: http://localhost:8081
     description: MDM Core (direct)
-
-tags:
-  - name: health
-  - name: entities
-  - name: matching
-  - name: survivorship
-  - name: ai
+  - url: http://localhost:8082
+    description: AI Service (direct)
+  - url: http://localhost:8084
+    description: Ingest Service (direct)
 
 security:
   - bearerAuth: []
 
+tags:
+  - name: Health
+    description: Liveness and readiness probes
+  - name: Authentication
+    description: Login, token refresh, password management, SSO exchange
+  - name: Users
+    description: User management and role assignment
+  - name: Entities
+    description: Core entity CRUD and lifecycle
+  - name: Entity Types
+    description: Entity type and attribute schema configuration
+  - name: Relationships
+    description: Entity-to-entity relationship management
+  - name: Cross-References
+    description: External system ID mapping
+  - name: Entity Hierarchy
+    description: Parent-child tree operations
+  - name: History & Bitemporal
+    description: Version history and point-in-time queries
+  - name: Comments
+    description: Entity comments and collaboration
+  - name: Matching
+    description: Duplicate detection, review queue, bulk decisions
+  - name: Merge & Unmerge
+    description: Entity merge and split operations
+  - name: Golden Records
+    description: Survivorship-managed canonical records
+  - name: Lineage
+    description: Data lineage graph and statistics
+  - name: Data Quality
+    description: Quality rules, violations, and analytics
+  - name: Data Profiling
+    description: Attribute-level statistical profiling
+  - name: Quality Analytics
+    description: Trend analysis and dimension breakdowns
+  - name: Governance
+    description: Data ownership and stewardship assignments
+  - name: Domain Policies
+    description: Per-entity-type policy overrides
+  - name: Transformation Rules
+    description: Attribute transformation DSL rules
+  - name: Reference Data
+    description: Controlled vocabulary lists and submaster types
+  - name: Party Roles
+    description: Functional role tags on entity records
+  - name: AI Suggestions
+    description: AI-generated enrichment and anomaly suggestions
+  - name: AI Copilot
+    description: LLM query, streaming, and RAG endpoints
+  - name: Ingestion
+    description: Batch, CSV, and REST data ingestion
+  - name: Source Systems
+    description: Source system configuration
+  - name: Distribution
+    description: Downstream distribution jobs
+  - name: Notifications
+    description: In-app notification management
+  - name: Notification Subscriptions
+    description: User subscription management
+  - name: Tasks
+    description: Workflow tasks and SLA management
+  - name: Dashboard
+    description: Dashboard statistics and activity feed
+  - name: Approval Workflow
+    description: Entity submit-for-review and approval/rejection
+  - name: Bulk Operations
+    description: Batch entity status changes, exports, tagging
+  - name: SSO Configuration
+    description: SAML 2.0 / OIDC identity provider configuration
+  - name: SCIM 2.0
+    description: RFC 7643/7644 user and group provisioning
+  - name: Administration
+    description: Tenant and license management (super-admin)
+  - name: Branding
+    description: Tenant branding customisation
+  - name: Audit
+    description: Immutable audit event log
+  - name: Policy Evaluation
+    description: Policy-service rule evaluation and GDPR endpoints
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────────────────────────────────────
 paths:
+
+  # ── Health ──────────────────────────────────────────────────────────────────
+
   /health:
     get:
-      tags: [health]
+      tags: [Health]
+      summary: Service health
       security: []
-      summary: Gateway health
       responses:
         "200":
-          description: OK
+          description: Service is healthy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthResponse" }
 
-  /entities:
+  /health/live:
+    get:
+      tags: [Health]
+      summary: Kubernetes liveness probe
+      security: []
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthResponse" }
+
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Kubernetes readiness probe (checks DB + dependencies)
+      security: []
+      responses:
+        "200":
+          description: Service is ready to receive traffic
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthResponse" }
+        "503":
+          description: Service is not ready
+
+  /metrics:
+    get:
+      tags: [Health]
+      summary: Prometheus metrics scrape endpoint
+      security: []
+      responses:
+        "200":
+          description: Prometheus text format metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  # ── Authentication ───────────────────────────────────────────────────────────
+
+  /auth/login:
     post:
-      tags: [entities]
-      summary: Create entity in MDM (hub authoring)
-      description: |
-        Persists a canonical entity. When `distribute` is true, emits
-        `EntityDistributionRequested` to the transactional outbox for
-        connector workers (Salesforce, SAP, webhooks, etc.).
-      parameters:
-        - $ref: "#/components/parameters/TenantId"
+      tags: [Authentication]
+      summary: Authenticate and obtain JWT tokens
+      security: []
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/CreateEntityRequest"
+            schema: { $ref: "#/components/schemas/LoginRequest" }
       responses:
-        "201":
-          description: Created
+        "200":
+          description: Authentication successful
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/accept-invite:
+    post:
+      tags: [Authentication]
+      summary: Accept invitation and set password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcceptInviteRequest" }
+      responses:
+        "200":
+          description: User created and logged in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
         "400":
-          description: Validation error
+          $ref: "#/components/responses/BadRequest"
 
-  /match:
-    post:
-      tags: [matching]
-      summary: Execute entity matching
+  /auth/invite-info:
+    get:
+      tags: [Authentication]
+      summary: Look up invite token details
+      security: []
       parameters:
-        - $ref: "#/components/parameters/TenantId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/MatchRequest"
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
       responses:
         "200":
-          description: Match results
+          description: Invite details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InviteInfo" }
+        "404":
+          $ref: "#/components/responses/NotFound"
 
-  /merge:
+  /auth/forgot-password:
     post:
-      tags: [survivorship]
-      summary: Apply survivorship rules and produce golden record
+      tags: [Authentication]
+      summary: Request a password-reset email
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required: [email, tenant_id]
+              properties:
+                email: { type: string, format: email }
+                tenant_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Reset email sent (always 200 to prevent email enumeration)
+
+  /auth/reset-password:
+    post:
+      tags: [Authentication]
+      summary: Reset password using token from email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token: { type: string }
+                new_password: { type: string, minLength: 8 }
+      responses:
+        "200":
+          description: Password updated
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /auth/change-password:
+    post:
+      tags: [Authentication]
+      summary: Change password (authenticated)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string }
+                new_password: { type: string, minLength: 8 }
+      responses:
+        "200":
+          description: Password changed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/sso-exchange:
+    post:
+      tags: [Authentication]
+      summary: Exchange SSO token for JWT pair
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sso_token]
+              properties:
+                sso_token: { type: string }
+      responses:
+        "200":
+          description: JWT pair issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── Users ────────────────────────────────────────────────────────────────────
+
+  /users:
+    get:
+      tags: [Users]
+      summary: List users in the current tenant
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/PaginatedResponse" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/UserSummary" }
+
+  /users/invite:
+    post:
+      tags: [Users]
+      summary: Invite a user by email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InviteUserRequest" }
+      responses:
+        "200":
+          description: Invite sent
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /users/{id}/role:
+    patch:
+      tags: [Users]
+      summary: Change a user's role
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { $ref: "#/components/schemas/Role" }
+      responses:
+        "200":
+          description: Role updated
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Entities ─────────────────────────────────────────────────────────────────
+
+  /entities:
+    get:
+      tags: [Entities]
+      summary: List / search entities
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { type: string }
+          description: Entity type code filter
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/EntityStatus" }
+        - name: source_system
+          in: query
+          schema: { type: string }
+        - name: sort_by
+          in: query
+          schema: { type: string, default: created_at }
+        - name: sort_dir
+          in: query
+          schema: { type: string, enum: [asc, desc], default: desc }
+      responses:
+        "200":
+          description: Entity list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/PaginatedResponse" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/EntitySummary" }
+
+    post:
+      tags: [Entities]
+      summary: Create a new entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateEntityRequest" }
+      responses:
+        "201":
+          description: Entity created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /entities/{id}:
+    get:
+      tags: [Entities]
+      summary: Get a single entity by ID
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Entity object
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/ApiResponse" }
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Entity" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags: [Entities]
+      summary: Partial update of an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                attributes: { type: object, additionalProperties: true }
+                status: { $ref: "#/components/schemas/EntityStatus" }
+      responses:
+        "200":
+          description: Entity updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /entities/{id}/gdpr-erase:
+    delete:
+      tags: [Entities]
+      summary: GDPR erasure — permanently remove PII from an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Entity PII erased
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Approval Workflow ────────────────────────────────────────────────────────
+
+  /entities/pending-approvals:
+    get:
+      tags: [Approval Workflow]
+      summary: List entities pending steward approval
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+      responses:
+        "200":
+          description: Pending entities
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /entities/{id}/submit-for-review:
+    post:
+      tags: [Approval Workflow]
+      summary: Submit an entity for steward review
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Submitted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /entities/{id}/approve:
+    post:
+      tags: [Approval Workflow]
+      summary: Approve an entity (steward/admin)
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes: { type: string }
+      responses:
+        "200":
+          description: Approved
+
+  /entities/{id}/reject:
+    post:
+      tags: [Approval Workflow]
+      summary: Reject an entity (steward/admin)
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes: { type: string }
+      responses:
+        "200":
+          description: Rejected
+
+  /entities/bulk-approve:
+    post:
+      tags: [Approval Workflow]
+      summary: Bulk approve entities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entity_ids]
+              properties:
+                entity_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Batch result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkResult" }
+
+  /entities/bulk-reject:
+    post:
+      tags: [Approval Workflow]
+      summary: Bulk reject entities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entity_ids]
+              properties:
+                entity_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                notes: { type: string }
+      responses:
+        "200":
+          description: Batch result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkResult" }
+
+  # ── Bulk Operations ──────────────────────────────────────────────────────────
+
+  /entities/bulk/status:
+    post:
+      tags: [Bulk Operations]
+      summary: Bulk update entity status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entity_ids, status]
+              properties:
+                entity_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                status: { $ref: "#/components/schemas/EntityStatus" }
+      responses:
+        "200":
+          description: Status updated
+
+  /entities/bulk/export:
+    post:
+      tags: [Bulk Operations]
+      summary: Bulk export entities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filters: { type: object }
+                format: { type: string, enum: [csv, json, parquet] }
+      responses:
+        "200":
+          description: Exported data or job ID
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /entities/bulk/tag:
+    post:
+      tags: [Bulk Operations]
+      summary: Bulk tag entities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entity_ids, tags]
+              properties:
+                entity_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                tags:
+                  type: array
+                  items: { type: string }
+      responses:
+        "200":
+          description: Tags applied
+
+  # ── Entity Hierarchy ─────────────────────────────────────────────────────────
+
+  /entities/hierarchy/roots:
+    get:
+      tags: [Entity Hierarchy]
+      summary: List root-level entities (no parent)
+      responses:
+        "200":
+          description: Root entities
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /entities/{id}/children:
+    get:
+      tags: [Entity Hierarchy]
+      summary: Get direct children of an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Children array
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /entities/{id}/ancestors:
+    get:
+      tags: [Entity Hierarchy]
+      summary: Get all ancestors up to root
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Ancestors array
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /entities/{id}/subtree:
+    get:
+      tags: [Entity Hierarchy]
+      summary: Get full subtree rooted at an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Nested subtree JSON
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /entities/{id}/parent:
+    patch:
+      tags: [Entity Hierarchy]
+      summary: Set parent entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parent_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+      responses:
+        "200":
+          description: Parent updated
+
+  # ── History & Bitemporal ─────────────────────────────────────────────────────
+
+  /entities/{id}/history:
+    get:
+      tags: [History & Bitemporal]
+      summary: Get version history for an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+      responses:
+        "200":
+          description: Version list (newest first)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /entities/{id}/as-of:
+    get:
+      tags: [History & Bitemporal]
+      summary: Get entity state at a specific point in time
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - name: timestamp
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Entity as it appeared at the given timestamp
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /entities/{id}/bitemporal:
+    get:
+      tags: [History & Bitemporal]
+      summary: Bitemporal query (valid-time × transaction-time)
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - name: valid_at
+          in: query
+          schema: { type: string, format: date-time }
+        - name: recorded_at
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Bitemporal view
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  # ── Comments ─────────────────────────────────────────────────────────────────
+
+  /entities/{id}/comments:
+    get:
+      tags: [Comments]
+      summary: List comments on an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Comments array
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Comments]
+      summary: Add a comment to an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+                metadata: { type: object, additionalProperties: true }
+      responses:
+        "201":
+          description: Comment created
+
+  /entities/{entity_id}/comments/{comment_id}:
+    patch:
+      tags: [Comments]
+      summary: Edit a comment
+      parameters:
+        - name: entity_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: comment_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+      responses:
+        "200":
+          description: Comment updated
+
+    delete:
+      tags: [Comments]
+      summary: Delete a comment
+      parameters:
+        - name: entity_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: comment_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Comment deleted
+
+  # ── Cross-References ─────────────────────────────────────────────────────────
+
+  /xrefs/lookup:
+    get:
+      tags: [Cross-References]
+      summary: Find entity by external system ID
+      parameters:
+        - name: system_code
+          in: query
+          required: true
+          schema: { type: string }
+        - name: external_id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Matching entity
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /entities/{id}/xrefs:
+    get:
+      tags: [Cross-References]
+      summary: List all external ID mappings for an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: XRef list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Cross-References]
+      summary: Add or update an external ID mapping
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [system_code, external_id]
+              properties:
+                system_code: { type: string }
+                external_id: { type: string }
+      responses:
+        "200":
+          description: XRef upserted
+
+  /entities/{entity_id}/xrefs/{xref_id}:
+    delete:
+      tags: [Cross-References]
+      summary: Delete an external ID mapping
+      parameters:
+        - name: entity_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: xref_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: XRef deleted
+
+  # ── Relationships ────────────────────────────────────────────────────────────
+
+  /entities/{id}/relationships:
+    get:
+      tags: [Relationships]
+      summary: List relationships for an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Relationships array
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Relationships]
+      summary: Create a relationship between entities
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRelationshipRequest" }
+      responses:
+        "201":
+          description: Relationship created
+
+  /relationships/{id}:
+    delete:
+      tags: [Relationships]
+      summary: Delete a relationship
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204":
+          description: Relationship deleted
+
+  /relationship-types:
+    get:
+      tags: [Relationships]
+      summary: List relationship type definitions
+      responses:
+        "200":
+          description: Relationship types
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Relationships]
+      summary: Create a relationship type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRelationshipTypeRequest" }
+      responses:
+        "201":
+          description: Type created
+
+  /relationship-types/{type_id}:
+    delete:
+      tags: [Relationships]
+      summary: Delete a relationship type
+      parameters:
+        - name: type_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Type deleted
+
+  # ── Unmerge ──────────────────────────────────────────────────────────────────
+
+  /entities/{id}/unmerge:
+    post:
+      tags: [Merge & Unmerge]
+      summary: Split source records back out of a merged entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [records_to_split]
+              properties:
+                records_to_split:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Unmerge executed
+
+  /entities/{id}/unmerge-history:
+    get:
+      tags: [Merge & Unmerge]
+      summary: Get unmerge history for an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Unmerge history array
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  # ── Party Roles ──────────────────────────────────────────────────────────────
+
+  /entities/{id}/roles:
+    get:
+      tags: [Party Roles]
+      summary: List party role assignments for an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Roles array
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Party Roles]
+      summary: Assign or update a party role on an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_code]
+              properties:
+                role_code: { type: string }
+                metadata: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Role upserted
+
+  /entities/{id}/roles/{role_code}:
+    delete:
+      tags: [Party Roles]
+      summary: Remove a party role from an entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - name: role_code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Role removed
+
+  /party-roles/by-role:
+    get:
+      tags: [Party Roles]
+      summary: Find all entities that have a specific role
+      parameters:
+        - name: role_code
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Entities with the role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  # ── Entity Types ─────────────────────────────────────────────────────────────
+
+  /entity-types:
+    get:
+      tags: [Entity Types]
+      summary: List entity type definitions
+      responses:
+        "200":
+          description: Entity types list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/ApiResponse" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/EntityType" }
+
+    post:
+      tags: [Entity Types]
+      summary: Create an entity type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateEntityTypeRequest" }
+      responses:
+        "201":
+          description: Entity type created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /entity-types/{id}:
+    patch:
+      tags: [Entity Types]
+      summary: Update an entity type
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description: { type: string }
+                is_active: { type: boolean }
+      responses:
+        "200":
+          description: Type updated
+
+    delete:
+      tags: [Entity Types]
+      summary: Delete an entity type (only if no entities use it)
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204":
+          description: Deleted
+
+  /entity-types/{code}/next-sequence:
+    get:
+      tags: [Entity Types]
+      summary: Get the next auto-increment sequence ID for an entity type
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Next sequence number
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/ApiResponse" }
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          next_sequence: { type: integer }
+
+  /entity-types/{code}/attributes:
+    get:
+      tags: [Entity Types]
+      summary: List attribute definitions for an entity type
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Attributes list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Entity Types]
+      summary: Add an attribute definition to an entity type
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttributeDefinition" }
+      responses:
+        "201":
+          description: Attribute created
+
+  /entity-types/{code}/attributes/{attr_id}:
+    delete:
+      tags: [Entity Types]
+      summary: Remove an attribute definition
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: attr_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Attribute deleted
+
+  /entity-types/{code}/attributes/order:
+    put:
+      tags: [Entity Types]
+      summary: Reorder attribute definitions
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [attr_ids]
+              properties:
+                attr_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Order updated
+
+  # ── Matching ─────────────────────────────────────────────────────────────────
+
+  /match:
+    post:
+      tags: [Matching]
+      summary: Execute duplicate detection for a candidate entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MatchRequest" }
+      responses:
+        "200":
+          description: Match results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatchResponse" }
+
+  /match/review-queue:
+    get:
+      tags: [Matching]
+      summary: Get the match review queue
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, assigned, deferred] }
+      responses:
+        "200":
+          description: Review queue items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /match/queue-metrics:
+    get:
+      tags: [Matching]
+      summary: Match queue statistics
+      responses:
+        "200":
+          description: Queue metrics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /match/{request_id}/candidates/{candidate_id}/approve:
+    post:
+      tags: [Matching]
+      summary: Approve a match candidate (mark as duplicate)
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: candidate_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes: { type: string }
+      responses:
+        "200":
+          description: Match approved
+
+  /match/{request_id}/candidates/{candidate_id}/reject:
+    post:
+      tags: [Matching]
+      summary: Reject a match candidate (not a duplicate)
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: candidate_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes: { type: string }
+      responses:
+        "200":
+          description: Match rejected
+
+  /match/{request_id}/candidates/{candidate_id}/defer:
+    post:
+      tags: [Matching]
+      summary: Defer a match decision
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: candidate_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [days_to_defer]
+              properties:
+                days_to_defer: { type: integer, minimum: 1, maximum: 90 }
+      responses:
+        "200":
+          description: Match deferred
+
+  /match/review-queue/{review_id}/assign:
+    patch:
+      tags: [Matching]
+      summary: Assign a review item to a steward
+      parameters:
+        - name: review_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assignee_id]
+              properties:
+                assignee_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Assigned
+
+  /match/bulk-approve:
+    post:
+      tags: [Matching]
+      summary: Bulk approve match requests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_ids]
+              properties:
+                request_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Batch approved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkResult" }
+
+  /match/bulk-reject:
+    post:
+      tags: [Matching]
+      summary: Bulk reject match requests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_ids]
+              properties:
+                request_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Batch rejected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkResult" }
+
+  # ── Merge ────────────────────────────────────────────────────────────────────
+
+  /merge:
+    post:
+      tags: [Merge & Unmerge]
+      summary: Merge two entities into one golden record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MergeRequest" }
+      responses:
+        "200":
+          description: Merge result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  # ── Golden Records ───────────────────────────────────────────────────────────
+
+  /golden-records:
+    get:
+      tags: [Golden Records]
+      summary: List golden records
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - name: entity_type
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Golden records list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /golden-records/{id}:
+    get:
+      tags: [Golden Records]
+      summary: Get a golden record
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
       responses:
         "200":
           description: Golden record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
 
-  /copilot:
-    post:
-      tags: [ai]
-      summary: AI copilot (MCP)
+  /golden-records/{id}/attributes:
+    patch:
+      tags: [Golden Records]
+      summary: Override survivorship attributes on a golden record
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: Attribute key-value overrides
       responses:
         "200":
-          description: MCP response
+          description: Attributes overridden
 
+  # ── Policy / Matching Weights ────────────────────────────────────────────────
+
+  /policy/weights:
+    get:
+      tags: [Matching]
+      summary: Get current matching field weights
+      responses:
+        "200":
+          description: Weights object
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    patch:
+      tags: [Matching]
+      summary: Update matching field weights
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: number
+                format: float
+      responses:
+        "200":
+          description: Weights updated
+
+  /policy/survivorship-suggestions:
+    get:
+      tags: [Golden Records]
+      summary: Get AI survivorship rule suggestions
+      parameters:
+        - name: entity_type
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Survivorship suggestions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /policy/gdpr/requests:
+    get:
+      tags: [Governance]
+      summary: List GDPR erasure/access requests
+      responses:
+        "200":
+          description: GDPR requests list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  # ── Domain Policies ──────────────────────────────────────────────────────────
+
+  /domain-policies:
+    get:
+      tags: [Domain Policies]
+      summary: List all domain policy overrides
+      responses:
+        "200":
+          description: Domain policies list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /domain-policies/{entity_type_code}:
+    get:
+      tags: [Domain Policies]
+      summary: Get domain policy for an entity type
+      parameters:
+        - name: entity_type_code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Domain policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [Domain Policies]
+      summary: Create or update domain policy for an entity type
+      parameters:
+        - name: entity_type_code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DomainPolicy" }
+      responses:
+        "200":
+          description: Policy saved
+
+    delete:
+      tags: [Domain Policies]
+      summary: Delete domain policy for an entity type
+      parameters:
+        - name: entity_type_code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Policy deleted
+
+  # ── Data Quality ─────────────────────────────────────────────────────────────
+
+  /quality-rules:
+    get:
+      tags: [Data Quality]
+      summary: List data quality rules
+      responses:
+        "200":
+          description: Rules list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Data Quality]
+      summary: Create a quality rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateQualityRuleRequest" }
+      responses:
+        "201":
+          description: Rule created
+
+  /quality-rules/reorder:
+    post:
+      tags: [Data Quality]
+      summary: Reorder quality rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rule_ids]
+              properties:
+                rule_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Reordered
+
+  /quality-rules/run:
+    post:
+      tags: [Data Quality]
+      summary: Execute quality rules for an entity type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entity_type]
+              properties:
+                entity_type: { type: string }
+      responses:
+        "200":
+          description: Rules executed
+
+  /quality-rules/{id}:
+    patch:
+      tags: [Data Quality]
+      summary: Update a quality rule
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                is_active: { type: boolean }
+      responses:
+        "200":
+          description: Rule updated
+
+    delete:
+      tags: [Data Quality]
+      summary: Delete a quality rule
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204":
+          description: Rule deleted
+
+  /quality-violations:
+    get:
+      tags: [Data Quality]
+      summary: List quality violations
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - name: entity_type
+          in: query
+          schema: { type: string }
+        - name: dimension
+          in: query
+          schema: { type: string }
+        - name: resolved
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Violations list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /quality-violations/{id}/resolve:
+    patch:
+      tags: [Data Quality]
+      summary: Resolve a quality violation
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resolution_notes: { type: string }
+      responses:
+        "200":
+          description: Violation resolved
+
+  /quality-violations/bulk-resolve:
+    post:
+      tags: [Data Quality]
+      summary: Bulk resolve violations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [violation_ids]
+              properties:
+                violation_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Batch resolved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkResult" }
+
+  # ── Data Profiling ───────────────────────────────────────────────────────────
+
+  /data-profiling/{entity_type}:
+    get:
+      tags: [Data Profiling]
+      summary: Get attribute-level statistical profile for an entity type
+      parameters:
+        - name: entity_type
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Profile statistics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /data-profiling/{entity_type}/run:
+    post:
+      tags: [Data Profiling]
+      summary: Trigger a new profiling run
+      parameters:
+        - name: entity_type
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          description: Profile run started
+
+  # ── Quality Analytics ────────────────────────────────────────────────────────
+
+  /analytics/quality-trends:
+    get:
+      tags: [Quality Analytics]
+      summary: Quality score trends over time
+      parameters:
+        - name: time_window
+          in: query
+          schema: { type: string, enum: [7d, 30d, 90d, 1y], default: 30d }
+        - name: entity_type
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Trend data points
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /analytics/quality-dimensions:
+    get:
+      tags: [Quality Analytics]
+      summary: Quality score breakdown by dimension
+      parameters:
+        - name: entity_type
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Dimension breakdown
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /analytics/source-quality:
+    get:
+      tags: [Quality Analytics]
+      summary: Quality score ranking by source system
+      responses:
+        "200":
+          description: Source system quality rankings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /analytics/quality-snapshot:
+    post:
+      tags: [Quality Analytics]
+      summary: Trigger a quality snapshot for analytics history
+      responses:
+        "202":
+          description: Snapshot scheduled
+
+  # ── Lineage ──────────────────────────────────────────────────────────────────
+
+  /entities/{id}/lineage:
+    get:
+      tags: [Lineage]
+      summary: Get lineage graph for a single entity
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - name: depth
+          in: query
+          schema: { type: integer, default: 3 }
+      responses:
+        "200":
+          description: Lineage graph
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /lineage:
+    get:
+      tags: [Lineage]
+      summary: List lineage edges
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+      responses:
+        "200":
+          description: Lineage edges
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Lineage]
+      summary: Record a lineage relationship
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_id, target_id, relationship]
+              properties:
+                source_id: { type: string, format: uuid }
+                target_id: { type: string, format: uuid }
+                relationship: { type: string }
+                metadata: { type: object, additionalProperties: true }
+      responses:
+        "201":
+          description: Lineage recorded
+
+  /lineage/graph:
+    get:
+      tags: [Lineage]
+      summary: Full tenant lineage graph (for visualization)
+      responses:
+        "200":
+          description: Graph nodes and edges
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /lineage/stats:
+    get:
+      tags: [Lineage]
+      summary: Lineage graph statistics
+      responses:
+        "200":
+          description: Graph statistics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  # ── Transformation Rules ─────────────────────────────────────────────────────
+
+  /transformation-rules:
+    get:
+      tags: [Transformation Rules]
+      summary: List transformation rules
+      responses:
+        "200":
+          description: Rules list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Transformation Rules]
+      summary: Create a transformation rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTransformationRuleRequest" }
+      responses:
+        "201":
+          description: Rule created
+
+  /transformation-rules/preview:
+    post:
+      tags: [Transformation Rules]
+      summary: Preview transformation output on sample data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rule_id, sample_value]
+              properties:
+                rule_id: { type: string, format: uuid }
+                sample_value: { type: string }
+      responses:
+        "200":
+          description: Transformed value
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /transformation-rules/{id}/toggle:
+    put:
+      tags: [Transformation Rules]
+      summary: Enable or disable a transformation rule
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Rule toggled
+
+  /transformation-rules/{id}:
+    delete:
+      tags: [Transformation Rules]
+      summary: Delete a transformation rule
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204":
+          description: Rule deleted
+
+  # ── Reference Data ───────────────────────────────────────────────────────────
+
+  /reference-data:
+    get:
+      tags: [Reference Data]
+      summary: List controlled vocabulary lists
+      responses:
+        "200":
+          description: Reference lists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Reference Data]
+      summary: Create a reference data list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, code]
+              properties:
+                name: { type: string }
+                code: { type: string }
+                description: { type: string }
+      responses:
+        "201":
+          description: List created
+
+  /reference-data/{list_id}/values:
+    get:
+      tags: [Reference Data]
+      summary: Get values in a reference list
+      parameters:
+        - name: list_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Values array
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Reference Data]
+      summary: Add or update a reference list value
+      parameters:
+        - name: list_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { type: string }
+                description: { type: string }
+                metadata: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Value upserted
+
+  /reference-data/{list_id}/values/bulk:
+    post:
+      tags: [Reference Data]
+      summary: Bulk import reference list values
+      parameters:
+        - name: list_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [values]
+              properties:
+                values:
+                  type: array
+                  items:
+                    type: object
+                    required: [value]
+                    properties:
+                      value: { type: string }
+                      description: { type: string }
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkResult" }
+
+  /reference-data/{list_id}/values/{value_id}:
+    delete:
+      tags: [Reference Data]
+      summary: Delete a reference list value
+      parameters:
+        - name: list_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: value_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Value deleted
+
+  /submasters:
+    get:
+      tags: [Reference Data]
+      summary: List submaster type definitions
+      responses:
+        "200":
+          description: Submaster types
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Reference Data]
+      summary: Create a submaster type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, code]
+              properties:
+                name: { type: string }
+                code: { type: string }
+                description: { type: string }
+      responses:
+        "201":
+          description: Submaster type created
+
+  /submasters/{code}:
+    patch:
+      tags: [Reference Data]
+      summary: Update a submaster type
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+      responses:
+        "200":
+          description: Updated
+
+  /submasters/{code}/values:
+    get:
+      tags: [Reference Data]
+      summary: List values in a submaster type
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Values array
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Reference Data]
+      summary: Create a submaster value
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { type: string }
+                description: { type: string }
+      responses:
+        "201":
+          description: Value created
+
+  /submasters/{code}/values/{value_id}:
+    patch:
+      tags: [Reference Data]
+      summary: Update a submaster value
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: value_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value: { type: string }
+                description: { type: string }
+      responses:
+        "200":
+          description: Updated
+
+    delete:
+      tags: [Reference Data]
+      summary: Delete a submaster value
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+        - name: value_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Deleted
+
+  # ── AI Suggestions ───────────────────────────────────────────────────────────
+
+  /ai-suggestions:
+    get:
+      tags: [AI Suggestions]
+      summary: List AI-generated suggestions for the current tenant
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - name: type
+          in: query
+          schema: { type: string, enum: [enrichment, anomaly, address_parse] }
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, approved, rejected] }
+      responses:
+        "200":
+          description: Suggestions list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /ai-suggestions/{id}/approve:
+    patch:
+      tags: [AI Suggestions]
+      summary: Apply an AI suggestion
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Suggestion applied
+
+  /ai-suggestions/{id}/reject:
+    patch:
+      tags: [AI Suggestions]
+      summary: Dismiss an AI suggestion
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Suggestion dismissed
+
+  /entities/{entity_id}/ai-suggestions/address-parse:
+    post:
+      tags: [AI Suggestions]
+      summary: Trigger AI address parsing for an entity
+      parameters:
+        - name: entity_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "202":
+          description: Parse triggered
+
+  /entities/{entity_id}/ai-suggestions/anomaly:
+    post:
+      tags: [AI Suggestions]
+      summary: Trigger AI anomaly detection for an entity
+      parameters:
+        - name: entity_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "202":
+          description: Anomaly scan triggered
+
+  /entities/{entity_id}/ai-suggestions/enrichment:
+    post:
+      tags: [AI Suggestions]
+      summary: Trigger AI data enrichment for an entity
+      parameters:
+        - name: entity_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "202":
+          description: Enrichment triggered
+
+  # ── Notifications ────────────────────────────────────────────────────────────
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications for the current user
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - name: unread_only
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Notifications list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Get count of unread notifications
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread_count: { type: integer }
+
+  /notifications/{id}/read:
+    patch:
+      tags: [Notifications]
+      summary: Mark a notification as read
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Notification marked as read
+
+  /notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: All marked as read
+
+  # ── Notification Subscriptions ───────────────────────────────────────────────
+
+  /notification-subscriptions:
+    get:
+      tags: [Notification Subscriptions]
+      summary: List notification subscriptions for the current user
+      responses:
+        "200":
+          description: Subscriptions list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Notification Subscriptions]
+      summary: Subscribe to a notification event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_type, channel]
+              properties:
+                event_type:
+                  type: string
+                  description: Event type code (e.g. entity.created, match.pending)
+                channel:
+                  type: string
+                  enum: [in_app, email, webhook]
+                filters: { type: object, additionalProperties: true }
+      responses:
+        "201":
+          description: Subscription created
+
+  /notification-subscriptions/{id}:
+    delete:
+      tags: [Notification Subscriptions]
+      summary: Remove a notification subscription
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204":
+          description: Subscription deleted
+
+  # ── Tasks ────────────────────────────────────────────────────────────────────
+
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: List workflow tasks
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, in_progress, done, sla_breached] }
+        - name: assignee_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Tasks list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Tasks]
+      summary: Create a task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, entity_id]
+              properties:
+                title: { type: string }
+                description: { type: string }
+                entity_id: { type: string, format: uuid }
+                assignee_id: { type: string, format: uuid }
+                due_at: { type: string, format: date-time }
+                priority: { type: string, enum: [low, medium, high, critical] }
+      responses:
+        "201":
+          description: Task created
+
+  /tasks/{id}:
+    patch:
+      tags: [Tasks]
+      summary: Update a task
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [open, in_progress, done] }
+                notes: { type: string }
+                assignee_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Task updated
+
+  /tasks/check-sla:
+    post:
+      tags: [Tasks]
+      summary: Check and flag SLA-breached tasks
+      responses:
+        "200":
+          description: SLA check result
+
+  # ── Distribution ─────────────────────────────────────────────────────────────
+
+  /distribution/jobs:
+    get:
+      tags: [Distribution]
+      summary: List distribution jobs
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Jobs list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Distribution]
+      summary: Create a distribution job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_system, entity_type]
+              properties:
+                target_system: { type: string }
+                entity_type: { type: string }
+                filters: { type: object, additionalProperties: true }
+                schedule: { type: string, description: "Cron expression" }
+      responses:
+        "201":
+          description: Job created
+
+  /distribution/jobs/{id}:
+    get:
+      tags: [Distribution]
+      summary: Get distribution job details
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Job details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    delete:
+      tags: [Distribution]
+      summary: Cancel a distribution job
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Job cancelled
+
+  /distribution/jobs/{id}/queue:
+    post:
+      tags: [Distribution]
+      summary: Queue a distribution job for immediate execution
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "202":
+          description: Job queued
+
+  # ── Governance ───────────────────────────────────────────────────────────────
+
+  /governance/assignments:
+    get:
+      tags: [Governance]
+      summary: List data ownership/stewardship assignments
+      responses:
+        "200":
+          description: Assignments list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Governance]
+      summary: Assign a user as data owner/steward for entity types
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, entity_types, role]
+              properties:
+                user_id: { type: string, format: uuid }
+                entity_types:
+                  type: array
+                  items: { type: string }
+                role: { type: string, enum: [owner, steward] }
+      responses:
+        "201":
+          description: Assignment created
+
+  /governance/assignments/my-types:
+    get:
+      tags: [Governance]
+      summary: Get entity types assigned to the current user
+      responses:
+        "200":
+          description: Assigned entity types
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /governance/assignments/{id}:
+    delete:
+      tags: [Governance]
+      summary: Remove a governance assignment
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204":
+          description: Assignment removed
+
+  # ── Dashboard ────────────────────────────────────────────────────────────────
+
+  /dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: Overall MDM statistics for the dashboard
+      responses:
+        "200":
+          description: Statistics object
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /dashboard/activity:
+    get:
+      tags: [Dashboard]
+      summary: Recent activity feed
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+      responses:
+        "200":
+          description: Activity feed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /dashboard/steward-performance:
+    get:
+      tags: [Dashboard]
+      summary: Steward performance metrics
+      parameters:
+        - name: time_window
+          in: query
+          schema: { type: string, enum: [7d, 30d, 90d] }
+      responses:
+        "200":
+          description: Performance data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /dashboard/quality-dimensions:
+    get:
+      tags: [Dashboard]
+      summary: Quality dimension summary for dashboard widget
+      responses:
+        "200":
+          description: Dimension scores
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  # ── License ──────────────────────────────────────────────────────────────────
+
+  /license:
+    get:
+      tags: [Administration]
+      summary: Get current tenant's license information
+      responses:
+        "200":
+          description: License info
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /license/activate:
+    post:
+      tags: [Administration]
+      summary: Activate a license key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [license_key]
+              properties:
+                license_key: { type: string }
+      responses:
+        "200":
+          description: License activated
+
+  /admin/tenants/{id}/license:
+    post:
+      tags: [Administration]
+      summary: Create or update a license for a tenant (super-admin)
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: License upserted
+
+  # ── Branding ─────────────────────────────────────────────────────────────────
+
+  /tenant/branding:
+    get:
+      tags: [Branding]
+      summary: Get tenant branding configuration
+      responses:
+        "200":
+          description: Branding config
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    put:
+      tags: [Branding]
+      summary: Update tenant branding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                product_name: { type: string }
+                logo_url: { type: string }
+                primary_color: { type: string }
+                favicon_url: { type: string }
+      responses:
+        "200":
+          description: Branding saved
+
+  # ── SSO Configuration ────────────────────────────────────────────────────────
+
+  /sso-configurations:
+    get:
+      tags: [SSO Configuration]
+      summary: Get current SSO configuration for the tenant
+      responses:
+        "200":
+          description: SSO config (null if not configured)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/ApiResponse" }
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/SsoConfig" }
+
+    put:
+      tags: [SSO Configuration]
+      summary: Create or update SSO configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpsertSsoConfig" }
+      responses:
+        "200":
+          description: SSO configuration saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /sso-configurations/{provider_type}:
+    delete:
+      tags: [SSO Configuration]
+      summary: Delete SSO configuration for a provider type
+      parameters:
+        - name: provider_type
+          in: path
+          required: true
+          schema: { type: string, enum: [saml, oidc] }
+      responses:
+        "204":
+          description: Configuration deleted
+
+  # ── SAML 2.0 Endpoints (no auth — called by IdP / browser) ──────────────────
+
+  /saml/{tenant_id}/metadata:
+    get:
+      tags: [SSO Configuration]
+      summary: SP metadata XML (give this URL to your IdP)
+      security: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: SAML SP metadata
+          content:
+            application/xml:
+              schema: { type: string }
+
+  /saml/{tenant_id}/init:
+    get:
+      tags: [SSO Configuration]
+      summary: Initiate SAML SSO login (redirects to IdP)
+      security: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: relay_state
+          in: query
+          schema: { type: string }
+      responses:
+        "302":
+          description: Redirect to IdP SSO URL
+
+  /saml/{tenant_id}/acs:
+    post:
+      tags: [SSO Configuration]
+      summary: SAML Assertion Consumer Service (called by IdP)
+      security: []
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [SAMLResponse]
+              properties:
+                SAMLResponse: { type: string, description: "Base64-encoded SAML assertion" }
+                RelayState: { type: string }
+      responses:
+        "200":
+          description: JWT tokens issued (or redirect with token)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── SCIM Token Management ────────────────────────────────────────────────────
+
+  /scim/tokens:
+    get:
+      tags: [SCIM 2.0]
+      summary: List SCIM bearer tokens for the current tenant
+      responses:
+        "200":
+          description: Tokens list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/ApiResponse" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/ScimToken" }
+
+    post:
+      tags: [SCIM 2.0]
+      summary: Create a SCIM bearer token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description]
+              properties:
+                description: { type: string, example: "Okta SCIM integration" }
+                expires_at: { type: string, format: date-time, description: "Omit for non-expiring token" }
+      responses:
+        "201":
+          description: Token created — raw token shown ONCE
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/ApiResponse" }
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CreatedScimToken" }
+
+  /scim/tokens/{id}:
+    delete:
+      tags: [SCIM 2.0]
+      summary: Revoke a SCIM bearer token
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204":
+          description: Token revoked
+
+  # ── SCIM 2.0 User Provisioning ───────────────────────────────────────────────
+
+  /scim/{tenant_id}/v2/ServiceProviderConfig:
+    get:
+      tags: [SCIM 2.0]
+      summary: SCIM service provider configuration (RFC 7643 §5)
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+      responses:
+        "200":
+          description: SCIM ServiceProviderConfig
+
+  /scim/{tenant_id}/v2/Schemas:
+    get:
+      tags: [SCIM 2.0]
+      summary: SCIM schema definitions
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+      responses:
+        "200":
+          description: SCIM schemas
+
+  /scim/{tenant_id}/v2/ResourceTypes:
+    get:
+      tags: [SCIM 2.0]
+      summary: SCIM resource types
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+      responses:
+        "200":
+          description: Resource types
+
+  /scim/{tenant_id}/v2/Users:
+    get:
+      tags: [SCIM 2.0]
+      summary: List / filter SCIM users
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+        - name: filter
+          in: query
+          schema: { type: string, example: 'userName eq "alice@corp.com"' }
+        - name: startIndex
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: count
+          in: query
+          schema: { type: integer, default: 100 }
+      responses:
+        "200":
+          description: SCIM ListResponse
+          content:
+            application/scim+json:
+              schema: { $ref: "#/components/schemas/ScimListResponse" }
+
+    post:
+      tags: [SCIM 2.0]
+      summary: Provision a new user via SCIM
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+      requestBody:
+        required: true
+        content:
+          application/scim+json:
+            schema: { $ref: "#/components/schemas/ScimUser" }
+      responses:
+        "201":
+          description: User provisioned
+          content:
+            application/scim+json:
+              schema: { $ref: "#/components/schemas/ScimUser" }
+        "409":
+          description: User already exists
+
+  /scim/{tenant_id}/v2/Users/{id}:
+    get:
+      tags: [SCIM 2.0]
+      summary: Get a SCIM user
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: SCIM user
+          content:
+            application/scim+json:
+              schema: { $ref: "#/components/schemas/ScimUser" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags: [SCIM 2.0]
+      summary: Replace a SCIM user
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/scim+json:
+            schema: { $ref: "#/components/schemas/ScimUser" }
+      responses:
+        "200":
+          description: User replaced
+          content:
+            application/scim+json:
+              schema: { $ref: "#/components/schemas/ScimUser" }
+
+    patch:
+      tags: [SCIM 2.0]
+      summary: Partial update a SCIM user (activate/deactivate, name change)
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/scim+json:
+            schema: { $ref: "#/components/schemas/ScimPatchOp" }
+      responses:
+        "200":
+          description: User updated
+
+    delete:
+      tags: [SCIM 2.0]
+      summary: Deprovision a SCIM user
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204":
+          description: User deprovisioned
+
+  /scim/{tenant_id}/v2/Groups:
+    get:
+      tags: [SCIM 2.0]
+      summary: List SCIM groups (mapped to Nexus roles)
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+        - name: filter
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: SCIM ListResponse with groups
+          content:
+            application/scim+json:
+              schema: { $ref: "#/components/schemas/ScimListResponse" }
+
+    post:
+      tags: [SCIM 2.0]
+      summary: Create a SCIM group (maps to a Nexus role)
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+      requestBody:
+        required: true
+        content:
+          application/scim+json:
+            schema: { $ref: "#/components/schemas/ScimGroup" }
+      responses:
+        "201":
+          description: Group created
+
+  /scim/{tenant_id}/v2/Groups/{id}:
+    get:
+      tags: [SCIM 2.0]
+      summary: Get a SCIM group
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: SCIM group
+          content:
+            application/scim+json:
+              schema: { $ref: "#/components/schemas/ScimGroup" }
+
+    patch:
+      tags: [SCIM 2.0]
+      summary: Add or remove group members (role assignments)
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/scim+json:
+            schema: { $ref: "#/components/schemas/ScimPatchOp" }
+      responses:
+        "200":
+          description: Group updated
+
+    delete:
+      tags: [SCIM 2.0]
+      summary: Delete a SCIM group
+      security:
+        - scimBearerAuth: []
+      parameters:
+        - { $ref: "#/components/parameters/TenantId" }
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204":
+          description: Group deleted
+
+  # ── Audit ────────────────────────────────────────────────────────────────────
+
+  /audit/events:
+    get:
+      tags: [Audit]
+      summary: List immutable audit events
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - name: actor_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: entity_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: event_type
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Audit events list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  # ── AI Service ───────────────────────────────────────────────────────────────
+
+  /mcp/query:
+    post:
+      tags: [AI Copilot]
+      summary: Send a natural-language query to the AI Copilot
+      servers:
+        - url: http://localhost:8082
+          description: AI Service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/McpRequest" }
+      responses:
+        "200":
+          description: Copilot response
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpResponse" }
+
+  /mcp/stream:
+    post:
+      tags: [AI Copilot]
+      summary: Streaming copilot query (Server-Sent Events)
+      servers:
+        - url: http://localhost:8082
+          description: AI Service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/McpRequest" }
+      responses:
+        "200":
+          description: SSE stream of token chunks
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: 'Lines of the form: data: {"chunk": "token"}'
+
+  /match/semantic:
+    post:
+      tags: [Matching]
+      summary: AI-powered semantic match scoring
+      servers:
+        - url: http://localhost:8082
+          description: AI Service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SemanticMatchRequest" }
+      responses:
+        "200":
+          description: Semantic similarity score
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /embed:
+    post:
+      tags: [AI Copilot]
+      summary: Generate a text embedding vector
+      servers:
+        - url: http://localhost:8082
+          description: AI Service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+      responses:
+        "200":
+          description: Embedding vector
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  embedding:
+                    type: array
+                    items: { type: number, format: float }
+                  dims: { type: integer }
+
+  /rag/index:
+    post:
+      tags: [AI Copilot]
+      summary: Index a document into the RAG knowledge base
+      servers:
+        - url: http://localhost:8082
+          description: AI Service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant_id, doc_type, title, content]
+              properties:
+                tenant_id: { type: string, format: uuid }
+                doc_type: { type: string }
+                title: { type: string }
+                content: { type: string }
+      responses:
+        "201":
+          description: Document indexed
+
+  /weights/recommend:
+    get:
+      tags: [Matching]
+      summary: AI-recommended matching field weights based on steward feedback
+      servers:
+        - url: http://localhost:8082
+          description: AI Service
+      parameters:
+        - name: tenant_id
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: min_samples
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        "200":
+          description: Weight recommendations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  # ── Ingest Service ───────────────────────────────────────────────────────────
+
+  /ingest/batch:
+    post:
+      tags: [Ingestion]
+      summary: Ingest a batch of entity records (JSON)
+      servers:
+        - url: http://localhost:8084
+          description: Ingest Service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IngestBatchRequest" }
+      responses:
+        "202":
+          description: Batch accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  job_id: { type: string, format: uuid }
+
+  /ingest/csv:
+    post:
+      tags: [Ingestion]
+      summary: Ingest entities from a CSV file upload
+      servers:
+        - url: http://localhost:8084
+          description: Ingest Service
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, entity_type]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                entity_type: { type: string }
+                source_system: { type: string }
+                mapping:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: "CSV column → attribute code mapping"
+      responses:
+        "202":
+          description: CSV accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  job_id: { type: string, format: uuid }
+
+  /ingest/jobs:
+    get:
+      tags: [Ingestion]
+      summary: List ingest jobs
+      servers:
+        - url: http://localhost:8084
+          description: Ingest Service
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+      responses:
+        "200":
+          description: Jobs list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /ingest/jobs/{id}:
+    get:
+      tags: [Ingestion]
+      summary: Get ingest job status and error report
+      servers:
+        - url: http://localhost:8084
+          description: Ingest Service
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Job details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+  /source-systems:
+    get:
+      tags: [Source Systems]
+      summary: List source system configurations
+      servers:
+        - url: http://localhost:8084
+          description: Ingest Service
+      responses:
+        "200":
+          description: Source systems list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiResponse" }
+
+    post:
+      tags: [Source Systems]
+      summary: Create a source system
+      servers:
+        - url: http://localhost:8084
+          description: Ingest Service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSourceSystemRequest" }
+      responses:
+        "201":
+          description: Source system created
+
+  /source-systems/{id}:
+    put:
+      tags: [Source Systems]
+      summary: Update a source system
+      servers:
+        - url: http://localhost:8084
+          description: Ingest Service
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSourceSystemRequest" }
+      responses:
+        "200":
+          description: Source system updated
+
+    delete:
+      tags: [Source Systems]
+      summary: Delete a source system
+      servers:
+        - url: http://localhost:8084
+          description: Ingest Service
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204":
+          description: Deleted
+
+  /source-systems/{id}/test:
+    post:
+      tags: [Source Systems]
+      summary: Test connectivity to a source system
+      servers:
+        - url: http://localhost:8084
+          description: Ingest Service
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  latency_ms: { type: integer }
+                  error: { type: string, nullable: true }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────────────────────────────────────
 components:
+
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
+      bearerFormat: JWT
+      description: JWT obtained from POST /auth/login
+
+    scimBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: SCIM Token
+      description: SCIM bearer token obtained from POST /scim/tokens
 
   parameters:
-    TenantId:
-      name: x-tenant-id
-      in: header
+    Id:
+      name: id
+      in: path
       required: true
-      schema:
-        type: string
-        format: uuid
+      schema: { type: string, format: uuid }
+
+    TenantId:
+      name: tenant_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, default: 1, minimum: 1 }
+
+    PageSize:
+      name: page_size
+      in: query
+      schema: { type: integer, default: 20, minimum: 1, maximum: 200 }
+
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    Forbidden:
+      description: Insufficient permissions for this operation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    Conflict:
+      description: Resource conflict (e.g. duplicate email)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   schemas:
-    CreateEntityRequest:
+
+    # ── Envelope schemas ───────────────────────────────────────────────────────
+
+    ApiResponse:
       type: object
-      required: [entity, record_origin]
       properties:
-        entity:
-          type: object
-          description: Canonical entity payload
-        record_origin:
-          type: string
-          enum: [mdm_authoritative, ingested, survivorship_derived]
-        distribute:
-          type: boolean
-          default: false
-        distribution_targets:
+        success: { type: boolean }
+        data: {}
+        message: { type: string }
+        error: { type: string, nullable: true }
+
+    PaginatedResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data: {}
+        total: { type: integer }
+        page: { type: integer }
+        page_size: { type: integer }
+        total_pages: { type: integer }
+
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success: { type: boolean, example: false }
+        error: { type: string }
+        details: { type: object, additionalProperties: true }
+
+    BulkResult:
+      type: object
+      properties:
+        success: { type: boolean }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        errors:
           type: array
           items:
-            $ref: "#/components/schemas/DistributionTarget"
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              error: { type: string }
 
-    DistributionTarget:
+    HealthResponse:
       type: object
-      required: [connector_id, target_system, delivery_mode]
+      required: [status, service]
       properties:
-        connector_id:
+        status:
           type: string
-        target_system:
+          enum: [ok, healthy, degraded, unhealthy]
+        service: { type: string }
+        version: { type: string }
+        uptime_seconds: { type: integer }
+
+    # ── Auth ───────────────────────────────────────────────────────────────────
+
+    LoginRequest:
+      type: object
+      required: [email, password, tenant_id]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+        tenant_id: { type: string, format: uuid }
+
+    AcceptInviteRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token: { type: string }
+        password: { type: string, minLength: 8 }
+        display_name: { type: string }
+
+    AuthResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            access_token: { type: string }
+            refresh_token: { type: string }
+            token_type: { type: string, example: Bearer }
+            expires_in: { type: integer, description: Seconds until access token expiry }
+            user:
+              type: object
+              properties:
+                identity_id: { type: string, format: uuid }
+                email: { type: string }
+                display_name: { type: string }
+                role: { $ref: "#/components/schemas/Role" }
+                tenant_id: { type: string, format: uuid }
+
+    InviteInfo:
+      type: object
+      properties:
+        email: { type: string }
+        tenant_name: { type: string }
+        invited_by: { type: string }
+        expires_at: { type: string, format: date-time }
+
+    InviteUserRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email: { type: string, format: email }
+        role: { $ref: "#/components/schemas/Role" }
+        display_name: { type: string }
+
+    # ── Users ──────────────────────────────────────────────────────────────────
+
+    UserSummary:
+      type: object
+      properties:
+        identity_id: { type: string, format: uuid }
+        email: { type: string }
+        display_name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        last_login_at: { type: string, format: date-time, nullable: true }
+
+    Role:
+      type: string
+      enum: [super_admin, admin, business_admin, steward, viewer]
+
+    # ── Entities ───────────────────────────────────────────────────────────────
+
+    EntityStatus:
+      type: string
+      enum: [draft, pending_review, active, archived, rejected, gdpr_erased]
+
+    EntitySummary:
+      type: object
+      properties:
+        entity_id: { type: string, format: uuid }
+        entity_type: { type: string }
+        display_name: { type: string }
+        status: { $ref: "#/components/schemas/EntityStatus" }
+        source_system: { type: string }
+        quality_score: { type: number, format: float, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Entity:
+      allOf:
+        - { $ref: "#/components/schemas/EntitySummary" }
+        - type: object
+          properties:
+            attributes:
+              type: object
+              additionalProperties: true
+            golden_record_id: { type: string, format: uuid, nullable: true }
+            version: { type: integer }
+            created_by: { type: string, format: uuid }
+
+    CreateEntityRequest:
+      type: object
+      required: [entity_type]
+      properties:
+        entity_type: { type: string }
+        attributes:
+          type: object
+          additionalProperties: true
+        source_system: { type: string }
+        external_id: { type: string }
+        status: { $ref: "#/components/schemas/EntityStatus" }
+
+    # ── Entity Types ───────────────────────────────────────────────────────────
+
+    EntityType:
+      type: object
+      properties:
+        entity_type_id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        description: { type: string }
+        is_active: { type: boolean }
+        attribute_count: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    CreateEntityTypeRequest:
+      type: object
+      required: [name, code]
+      properties:
+        name: { type: string }
+        code: { type: string, pattern: "^[a-z][a-z0-9_]*$" }
+        description: { type: string }
+
+    AttributeDefinition:
+      type: object
+      required: [name, code, data_type]
+      properties:
+        name: { type: string }
+        code: { type: string, pattern: "^[a-z][a-z0-9_]*$" }
+        data_type:
           type: string
-        delivery_mode:
-          type: string
-          enum: [push, pull, cdc, webhook]
+          enum: [text, number, boolean, date, datetime, email, url, json, uuid, reference]
+        is_required: { type: boolean, default: false }
+        is_pii: { type: boolean, default: false }
+        is_unique: { type: boolean, default: false }
+        validation_rules: { type: object, additionalProperties: true }
+        display_order: { type: integer }
+
+    # ── Relationships ──────────────────────────────────────────────────────────
+
+    CreateRelationshipRequest:
+      type: object
+      required: [type_id, to_entity_id]
+      properties:
+        type_id: { type: string, format: uuid }
+        to_entity_id: { type: string, format: uuid }
+        strength: { type: number, format: float, minimum: 0, maximum: 1 }
+        metadata: { type: object, additionalProperties: true }
+
+    CreateRelationshipTypeRequest:
+      type: object
+      required: [name, code, from_entity_type, to_entity_type]
+      properties:
+        name: { type: string }
+        code: { type: string }
+        from_entity_type: { type: string }
+        to_entity_type: { type: string }
+        is_directional: { type: boolean, default: true }
+
+    # ── Matching ───────────────────────────────────────────────────────────────
 
     MatchRequest:
       type: object
-      required: [request_id, tenant_id, entity_type, entity, strategy, max_candidates]
+      required: [entity_type, source_attrs]
       properties:
-        request_id:
-          type: string
-          format: uuid
-        tenant_id:
-          type: string
-          format: uuid
-        entity_type:
-          type: string
-        entity:
+        entity_type: { type: string }
+        source_attrs:
           type: object
-        strategy:
+          additionalProperties: true
+        threshold: { type: number, format: float, default: 0.8 }
+        limit: { type: integer, default: 10 }
+        include_semantic: { type: boolean, default: true }
+
+    MatchResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            request_id: { type: string, format: uuid }
+            candidates:
+              type: array
+              items:
+                type: object
+                properties:
+                  entity_id: { type: string, format: uuid }
+                  display_name: { type: string }
+                  algo_score: { type: number, format: float }
+                  ai_score: { type: number, format: float, nullable: true }
+                  combined_score: { type: number, format: float }
+                  matched_fields: { type: array, items: { type: string } }
+
+    SemanticMatchRequest:
+      type: object
+      required: [tenant_id, source_attrs, candidate_attrs, entity_type]
+      properties:
+        tenant_id: { type: string, format: uuid }
+        source_attrs: { type: object, additionalProperties: true }
+        candidate_attrs: { type: object, additionalProperties: true }
+        algo_score: { type: number, format: float }
+        entity_type: { type: string }
+
+    # ── Merge ──────────────────────────────────────────────────────────────────
+
+    MergeRequest:
+      type: object
+      required: [source_id, target_id]
+      properties:
+        source_id: { type: string, format: uuid }
+        target_id: { type: string, format: uuid }
+        survivorship_rules:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [most_recent, most_complete, source_priority, manual]
+        manual_overrides:
+          type: object
+          additionalProperties: true
+
+    # ── Data Quality ───────────────────────────────────────────────────────────
+
+    CreateQualityRuleRequest:
+      type: object
+      required: [name, entity_type, dimension]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        entity_type: { type: string }
+        dimension:
           type: string
-        max_candidates:
-          type: integer
-        semantic_matching:
-          type: boolean
-        ai_assisted:
-          type: boolean
+          enum: [completeness, accuracy, consistency, uniqueness, timeliness, validity]
+        conditions:
+          type: array
+          items: { type: object, additionalProperties: true }
+        severity: { type: string, enum: [info, warning, error] }
+        is_active: { type: boolean, default: true }
+
+    # ── Domain Policies ────────────────────────────────────────────────────────
+
+    DomainPolicy:
+      type: object
+      properties:
+        match_threshold: { type: number, format: float }
+        auto_merge_threshold: { type: number, format: float }
+        require_approval: { type: boolean }
+        survivorship_rules: { type: object, additionalProperties: true }
+        required_fields: { type: array, items: { type: string } }
+
+    # ── Transformation Rules ───────────────────────────────────────────────────
+
+    CreateTransformationRuleRequest:
+      type: object
+      required: [name, entity_type, attribute_code, rule_type]
+      properties:
+        name: { type: string }
+        entity_type: { type: string }
+        attribute_code: { type: string }
+        rule_type:
+          type: string
+          enum: [regex_replace, uppercase, lowercase, trim, format_date, lookup, conditional, custom_dsl]
+        rule_config: { type: object, additionalProperties: true }
+        priority: { type: integer, default: 100 }
+        is_active: { type: boolean, default: true }
+
+    # ── SSO ────────────────────────────────────────────────────────────────────
+
+    SsoConfig:
+      type: object
+      properties:
+        sso_config_id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        provider_type: { type: string, enum: [saml, oidc] }
+        is_enabled: { type: boolean }
+        idp_entity_id: { type: string, nullable: true }
+        idp_sso_url: { type: string, nullable: true }
+        idp_slo_url: { type: string, nullable: true }
+        sp_entity_id: { type: string, nullable: true }
+        sp_acs_url: { type: string, nullable: true }
+        default_role: { $ref: "#/components/schemas/Role" }
+        auto_provision: { type: boolean }
+        auto_deprovision: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time, nullable: true }
+
+    UpsertSsoConfig:
+      type: object
+      required: [provider_type]
+      properties:
+        provider_type: { type: string, enum: [saml, oidc] }
+        is_enabled: { type: boolean }
+        idp_entity_id: { type: string, nullable: true }
+        idp_sso_url: { type: string, nullable: true }
+        idp_slo_url: { type: string, nullable: true }
+        idp_certificate:
+          type: string
+          nullable: true
+          description: X.509 certificate PEM (stored encrypted)
+        sp_entity_id: { type: string, nullable: true }
+        sp_acs_url: { type: string, nullable: true }
+        default_role: { $ref: "#/components/schemas/Role" }
+        auto_provision: { type: boolean }
+        auto_deprovision: { type: boolean }
+
+    # ── SCIM ───────────────────────────────────────────────────────────────────
+
+    ScimToken:
+      type: object
+      properties:
+        token_id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        description: { type: string }
+        is_active: { type: boolean }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        expires_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    CreatedScimToken:
+      type: object
+      properties:
+        token: { $ref: "#/components/schemas/ScimToken" }
+        raw_token:
+          type: string
+          description: "Plaintext bearer token — shown ONCE, never retrievable again. Format: nexus_scim_{hex}"
+
+    ScimListResponse:
+      type: object
+      properties:
+        schemas:
+          type: array
+          items: { type: string }
+          example: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+        totalResults: { type: integer }
+        startIndex: { type: integer }
+        itemsPerPage: { type: integer }
+        Resources:
+          type: array
+          items: { type: object }
+
+    ScimUser:
+      type: object
+      required: [schemas, userName]
+      properties:
+        schemas:
+          type: array
+          items: { type: string }
+          example: ["urn:ietf:params:scim:schemas:core:2.0:User"]
+        id: { type: string, format: uuid }
+        userName: { type: string, format: email }
+        displayName: { type: string }
+        active: { type: boolean, default: true }
+        emails:
+          type: array
+          items:
+            type: object
+            properties:
+              value: { type: string, format: email }
+              primary: { type: boolean }
+        name:
+          type: object
+          properties:
+            formatted: { type: string }
+            givenName: { type: string }
+            familyName: { type: string }
+        meta:
+          type: object
+          properties:
+            resourceType: { type: string, example: User }
+            created: { type: string, format: date-time }
+            lastModified: { type: string, format: date-time }
+            location: { type: string }
+
+    ScimGroup:
+      type: object
+      required: [schemas, displayName]
+      properties:
+        schemas:
+          type: array
+          items: { type: string }
+          example: ["urn:ietf:params:scim:schemas:core:2.0:Group"]
+        id: { type: string }
+        displayName: { type: string, description: "Maps to Nexus role name" }
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              value: { type: string, description: User UUID }
+              display: { type: string }
+
+    ScimPatchOp:
+      type: object
+      required: [schemas, Operations]
+      properties:
+        schemas:
+          type: array
+          items: { type: string }
+          example: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"]
+        Operations:
+          type: array
+          items:
+            type: object
+            required: [op]
+            properties:
+              op: { type: string, enum: [add, remove, replace] }
+              path: { type: string }
+              value: {}
+
+    # ── AI Service ─────────────────────────────────────────────────────────────
+
+    McpRequest:
+      type: object
+      required: [tenant_id, user_id, prompt]
+      properties:
+        tenant_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        prompt: { type: string }
+        tool: { type: string, nullable: true }
+        response_format: { type: string, enum: [text, json], default: text }
+
+    McpResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        result: { type: string }
+        tool_results: { type: array, items: { type: object } }
+        error: { type: string, nullable: true }
+
+    # ── Ingestion ──────────────────────────────────────────────────────────────
+
+    IngestBatchRequest:
+      type: object
+      required: [entity_type, records]
+      properties:
+        entity_type: { type: string }
+        source_system: { type: string }
+        records:
+          type: array
+          items:
+            type: object
+            properties:
+              external_id: { type: string }
+              attributes: { type: object, additionalProperties: true }
+        on_conflict: { type: string, enum: [update, skip, error], default: update }
+
+    CreateSourceSystemRequest:
+      type: object
+      required: [name, code, system_type]
+      properties:
+        name: { type: string }
+        code: { type: string }
+        system_type:
+          type: string
+          enum: [rest_api, database, kafka, file_upload, salesforce, sap, custom]
+        connection_config:
+          type: object
+          additionalProperties: true
+          description: System-type-specific config (URLs, credentials stored encrypted)
+        sync_schedule: { type: string, description: "Cron expression" }
+        is_active: { type: boolean, default: true }
