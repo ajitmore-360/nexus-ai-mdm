@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use axum::{
     extract::{Extension, Path, Query, State},
@@ -12,16 +12,16 @@ use serde_json::json;
 use sqlx::Row;
 use uuid::Uuid;
 
-use nexus_auth::{hash_password, issue_tokens, verify_password, Claims, JwtConfig, Role};
+use azile_auth::{hash_password, issue_tokens, verify_password, Claims, JwtConfig, Role};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 
 use crate::services::audit_service::AuditEvent;
 use crate::AppState;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // REQUEST / RESPONSE TYPES
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
@@ -73,9 +73,9 @@ pub struct UserResponse {
     pub created_at:   String,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // POST /auth/login
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn login(
     State(state): State<Arc<AppState>>,
@@ -92,7 +92,7 @@ pub async fn login(
             .into_response();
     }
 
-    // ── Brute-force protection ───────────────────────────────────────────────
+    // â”€â”€ Brute-force protection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let client_ip = headers
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
@@ -110,14 +110,14 @@ pub async fn login(
                     StatusCode::TOO_MANY_REQUESTS,
                     Json(json!({
                         "success": false,
-                        "error": "too many login attempts — try again in 5 minutes"
+                        "error": "too many login attempts â€” try again in 5 minutes"
                     })),
                 )
                     .into_response();
             }
             Ok(true)  => {}
             Err(e)    => {
-                tracing::warn!(error=%e, "login rate limiter error — allowing request");
+                tracing::warn!(error=%e, "login rate limiter error â€” allowing request");
             }
         }
     }
@@ -132,7 +132,7 @@ pub async fn login(
     let tenant_id = if let Some(tid) = tenant_id_explicit {
         tid
     } else {
-        // No tenant supplied — look up all active memberships for this email.
+        // No tenant supplied â€” look up all active memberships for this email.
         let rows = sqlx::query(
             r#"
             SELECT m.tenant_id, t.display_name AS tenant_name
@@ -151,7 +151,7 @@ pub async fn login(
 
         match rows.len() {
             0 => {
-                // No active membership — return 401 to avoid account enumeration.
+                // No active membership â€” return 401 to avoid account enumeration.
                 return (
                     StatusCode::UNAUTHORIZED,
                     Json(json!({ "success": false, "error": "invalid credentials" })),
@@ -159,7 +159,7 @@ pub async fn login(
             }
             1 => rows[0].try_get::<Uuid, _>("tenant_id").unwrap_or(Uuid::nil()),
             _ => {
-                // Multiple tenants — ask the client to specify one.
+                // Multiple tenants â€” ask the client to specify one.
                 let tenants: Vec<serde_json::Value> = rows.iter().map(|r| {
                     json!({
                         "tenant_id":   r.try_get::<Uuid,   _>("tenant_id")   .unwrap_or(Uuid::nil()),
@@ -209,7 +209,7 @@ pub async fn login(
         }
     };
 
-    // ── Constant-time auth (prevents timing oracle + account enumeration) ────
+    // â”€â”€ Constant-time auth (prevents timing oracle + account enumeration) â”€â”€â”€â”€
     const DUMMY_HASH: &str =
         "$2b$12$8p/jdF3aHVlQ1e5mvTVnxOX0AJfKf7C5Vd3Fz1Mj2hj5E9qWkLuC6";
 
@@ -265,7 +265,7 @@ pub async fn login(
 
     tracing::info!(identity_id=%identity_id, tenant_id=%tenant_id, "user logged in");
 
-    // Stewards are scoped to specific entity types — include their assignments
+    // Stewards are scoped to specific entity types â€” include their assignments
     // in the login response so the client can filter data without a second round-trip.
     let assigned_entity_types: Vec<String> = if role == Role::Steward {
         sqlx::query_scalar(
@@ -302,9 +302,9 @@ pub async fn login(
         .into_response()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /users — list users for tenant
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// GET /users â€” list users for tenant
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn list_users(
     State(state):      State<Arc<AppState>>,
@@ -358,9 +358,9 @@ pub async fn list_users(
     (StatusCode::OK, Json(json!({ "success": true, "data": users }))).into_response()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PATCH /users/:id/role — change user role (admin only)
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// PATCH /users/:id/role â€” change user role (admin only)
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Deserialize)]
 pub struct ChangeRoleRequest {
@@ -424,9 +424,9 @@ pub async fn change_role(
     (StatusCode::OK, Json(json!({ "success": true }))).into_response()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // POST /admin/users/invite
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn invite_user(
     State(state):      State<Arc<AppState>>,
@@ -491,7 +491,7 @@ pub async fn invite_user(
                     .into_response();
             }
             Err(e) => {
-                tracing::warn!(error=%e, "steward quota check failed — proceeding without enforcement");
+                tracing::warn!(error=%e, "steward quota check failed â€” proceeding without enforcement");
             }
             Ok(quota) => {
                 let ns  = Arc::clone(&state.notification_service);
@@ -504,7 +504,7 @@ pub async fn invite_user(
         }
     }
 
-    // Upsert identity — create if new email, or return existing identity_id
+    // Upsert identity â€” create if new email, or return existing identity_id
     let identity_id: Uuid = match sqlx::query_scalar(
         r#"
         INSERT INTO core_mdm.identities (email, display_name)
@@ -526,7 +526,7 @@ pub async fn invite_user(
         }
     };
 
-    // Upsert membership — set status to 'invited' (re-invite is allowed)
+    // Upsert membership â€” set status to 'invited' (re-invite is allowed)
     if let Err(e) = sqlx::query(
         r#"
         INSERT INTO core_mdm.tenant_memberships (identity_id, tenant_id, role, status)
@@ -630,7 +630,7 @@ pub async fn invite_user(
         let activation_url = format!("{}/activate?token={}", app_url, invite_token);
         let email_to       = email.clone();
         let name           = if display_name.is_empty() { email.clone() } else { display_name.clone() };
-        let invited_by     = req.invited_by.clone().unwrap_or_else(|| "Nexus AI MDM".to_string());
+        let invited_by     = req.invited_by.clone().unwrap_or_else(|| "Azile AI MDM".to_string());
 
         tokio::spawn(async move {
             let body = serde_json::json!({
@@ -669,9 +669,9 @@ pub async fn invite_user(
         .into_response()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /auth/invite-info?token=XXX — peek at an invite without consuming it
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// GET /auth/invite-info?token=XXX â€” peek at an invite without consuming it
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn invite_info(
     State(state): State<Arc<AppState>>,
@@ -728,9 +728,9 @@ pub async fn invite_info(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // POST /auth/accept-invite
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn accept_invite(
     State(state): State<Arc<AppState>>,
@@ -743,7 +743,7 @@ pub async fn accept_invite(
         return (StatusCode::BAD_REQUEST, Json(json!({ "success": false, "error": "password must be at least 8 characters" }))).into_response();
     }
 
-    // Validate token — must exist, not yet accepted, not expired
+    // Validate token â€” must exist, not yet accepted, not expired
     let invitation = match sqlx::query(
         r#"
         SELECT inv.identity_id, inv.tenant_id,
@@ -868,13 +868,13 @@ pub async fn accept_invite(
         .into_response()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // POST /auth/change-password
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn change_password(
     State(state):            State<Arc<AppState>>,
-    axum::Extension(claims): axum::Extension<nexus_auth::Claims>,
+    axum::Extension(claims): axum::Extension<azile_auth::Claims>,
     headers:                 HeaderMap,
     Json(req):               Json<ChangePasswordRequest>,
 ) -> Response {
@@ -888,7 +888,7 @@ pub async fn change_password(
 
     // Prefer x-user-id injected by the gateway's inject_user_context middleware:
     // when the gateway forwards with service-to-service auth, claims.sub is the
-    // synthetic "service-account" identity — the real user ID arrives in x-user-id.
+    // synthetic "service-account" identity â€” the real user ID arrives in x-user-id.
     let identity_id_owned = headers
         .get("x-user-id")
         .and_then(|v| v.to_str().ok())
@@ -968,9 +968,9 @@ pub async fn change_password(
     (StatusCode::OK, Json(json!({ "success": true }))).into_response()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // POST /auth/forgot-password
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Deserialize)]
 pub struct ForgotPasswordRequest {
@@ -992,7 +992,7 @@ pub async fn request_password_reset(
         return (StatusCode::BAD_REQUEST, Json(json!({ "success": false, "error": "x-tenant-id header required" }))).into_response();
     };
 
-    // Always return 200 — no email enumeration
+    // Always return 200 â€” no email enumeration
     let row = sqlx::query(
         r#"
         SELECT i.identity_id, i.display_name
@@ -1086,9 +1086,9 @@ pub async fn request_password_reset(
     (StatusCode::OK, Json(json!({ "success": true }))).into_response()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // POST /auth/reset-password
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Deserialize)]
 pub struct ResetPasswordRequest {
@@ -1151,7 +1151,7 @@ pub async fn reset_password(
     (StatusCode::OK, Json(json!({ "success": true }))).into_response()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // POST /auth/sso-exchange
 //
 // Validates an OAuth2 access token from a third-party OIDC provider by calling
@@ -1164,17 +1164,17 @@ pub async fn reset_password(
 // password, it does not bypass the provisioning step.
 //
 // Supported providers:
-//   google — https://www.googleapis.com/oauth2/v3/userinfo
-//   azure  — https://graph.microsoft.com/oidc/userinfo
-//   okta   — {OKTA_ISSUER}/v1/userinfo  (set OKTA_ISSUER env var)
-// ─────────────────────────────────────────────────────────────────────────────
+//   google â€” https://www.googleapis.com/oauth2/v3/userinfo
+//   azure  â€” https://graph.microsoft.com/oidc/userinfo
+//   okta   â€” {OKTA_ISSUER}/v1/userinfo  (set OKTA_ISSUER env var)
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct SsoExchangeRequest {
     pub provider:     String,       // "google" | "azure" | "okta"
     pub access_token: String,
-    pub tenant_id:    Option<Uuid>, // hint — used when provided, otherwise resolved from email
+    pub tenant_id:    Option<Uuid>, // hint â€” used when provided, otherwise resolved from email
 }
 
 pub async fn sso_exchange(
@@ -1190,7 +1190,7 @@ pub async fn sso_exchange(
         ).into_response();
     }
 
-    // ── 1. Call provider's userinfo endpoint ──────────────────────────────────
+    // â”€â”€ 1. Call provider's userinfo endpoint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let userinfo_url = match provider.as_str() {
         "google" => "https://www.googleapis.com/oauth2/v3/userinfo".to_string(),
         "azure"  => "https://graph.microsoft.com/oidc/userinfo".to_string(),
@@ -1233,7 +1233,7 @@ pub async fn sso_exchange(
         tracing::warn!(provider=%provider, status=%userinfo_resp.status(), "userinfo request rejected");
         return (
             StatusCode::UNAUTHORIZED,
-            Json(json!({ "success": false, "error": "SSO token was rejected by the provider — please try again" })),
+            Json(json!({ "success": false, "error": "SSO token was rejected by the provider â€” please try again" })),
         ).into_response();
     }
 
@@ -1248,7 +1248,7 @@ pub async fn sso_exchange(
         }
     };
 
-    // ── 2. Extract email from userinfo claims ──────────────────────────────────
+    // â”€â”€ 2. Extract email from userinfo claims â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let email = userinfo
         .get("email")
         .and_then(|v| v.as_str())
@@ -1260,12 +1260,12 @@ pub async fn sso_exchange(
         None => {
             return (
                 StatusCode::UNAUTHORIZED,
-                Json(json!({ "success": false, "error": "SSO provider did not return an email address — ensure the 'email' scope is granted" })),
+                Json(json!({ "success": false, "error": "SSO provider did not return an email address â€” ensure the 'email' scope is granted" })),
             ).into_response();
         }
     };
 
-    // ── 3. Look up identity + membership in the DB ─────────────────────────────
+    // â”€â”€ 3. Look up identity + membership in the DB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // If the caller gave us a tenant_id hint, use it directly.
     // Otherwise, resolve to the most recent active membership for this email.
     let row = if let Some(tenant_id) = req.tenant_id {

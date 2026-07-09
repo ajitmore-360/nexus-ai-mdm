@@ -1,0 +1,42 @@
+﻿{{- if .Values.searchService.hpa.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "azile-mdm.fullname" . }}-{{ .Values.searchService.name }}
+  namespace: {{ include "azile-mdm.namespace" . }}
+  labels:
+    {{- include "azile-mdm.serviceLabels" (dict "root" . "service" .Values.searchService.name) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "azile-mdm.fullname" . }}-{{ .Values.searchService.name }}
+  minReplicas: {{ .Values.searchService.hpa.minReplicas }}
+  maxReplicas: {{ .Values.searchService.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.searchService.hpa.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.searchService.hpa.targetMemoryUtilizationPercentage }}
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+{{- end }}

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -233,7 +233,7 @@ class _ConnectorMarketplacePageState extends State<ConnectorMarketplacePage>
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Certified Connectors', style: AppTextStyles.titleMedium),
-              Text('Connect Nexus MDM to your enterprise systems',
+              Text('Connect Azile MDM to your enterprise systems',
                   style: AppTextStyles.bodySmall
                       .copyWith(color: AppColors.secondaryText)),
             ]),
@@ -267,7 +267,7 @@ class _ConnectorMarketplacePageState extends State<ConnectorMarketplacePage>
               child: TextField(
                 onChanged: (v) => setState(() => _searchQuery = v),
                 decoration: InputDecoration(
-                  hintText: 'Search connectors…',
+                  hintText: 'Search connectorsâ€¦',
                   prefixIcon: const Icon(Icons.search, size: 18),
                   filled: true,
                   fillColor: AppColors.inputFill,

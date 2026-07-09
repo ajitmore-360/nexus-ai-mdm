@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "ai-service"
 version = "0.1.0"
 edition = "2021"
@@ -12,7 +12,7 @@ serde_json.workspace  = true
 reqwest               = { workspace = true, features = ["json", "stream"] }
 tracing.workspace     = true
 tracing-subscriber.workspace  = true
-nexus-telemetry               = { workspace = true }
+azile-telemetry               = { workspace = true }
 anyhow.workspace      = true
 thiserror.workspace   = true
 uuid.workspace        = true
@@ -23,7 +23,7 @@ sqlx.workspace        = true
 
 contracts   = { path = "../../shared/contracts" }
 database    = { workspace = true }
-nexus-redis = { workspace = true }
+azile-redis = { workspace = true }
 
 futures.workspace = true
 dashmap           = "5"

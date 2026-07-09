@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 
 set -e
 
@@ -6,13 +6,13 @@ export PGPASSWORD=postgres
 
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=nexus_mdm
+DB_NAME=azile_mdm
 DB_USER=postgres
 
 MIGRATION_DIR="../migrations"
 
 echo "===================================="
-echo "Running Nexus MDM migrations"
+echo "Running Azile MDM migrations"
 echo "===================================="
 
 for file in $(ls $MIGRATION_DIR/*.sql | sort)

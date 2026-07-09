@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -11,14 +11,14 @@ import '../../../../shared/models/api_responses.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../data/entity_repository.dart';
 import '../../../../core/validation/validators.dart';
-import '../../../../shared/widgets/nexus_dialog.dart';
+import '../../../../shared/widgets/azile_dialog.dart';
 import '../../../../features/admin/data/governance_repository.dart';
 import '../../../../features/admin/data/source_systems_repository.dart';
 import '../../../../features/admin/data/entity_type_repository.dart';
 import '../../../../features/admin/data/submaster_repository.dart';
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Domain enums / models
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 enum _EntityType {
   customer,
@@ -206,9 +206,9 @@ extension _EntityTypeLabel on _EntityType {
 
 enum _Origin { mdmAuthoritative, sourceSystem }
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Attribute row model
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _AttributeRow {
   String key;
@@ -219,7 +219,7 @@ class _AttributeRow {
   final bool isCustom;
   final TextEditingController keyController;
   final TextEditingController valueController;
-  // When non-null, this attribute is backed by a submaster — render as dropdown.
+  // When non-null, this attribute is backed by a submaster â€” render as dropdown.
   String? submasterCode;
   List<_SubmasterOption>? dropdownOptions;
 
@@ -239,9 +239,9 @@ class _AttributeRow {
   }
 }
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Submaster dropdown option
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SubmasterOption {
   final String code;
@@ -249,9 +249,9 @@ class _SubmasterOption {
   const _SubmasterOption({required this.code, required this.label});
 }
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Duplicate check model
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _DuplicateHit {
   final String entityId;
@@ -267,9 +267,9 @@ class _DuplicateHit {
   });
 }
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Page
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class EntityCreatePage extends StatefulWidget {
   const EntityCreatePage({super.key});
@@ -288,7 +288,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
   bool _loadingSchemas = false;
 
   static final SourceSystemModel _manualEntry = SourceSystemModel(
-    id: '', tenantId: '', name: 'Manual Entry', code: 'nexus-mdm',
+    id: '', tenantId: '', name: 'Manual Entry', code: 'azile-mdm',
     connectorType: 'manual', description: 'Manually entered data',
     icon: '', trustWeight: 1.0, priority: 0, entityTypes: const [],
     syncMode: 'manual', isActive: true, isConnected: true,
@@ -403,7 +403,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
 
       if (!mounted) return;
 
-      // Build a quick lookup: attribute_key → submaster options
+      // Build a quick lookup: attribute_key â†’ submaster options
       final Map<String, List<_SubmasterOption>> attrOptions = {};
       for (final schema in schemas) {
         if (schema.submasterCode != null && optionsByCode.containsKey(schema.submasterCode)) {
@@ -498,10 +498,10 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
         _dupHits = items.map((e) {
           final m = e as Map<String, dynamic>;
           return _DuplicateHit(
-            entityId: m['id'] as String? ?? m['entity_id'] as String? ?? '—',
+            entityId: m['id'] as String? ?? m['entity_id'] as String? ?? 'â€”',
             entityName: m['display_name'] as String? ?? m['name'] as String? ?? 'Unknown',
             score: (m['score'] as num?)?.toDouble() ?? 0.8,
-            sourceSystem: (m['source_systems'] as List<dynamic>?)?.firstOrNull as String? ?? '—',
+            sourceSystem: (m['source_systems'] as List<dynamic>?)?.firstOrNull as String? ?? 'â€”',
           );
         }).toList();
       });
@@ -556,7 +556,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
       };
 
       // Include source snapshot when user selected a real (non-manual) source system.
-      if (isIngested && _selectedSourceModel.code != 'nexus-mdm') {
+      if (isIngested && _selectedSourceModel.code != 'azile-mdm') {
         entityBody['source_snapshots'] = [
           {
             'source_system': _selectedSourceModel.code,
@@ -587,7 +587,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
             setState(() => _isPublishing = false);
             final msg = reviewResult is Success<bool>
                 ? 'Record submitted for Data Owner review.'
-                : 'Record saved as draft (submit-for-review failed — try from the entity detail page).';
+                : 'Record saved as draft (submit-for-review failed â€” try from the entity detail page).';
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Row(children: [
                 const Icon(Icons.pending_actions_outlined,
@@ -732,7 +732,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     );
   }
 
-  // ── App Bar ──────────────────────────────────
+  // â”€â”€ App Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: AppColors.cardSurface,
@@ -778,7 +778,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     );
   }
 
-  // ── Entity Identity ──────────────────────────
+  // â”€â”€ Entity Identity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildIdentitySection() {
     return _SectionCard(
       title: 'Entity Identity',
@@ -852,7 +852,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.03, end: 0);
   }
 
-  // ── Attributes Section ───────────────────────
+  // â”€â”€ Attributes Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildAttributesSection() {
     return _SectionCard(
       title: 'Attributes',
@@ -924,7 +924,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Key — read-only label for predefined, editable field for custom
+          // Key â€” read-only label for predefined, editable field for custom
           Expanded(
             flex: 2,
             child: attr.isCustom
@@ -951,7 +951,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
             child: attr.dropdownOptions != null
                 ? DropdownButtonFormField<String>(
                     initialValue: attr.value.isEmpty ? null : attr.value,
-                    decoration: _inputDecoration(hintText: 'Select…'),
+                    decoration: _inputDecoration(hintText: 'Selectâ€¦'),
                     style: AppTextStyles.inputText,
                     isExpanded: true,
                     items: attr.dropdownOptions!
@@ -977,7 +977,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
                     },
                     validator:
                         attr.type == 'email' ? Validators.emailOptional : null,
-                    decoration: _inputDecoration(hintText: 'Enter value…'),
+                    decoration: _inputDecoration(hintText: 'Enter valueâ€¦'),
                     style: AppTextStyles.inputText,
                   ),
           ),
@@ -1059,10 +1059,10 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     String selectedType = 'string';
     final types = ['string', 'email', 'phone', 'number', 'boolean', 'date'];
 
-    showNexusDialog<void>(
+    showAzileDialog<void>(
       context: context,
       child: StatefulBuilder(
-        builder: (ctx, setDs) => NexusDialog(
+        builder: (ctx, setDs) => AzileDialog(
           title: 'Add Attribute',
           titleIcon: Container(
             width: 28,
@@ -1149,7 +1149,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     );
   }
 
-  // ── AI Dup Check ─────────────────────────────
+  // â”€â”€ AI Dup Check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildDupCheckSection() {
     return _SectionCard(
       title: 'AI Duplicate Check',
@@ -1220,7 +1220,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
           const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 18),
           const SizedBox(width: 10),
           Text(
-            'No duplicates found — this appears to be a new entity.',
+            'No duplicates found â€” this appears to be a new entity.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary),
           ),
         ],
@@ -1245,7 +1245,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
               const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
               const SizedBox(width: 8),
               Text(
-                '${_dupHits.length} potential duplicate${_dupHits.length > 1 ? 's' : ''} found — review before publishing.',
+                '${_dupHits.length} potential duplicate${_dupHits.length > 1 ? 's' : ''} found â€” review before publishing.',
                 style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning),
               ),
             ],
@@ -1334,7 +1334,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
     );
   }
 
-  // ── Distribution ─────────────────────────────
+  // â”€â”€ Distribution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildDistributionToggle() {
     return _SectionCard(
       title: 'Distribution',
@@ -1354,9 +1354,9 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
   }
 }
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Reusable widgets
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SectionCard extends StatelessWidget {
   final String title;

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -81,7 +81,7 @@ class _TenantsPageState extends State<TenantsPage> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Tenants · $_activeCount active',
+              Text('Tenants Â· $_activeCount active',
                   style: AppTextStyles.headlineSmall),
               const SizedBox(height: 4),
               Text('Manage platform tenants and their configurations',
@@ -203,7 +203,7 @@ class _TenantsPageState extends State<TenantsPage> {
           Expanded(
             flex: 2,
             child: Text(
-              '${t.subdomain}.nexusmdm.io',
+              '${t.subdomain}.azilemdm.io',
               style: AppTextStyles.tableCell
                   .copyWith(color: AppColors.cyan, fontSize: 13),
             ),

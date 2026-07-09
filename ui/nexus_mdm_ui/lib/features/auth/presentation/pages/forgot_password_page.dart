@@ -1,4 +1,4 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
@@ -7,7 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/network/api_client.dart';
-import '../../../../shared/widgets/nexus_logo.dart';
+import '../../../../shared/widgets/azile_logo.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -112,7 +112,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const NexusLogo(size: 48)
+                const AzileLogo(size: 48)
                     .animate()
                     .fadeIn(duration: 600.ms),
                 const Spacer(),
@@ -172,7 +172,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
       child: Column(
         children: [
-          const NexusLogo(size: 36),
+          const AzileLogo(size: 36),
           const SizedBox(height: 16),
           Text('Forgot password',
               style: AppTextStyles.titleMedium,

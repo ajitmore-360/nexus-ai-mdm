@@ -1,5 +1,5 @@
-[package]
-name = "nexus-security"
+﻿[package]
+name = "azile-security"
 version = "0.1.0"
 edition = "2021"
 

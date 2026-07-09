@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "kafka-event-service"
 version = "0.1.0"
 edition = "2021"
@@ -8,7 +8,7 @@ edition = "2021"
 tokio = { version = "1", features = ["full"] }
 
 axum.workspace         = true
-nexus-telemetry.workspace = true
+azile-telemetry.workspace = true
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

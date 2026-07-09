@@ -1,6 +1,6 @@
-{
-    "name": "nexus_mdm_ui",
-    "short_name": "nexus_mdm_ui",
+﻿{
+    "name": "azile_mdm_ui",
+    "short_name": "azile_mdm_ui",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

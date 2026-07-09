@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
@@ -134,7 +134,7 @@ class _DashboardPageState extends State<DashboardPage> {
       'quality': ('Data Quality', Icons.health_and_safety_rounded, 'Monitor and improve your data quality metrics'),
       'governance': ('Governance', Icons.policy_rounded, 'Configure data governance rules and policies'),
       'analytics': ('Analytics', Icons.analytics_rounded, 'Deep insights into your MDM performance'),
-      'settings': ('Settings', Icons.settings_rounded, 'Configure your Nexus AI MDM platform'),
+      'settings': ('Settings', Icons.settings_rounded, 'Configure your Azile AI MDM platform'),
     };
 
     final config = sectionMap[widget.section] ??
@@ -230,7 +230,7 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Could not reach server — showing demo data. $_errorMessage',
+              'Could not reach server â€” showing demo data. $_errorMessage',
               style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning),
             ),
           ),
@@ -270,7 +270,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         const Spacer(),
         OutlinedButton.icon(
-          onPressed: () => context.go('/dashboard/ai-copilot'),
+          onPressed: () => context.go('/dashboard/ai-prism'),
           icon: const Icon(Icons.auto_awesome, size: 16),
           label: const Text('Ask AI'),
           style: OutlinedButton.styleFrom(
@@ -421,7 +421,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Auto-merged, manual, and rejected — last 14 days',
+            'Auto-merged, manual, and rejected â€” last 14 days',
             style: AppTextStyles.bodySmall,
           ),
           const SizedBox(height: 24),

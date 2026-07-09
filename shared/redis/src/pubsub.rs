@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use deadpool_redis::Pool;
 use redis::AsyncCommands;
 use serde::Serialize;
@@ -15,11 +15,11 @@ pub mod channels {
 
     /// Tenant-scoped channel (all events for a specific tenant).
     pub fn tenant_channel(tenant_id: &str) -> String {
-        format!("nexus:tenant:{}", tenant_id)
+        format!("azile:tenant:{}", tenant_id)
     }
 }
 
-/// Publisher — broadcasts JSON-serialised events to Redis Pub/Sub channels.
+/// Publisher â€” broadcasts JSON-serialised events to Redis Pub/Sub channels.
 ///
 /// Subscribers (the notification-service WebSocket hub) listen on these
 /// channels and forward events to connected Flutter clients.

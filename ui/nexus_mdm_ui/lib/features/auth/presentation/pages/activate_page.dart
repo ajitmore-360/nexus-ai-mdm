@@ -1,4 +1,4 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
@@ -10,7 +10,7 @@ import '../../../../core/auth/auth_manager.dart';
 import '../../../../core/license/license_manager.dart';
 import '../../../../core/branding/branding_manager.dart';
 import '../../../../core/network/api_client.dart';
-import '../../../../shared/widgets/nexus_logo.dart';
+import '../../../../shared/widgets/azile_logo.dart';
 
 class ActivatePage extends StatefulWidget {
   final String token;
@@ -56,7 +56,7 @@ class _ActivatePageState extends State<ActivatePage> {
         });
       }
     } catch (_) {
-      // Non-fatal — page still works, brand panel just shows the generic text
+      // Non-fatal â€” page still works, brand panel just shows the generic text
     }
   }
 
@@ -71,7 +71,7 @@ class _ActivatePageState extends State<ActivatePage> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (widget.token.isEmpty) {
-      setState(() => _error = 'Invalid invite link — token is missing.');
+      setState(() => _error = 'Invalid invite link â€” token is missing.');
       return;
     }
 
@@ -93,7 +93,7 @@ class _ActivatePageState extends State<ActivatePage> {
       );
       if (!mounted) return;
 
-      // Backend returns JWT tokens on success — auto-login the user
+      // Backend returns JWT tokens on success â€” auto-login the user
       final body = response.data;
       final data = body?['data'] as Map<String, dynamic>?;
       if (data != null) {
@@ -132,7 +132,7 @@ class _ActivatePageState extends State<ActivatePage> {
         }
       }
 
-      // Token missing in response — fallback to success screen → manual login
+      // Token missing in response â€” fallback to success screen â†’ manual login
       setState(() {
         _loading = false;
         _done = true;
@@ -177,7 +177,7 @@ class _ActivatePageState extends State<ActivatePage> {
     );
   }
 
-  // ── Brand panel (same look as LoginPage) ────────────────────────────────────
+  // â”€â”€ Brand panel (same look as LoginPage) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildBrandPanel() {
     return Container(
@@ -202,7 +202,7 @@ class _ActivatePageState extends State<ActivatePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const NexusLogo(size: 48)
+                const AzileLogo(size: 48)
                     .animate()
                     .fadeIn(duration: 600.ms),
                 const Spacer(),
@@ -219,7 +219,7 @@ class _ActivatePageState extends State<ActivatePage> {
                     .slideY(begin: 0.2, end: 0, duration: 600.ms),
                 const SizedBox(height: 16),
                 Text(
-                  'Set your password to activate your account and access Nexus AI MDM.',
+                  'Set your password to activate your account and access Azile AI MDM.',
                   style: AppTextStyles.bodyLarge.copyWith(
                     color: AppColors.secondaryText,
                   ),
@@ -264,7 +264,7 @@ class _ActivatePageState extends State<ActivatePage> {
       padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
       child: Column(
         children: [
-          const NexusLogo(size: 36),
+          const AzileLogo(size: 36),
           const SizedBox(height: 16),
           Text('Activate your account',
               style: AppTextStyles.titleMedium,
@@ -274,7 +274,7 @@ class _ActivatePageState extends State<ActivatePage> {
     );
   }
 
-  // ── Form panel ───────────────────────────────────────────────────────────────
+  // â”€â”€ Form panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildFormPanel() {
     return SingleChildScrollView(
@@ -368,7 +368,7 @@ class _ActivatePageState extends State<ActivatePage> {
               const SizedBox(height: 6),
               _textField(
                 controller: _passwordCtrl,
-                hint: '••••••••••••',
+                hint: 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢',
                 obscure: _obscurePassword,
                 toggleObscure: () =>
                     setState(() => _obscurePassword = !_obscurePassword),
@@ -384,7 +384,7 @@ class _ActivatePageState extends State<ActivatePage> {
               const SizedBox(height: 6),
               _textField(
                 controller: _confirmCtrl,
-                hint: '••••••••••••',
+                hint: 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢',
                 obscure: _obscureConfirm,
                 toggleObscure: () =>
                     setState(() => _obscureConfirm = !_obscureConfirm),
@@ -481,7 +481,7 @@ class _ActivatePageState extends State<ActivatePage> {
     );
   }
 
-  // ── Shared form helpers ───────────────────────────────────────────────────────
+  // â”€â”€ Shared form helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _label(String text) {
     return Text(

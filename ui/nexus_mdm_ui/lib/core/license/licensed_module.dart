@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 enum LicensedModule {
   // Professional tier
@@ -10,7 +10,7 @@ enum LicensedModule {
   matchingSemantic,
   relationships,
   domainPolicies,
-  // Essentials tier (always on — but still a trackable module)
+  // Essentials tier (always on â€” but still a trackable module)
   lineage,
   // Enterprise tier (future)
   whiteLabelBranding,
@@ -19,7 +19,7 @@ enum LicensedModule {
 extension LicensedModuleX on LicensedModule {
   String get tier {
     switch (this) {
-      case LicensedModule.aiCopilot:
+      case LicensedModule.aiPrism:
       case LicensedModule.dataQuality:
       case LicensedModule.analytics:
       case LicensedModule.governance:
@@ -37,7 +37,7 @@ extension LicensedModuleX on LicensedModule {
 
   IconData get icon {
     switch (this) {
-      case LicensedModule.aiCopilot:         return Icons.auto_awesome_outlined;
+      case LicensedModule.aiPrism:         return Icons.auto_awesome_outlined;
       case LicensedModule.dataQuality:       return Icons.verified_outlined;
       case LicensedModule.analytics:         return Icons.analytics_outlined;
       case LicensedModule.governance:        return Icons.shield_outlined;
@@ -52,7 +52,7 @@ extension LicensedModuleX on LicensedModule {
 
   String get displayName {
     switch (this) {
-      case LicensedModule.aiCopilot:          return 'AI Copilot';
+      case LicensedModule.aiPrism:          return 'AI Prism';
       case LicensedModule.dataQuality:        return 'Data Quality';
       case LicensedModule.analytics:          return 'Analytics';
       case LicensedModule.governance:         return 'Governance';
@@ -67,7 +67,7 @@ extension LicensedModuleX on LicensedModule {
 
   String get description {
     switch (this) {
-      case LicensedModule.aiCopilot:
+      case LicensedModule.aiPrism:
         return 'AI-powered data stewardship recommendations';
       case LicensedModule.dataQuality:
         return 'Advanced data quality rules and scoring';
@@ -94,7 +94,7 @@ extension LicensedModuleX on LicensedModule {
   /// Returns null for always-on modules that have no backend gate (lineage).
   String? get featureKey {
     switch (this) {
-      case LicensedModule.aiCopilot:          return 'ai_copilot';
+      case LicensedModule.aiPrism:          return 'ai_copilot';
       case LicensedModule.dataQuality:        return 'data_quality';
       case LicensedModule.analytics:          return 'analytics';
       case LicensedModule.governance:         return 'governance';

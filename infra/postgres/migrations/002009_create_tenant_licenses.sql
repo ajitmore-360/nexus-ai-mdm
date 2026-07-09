@@ -1,4 +1,4 @@
--- ============================================================================
+﻿-- ============================================================================
 -- Migration 002009: Tenant Licenses
 -- Per-tenant subscription tier with feature flags and hard limits.
 -- Essentials: 1 domain / 500k records / 5 stewards
@@ -47,25 +47,25 @@ CREATE INDEX IF NOT EXISTS idx_tenant_licenses_status  ON core_mdm.tenant_licens
 CREATE INDEX IF NOT EXISTS idx_tenant_licenses_expires ON core_mdm.tenant_licenses(expires_at)
     WHERE expires_at IS NOT NULL;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Helper: canonical feature set per tier
 -- Use these JSONB constants when creating licenses programmatically.
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
--- Essentials features are ALWAYS on — nothing gated here.
+-- Essentials features are ALWAYS on â€” nothing gated here.
 -- Professional adds all premium features.
 -- Enterprise adds white-label ontop of Professional.
 
 COMMENT ON TABLE core_mdm.tenant_licenses IS
 'One row per tenant. tier controls feature access and hard limits.
- Essentials (default): 1 domain, 500k records, 5 stewards — basic matching only.
- Professional: 5 domains, 5M records, 20 stewards — semantic matching, AI copilot,
+ Essentials (default): 1 domain, 500k records, 5 stewards â€” basic matching only.
+ Professional: 5 domains, 5M records, 20 stewards â€” semantic matching, AI copilot,
    cross-domain relationships, per-domain policies, analytics, governance, distribution.
  Enterprise: unlimited everything + white-label branding.';
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Seed: system tenant gets enterprise (internal use / demo)
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.tenant_licenses (
     tenant_id,
@@ -95,16 +95,16 @@ INSERT INTO core_mdm.tenant_licenses (
         "white_label":        true,
         "priority_support":   true
     }'::jsonb,
-    'System / demo tenant — enterprise tier, all features enabled'
+    'System / demo tenant â€” enterprise tier, all features enabled'
 ) ON CONFLICT (tenant_id) DO NOTHING;
 
--- ─────────────────────────────────────────────────────────────────────────────
--- Function: nexus_license_features(tier TEXT) → JSONB
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- Function: AZILE_license_features(tier TEXT) â†’ JSONB
 -- Returns the canonical features JSONB for a given tier.
 -- Called when provisioning new tenants programmatically.
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-CREATE OR REPLACE FUNCTION core_mdm.nexus_license_features(p_tier TEXT)
+CREATE OR REPLACE FUNCTION core_mdm.AZILE_license_features(p_tier TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql IMMUTABLE
 AS $$
@@ -144,12 +144,12 @@ BEGIN
 END;
 $$;
 
--- ─────────────────────────────────────────────────────────────────────────────
--- Function: nexus_license_limits(tier TEXT) → TABLE
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- Function: AZILE_license_limits(tier TEXT) â†’ TABLE
 -- Returns (max_domains, max_records, max_stewards) for a given tier.
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-CREATE OR REPLACE FUNCTION core_mdm.nexus_license_limits(p_tier TEXT)
+CREATE OR REPLACE FUNCTION core_mdm.AZILE_license_limits(p_tier TEXT)
 RETURNS TABLE(max_domains INTEGER, max_records BIGINT, max_stewards INTEGER)
 LANGUAGE plpgsql IMMUTABLE
 AS $$

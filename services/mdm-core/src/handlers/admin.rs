@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use axum::{
     extract::State,
@@ -10,15 +10,15 @@ use axum::{
 use serde_json::json;
 use uuid::Uuid;
 
-use nexus_redis::queue::{Task, task_types};
+use azile_redis::queue::{Task, task_types};
 
 use crate::middleware::tenant::TenantContext;
 use crate::AppState;
 
-// ── POST /admin/embed-migration ──────────────────────────────────────────────
+// â”€â”€ POST /admin/embed-migration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
 // Enqueues `entity.embed` tasks for every entity in the caller's tenant that
-// does not yet have a row in `ai.entity_embeddings`. Safe to call repeatedly —
+// does not yet have a row in `ai.entity_embeddings`. Safe to call repeatedly â€”
 // each entity is only queued once per invocation; the AI service is idempotent.
 
 pub async fn embed_migration(
@@ -32,7 +32,7 @@ pub async fn embed_migration(
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({
                 "success": false,
-                "error":   "Task queue not configured — set REDIS_URL to enable embedding migration",
+                "error":   "Task queue not configured â€” set REDIS_URL to enable embedding migration",
             })),
         ).into_response();
     };

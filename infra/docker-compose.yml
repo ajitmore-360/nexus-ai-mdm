@@ -1,5 +1,5 @@
 # ============================================================================
-# Nexus AI MDM — Complete Production-Ready Stack
+# Azile AI MDM — Complete Production-Ready Stack
 # ============================================================================
 #
 # QUICK START:
@@ -29,25 +29,25 @@
 #   4. All other services  → depend on mdm-core:healthy (migrations complete)
 #
 # CREDENTIALS (override in infra/.env):
-#   PostgreSQL:    postgres / nexus_dev_2024
-#   Redis:         nexus_redis_pass
-#   PgAdmin:       admin@nexus.ai / nexus_pgadmin_dev
-#   Grafana:       admin / nexus_grafana_dev
-#   JWT Secret:    nexus-local-dev-jwt-secret-min-32-chars!!
+#   PostgreSQL:    postgres / azile_dev_2024
+#   Redis:         azile_redis_pass
+#   PgAdmin:       admin@nexus.ai / AZILE_pgadmin_dev
+#   Grafana:       admin / AZILE_grafana_dev
+#   JWT Secret:    azile-local-dev-jwt-secret-min-32-chars!!
 # ============================================================================
 
 # ── Shared environment fragments ─────────────────────────────────────────────
 x-db-env: &db-env
-  DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-nexus_dev_2024}@postgres:5432/nexus_mdm
+  DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-azile_dev_2024}@postgres:5432/azile_mdm
 
 x-redis-env: &redis-env
-  REDIS_URL:        redis://:${REDIS_PASSWORD:-nexus_redis_pass}@redis:6379
+  REDIS_URL:        redis://:${REDIS_PASSWORD:-azile_redis_pass}@redis:6379
   REDIS_KEY_PREFIX: nexus
 
 x-auth-env: &auth-env
   AUTH_DISABLED:        ${AUTH_DISABLED:-false}
-  JWT_SECRET:           ${JWT_SECRET:-nexus-local-dev-jwt-secret-min-32-chars!!}
-  API_BEARER_TOKEN:     ${API_BEARER_TOKEN:-nexus-local-dev-token}
+  JWT_SECRET:           ${JWT_SECRET:-azile-local-dev-jwt-secret-min-32-chars!!}
+  API_BEARER_TOKEN:     ${API_BEARER_TOKEN:-azile-local-dev-token}
   FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
 
 x-obs-env: &obs-env
@@ -57,7 +57,7 @@ x-obs-env: &obs-env
 
 x-kafka-env: &kafka-env
   KAFKA_BROKERS:   kafka:29092
-  KAFKA_GROUP_ID:  nexus-default
+  KAFKA_GROUP_ID:  azile-default
 
 x-service-deps-infra: &deps-infra
   depends_on:
@@ -74,19 +74,19 @@ services:
 
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: nexus-postgres
+    container_name: azile-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER:     ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexus_dev_2024}
-      POSTGRES_DB:       nexus_mdm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-azile_dev_2024}
+      POSTGRES_DB:       azile_mdm
     ports:
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro    # roles, schemas, extensions
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d nexus_mdm"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d azile_mdm"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -98,11 +98,11 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: nexus-redis
+    container_name: azile-redis
     restart: unless-stopped
     command: >
       redis-server
-      --requirepass ${REDIS_PASSWORD:-nexus_redis_pass}
+      --requirepass ${REDIS_PASSWORD:-azile_redis_pass}
       --maxmemory 2gb
       --maxmemory-policy allkeys-lru
       --save 900 1
@@ -113,7 +113,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-nexus_redis_pass}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-azile_redis_pass}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -128,14 +128,14 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: nexus-pgadmin
+    container_name: azile-pgadmin
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL:    ${PGADMIN_EMAIL:-admin@nexus.ai}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-nexus_pgadmin_dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-AZILE_pgadmin_dev}
       PGADMIN_CONFIG_SERVER_MODE: "False"
       PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
-      PGADMIN_CONFIG_LOGIN_BANNER: "Nexus MDM Internal — Authorised Access Only"
+      PGADMIN_CONFIG_LOGIN_BANNER: "Azile MDM Internal — Authorised Access Only"
       PGADMIN_CONFIG_SESSION_EXPIRATION_TIME: 60
     ports:
       - "127.0.0.1:5050:80"    # localhost-only — never expose on 0.0.0.0
@@ -151,7 +151,7 @@ services:
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
-    container_name: nexus-zookeeper
+    container_name: azile-zookeeper
     restart: unless-stopped
     environment:
       ZOOKEEPER_CLIENT_PORT:         2181
@@ -171,7 +171,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: nexus-kafka
+    container_name: azile-kafka
     restart: unless-stopped
     depends_on:
       zookeeper:
@@ -204,7 +204,7 @@ services:
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
-    container_name: nexus-kafka-ui
+    container_name: azile-kafka-ui
     restart: unless-stopped
     depends_on:
       kafka:
@@ -224,7 +224,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: nexus-ollama
+    container_name: azile-ollama
     restart: unless-stopped
     # SECURITY: No external port — only ai-service can reach Ollama
     # ports:
@@ -248,7 +248,7 @@ services:
   # Pull required LLM models once after Ollama starts
   ollama-init:
     image: curlimages/curl:latest
-    container_name: nexus-ollama-init
+    container_name: azile-ollama-init
     restart: "no"
     depends_on:
       ollama:
@@ -269,7 +269,7 @@ services:
 
   opa:
     image: openpolicyagent/opa:latest
-    container_name: nexus-opa
+    container_name: azile-opa
     restart: unless-stopped
     command: ["run", "--server", "--log-format=json", "--log-level=error",
               "--set=decision_logs.console=true"]
@@ -298,7 +298,7 @@ services:
     build:
       context: ..
       dockerfile: services/mdm-core/Dockerfile
-    container_name: nexus-mdm-core
+    container_name: azile-mdm-core
     restart: unless-stopped
     <<: *deps-infra
     environment:
@@ -498,7 +498,7 @@ services:
       RUST_LOG:          "notification_service=info"
       SMTP_HOST:         "${SMTP_HOST:-mailhog}"
       SMTP_PORT:         "${SMTP_PORT:-1025}"
-      SMTP_FROM:         "${SMTP_FROM:-Nexus AI MDM <noreply@nexus-mdm.io>}"
+      SMTP_FROM:         "${SMTP_FROM:-Azile AI MDM <noreply@azile-mdm.io>}"
       SMTP_INSECURE:     "${SMTP_INSECURE:-true}"
       SMTP_USER:         "${SMTP_USER:-}"
       SMTP_PASS:         "${SMTP_PASS:-}"
@@ -599,7 +599,7 @@ services:
     build:
       context: ..
       dockerfile: services/kafka-event-service/Dockerfile
-    container_name: nexus-kafka-event-service
+    container_name: azile-kafka-event-service
     restart: unless-stopped
     depends_on:
       mdm-core:
@@ -617,11 +617,11 @@ services:
   # UI
   # ═══════════════════════════════════════════════════════════════════════════
 
-  nexus-ui:
+  azile-ui:
     build:
-      context: ../ui/nexus_mdm_ui
+      context: ../ui/azile_mdm_ui
       dockerfile: Dockerfile
-    container_name: nexus-ui
+    container_name: azile-ui
     restart: unless-stopped
     depends_on:
       api-gateway:
@@ -643,7 +643,7 @@ services:
   # ── Grafana Tempo — distributed trace backend ────────────────────────────────
   tempo:
     image: grafana/tempo:2.6.1
-    container_name: nexus-tempo
+    container_name: azile-tempo
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/tempo.yml"]
     volumes:
@@ -665,7 +665,7 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: nexus-prometheus
+    container_name: azile-prometheus
     restart: unless-stopped
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -693,7 +693,7 @@ services:
 
   alertmanager:
     image: prom/alertmanager:latest
-    container_name: nexus-alertmanager
+    container_name: azile-alertmanager
     restart: unless-stopped
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
@@ -720,10 +720,10 @@ services:
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
-    container_name: nexus-postgres-exporter
+    container_name: azile-postgres-exporter
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-nexus_dev_2024}@postgres:5432/nexus_mdm?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-azile_dev_2024}@postgres:5432/azile_mdm?sslmode=disable"
       PG_EXPORTER_EXTEND_QUERY_PATH: /etc/postgres_exporter/queries.yml
     depends_on:
       postgres:
@@ -740,17 +740,17 @@ services:
 
   grafana:
     image: grafana/grafana-oss:latest
-    container_name: nexus-grafana
+    container_name: azile-grafana
     restart: unless-stopped
     depends_on:
       prometheus:
         condition: service_healthy
     environment:
       GF_SECURITY_ADMIN_USER:     admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-nexus_grafana_dev}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-AZILE_grafana_dev}
       GF_USERS_ALLOW_SIGN_UP:     "false"
       GF_LOG_LEVEL:               "warn"
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/nexus_overview.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/azile_overview.json
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

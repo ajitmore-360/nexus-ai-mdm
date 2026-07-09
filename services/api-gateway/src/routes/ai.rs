@@ -1,4 +1,4 @@
-use axum::{
+﻿use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
@@ -6,7 +6,7 @@ use axum::{
     Json,
 };
 
-use nexus_auth::Claims;
+use azile_auth::Claims;
 use contracts::ai::mcp::MCPRequest;
 
 use crate::{
@@ -20,7 +20,7 @@ const MAX_PROMPT_BYTES: usize = 8_000;
 
 //
 // ========================================
-// 🚀 AI COPILOT ROUTE
+// ðŸš€ AI COPILOT ROUTE
 // ========================================
 //
 
@@ -33,7 +33,7 @@ pub async fn copilot(
     Json(payload):          Json<MCPRequest>,
 ) -> impl IntoResponse {
 
-    // Tenant ID from the header — already validated against JWT in tenant_middleware
+    // Tenant ID from the header â€” already validated against JWT in tenant_middleware
     let tenant_id = headers
         .get("x-tenant-id")
         .and_then(|v| v.to_str().ok())
@@ -58,7 +58,7 @@ pub async fn copilot(
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
 
-    // Reject prompts that exceed the byte cap — protects Ollama from OOM and
+    // Reject prompts that exceed the byte cap â€” protects Ollama from OOM and
     // prevents token-budget exhaustion by large untrusted inputs.
     if payload.prompt.as_deref().map(|p| p.len()).unwrap_or(0) > MAX_PROMPT_BYTES {
         return (
@@ -109,7 +109,7 @@ pub async fn copilot(
 
 //
 // ========================================
-// 🚀 AI COPILOT — STREAMING  (additive: /copilot/stream)
+// ðŸš€ AI COPILOT â€” STREAMING  (additive: /prism/stream)
 // ========================================
 //
 

@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // SCIM 2.0 Handlers (RFC 7643 / RFC 7644)
 //
 // All SCIM endpoints are authenticated via SCIM bearer tokens
@@ -30,7 +30,7 @@ use crate::{
     AppState,
 };
 
-// ── SCIM bearer token auth helper ────────────────────────────────────────────
+// â”€â”€ SCIM bearer token auth helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async fn extract_tenant_from_token(
     state: &Arc<AppState>,
@@ -67,7 +67,7 @@ async fn extract_tenant_from_token(
         })
 }
 
-// ── Service Provider Configuration ───────────────────────────────────────────
+// â”€â”€ Service Provider Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn scim_service_provider_config(
     Path(_tenant_id_str): Path<String>,
@@ -81,7 +81,7 @@ pub async fn scim_service_provider_config(
 
     let config = serde_json::json!({
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
-        "documentationUri": "https://nexus-mdm.dev/docs/scim",
+        "documentationUri": "https://azile-mdm.dev/docs/scim",
         "patch": { "supported": true },
         "bulk": { "supported": false, "maxOperations": 0, "maxPayloadSize": 0 },
         "filter": { "supported": true, "maxResults": 200 },
@@ -99,7 +99,7 @@ pub async fn scim_service_provider_config(
     (StatusCode::OK, Json(config)).into_response()
 }
 
-// ── Schemas ───────────────────────────────────────────────────────────────────
+// â”€â”€ Schemas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn scim_schemas(
     Path(_tenant_id_str): Path<String>,
@@ -155,7 +155,7 @@ pub async fn scim_schemas(
     (StatusCode::OK, Json(schemas)).into_response()
 }
 
-// ── Resource Types ────────────────────────────────────────────────────────────
+// â”€â”€ Resource Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn scim_resource_types(
     Path(_tenant_id_str): Path<String>,
@@ -192,7 +192,7 @@ pub async fn scim_resource_types(
     (StatusCode::OK, Json(rt)).into_response()
 }
 
-// ── Users ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Deserialize)]
 pub struct ScimListQuery {
@@ -331,7 +331,7 @@ pub async fn scim_delete_user(
     }
 }
 
-// ── Groups ────────────────────────────────────────────────────────────────────
+// â”€â”€ Groups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn scim_list_groups(
     Path(_tenant_id_str): Path<String>,
@@ -381,7 +381,7 @@ pub async fn scim_create_group(
         Err(e) => return e.into_response(),
     };
 
-    // Map displayName → role code
+    // Map displayName â†’ role code
     let role_code = display_name_to_role(&payload.display_name);
 
     // Add all members to this role
@@ -463,7 +463,7 @@ pub async fn scim_delete_group(
     StatusCode::NO_CONTENT.into_response()
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn display_name_to_role(name: &str) -> String {
     match name.to_lowercase().as_str() {

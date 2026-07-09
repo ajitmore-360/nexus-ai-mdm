@@ -1,4 +1,4 @@
-mod config;
+﻿mod config;
 mod middleware;
 mod proxy;
 mod routes;
@@ -31,7 +31,7 @@ use middleware::{
     user_context::inject_user_context,
 };
 
-use nexus_redis::{create_pool as create_redis_pool, RedisConfig, RedisRateLimiter, SessionStore};
+use azile_redis::{create_pool as create_redis_pool, RedisConfig, RedisRateLimiter, SessionStore};
 
 use routes::{
     ai::{copilot, copilot_stream},
@@ -56,13 +56,13 @@ use routes::{
         patch_entity, record_consent, recommend_weights,
         reject_match_candidate, scan_anomalies, search,
         update_policy_weights, withdraw_consent,
-        // admin — tenant management
+        // admin â€” tenant management
         admin_list_tenants, admin_create_tenant, admin_create_admin_user,
         admin_list_users, admin_invite_user, admin_update_user_role,
-        // admin — entity types & attributes
+        // admin â€” entity types & attributes
         list_entity_types, create_entity_type, update_entity_type, delete_entity_type,
         list_attributes, create_attribute, delete_attribute, reorder_attributes, next_sequence,
-        // admin — source systems
+        // admin â€” source systems
         list_source_systems, create_source_system, update_source_system,
         delete_source_system, test_source_system,
         // audit
@@ -153,12 +153,12 @@ async fn main() {
     dotenvy::dotenv().ok();
 
     // ---- Tracing -----------------------------------------------------------
-    nexus_telemetry::tracing_init::init_tracing("api-gateway");
+    azile_telemetry::tracing_init::init_tracing("api-gateway");
 
     // ---- Config ------------------------------------------------------------
     let settings = Settings::from_env();
 
-    // ── Production safety guard ──────────────────────────────────────────────
+    // â”€â”€ Production safety guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Refuse to start with insecure configuration in non-development environments.
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     let auth_disabled = std::env::var("AUTH_DISABLED")
@@ -175,13 +175,13 @@ async fn main() {
 
     if auth_disabled {
         tracing::warn!(
-            "⚠️  AUTH_DISABLED=true — all authentication checks are bypassed. \
+            "âš ï¸  AUTH_DISABLED=true â€” all authentication checks are bypassed. \
              This MUST NOT be used in production."
         );
     }
 
     // Guard: reject known dev default JWT secret in non-dev environments.
-    const KNOWN_DEV_JWT_SECRET: &str = "nexus-local-dev-jwt-secret-min-32-chars!!";
+    const KNOWN_DEV_JWT_SECRET: &str = "azile-local-dev-jwt-secret-min-32-chars!!";
     let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_default();
     if jwt_secret.is_empty()
         && !auth_disabled
@@ -208,7 +208,7 @@ async fn main() {
     // Guard: API_BEARER_TOKEN must be set and must not be the known dev default in
     // non-development environments. mdm_service_auth() sends this as the
     // service-to-service Authorization header on every proxied write to mdm-core.
-    const KNOWN_DEV_API_TOKEN: &str = "nexus-local-dev-token";
+    const KNOWN_DEV_API_TOKEN: &str = "azile-local-dev-token";
     let api_bearer_token = std::env::var("API_BEARER_TOKEN").unwrap_or_default();
     if api_bearer_token == KNOWN_DEV_API_TOKEN
         && matches!(app_env.as_str(), "production" | "staging" | "prod" | "stage")
@@ -259,7 +259,7 @@ async fn main() {
                     pool.clone(),
                     redis_cfg.key_prefix.clone(),
                 ));
-                let blocklist = Arc::new(nexus_redis::TokenBlocklist::new(
+                let blocklist = Arc::new(azile_redis::TokenBlocklist::new(
                     pool,
                     redis_cfg.key_prefix.clone(),
                 ));
@@ -330,18 +330,18 @@ async fn main() {
         ));
 
     // ---- Routes ------------------------------------------------------------
-    // Middleware order (outermost applied last → executes first):
-    //   request_id → logging → rate_limit → auth → tenant → rbac → handler
+    // Middleware order (outermost applied last â†’ executes first):
+    //   request_id â†’ logging â†’ rate_limit â†’ auth â†’ tenant â†’ rbac â†’ handler
     //
     // Routes are split into three groups with different RBAC rules:
     //
-    //  1. platform_admin_routes  — SuperAdmin ONLY (Product Admin / IT team)
+    //  1. platform_admin_routes  â€” SuperAdmin ONLY (Product Admin / IT team)
     //     Tenant management, platform users.  Data operators are blocked.
     //
-    //  2. tenant_data_routes     — Any tenant role EXCEPT SuperAdmin
+    //  2. tenant_data_routes     â€” Any tenant role EXCEPT SuperAdmin
     //     Entities, match, merge, ingest.  IT admin is blocked.
     //
-    //  3. shared_routes          — Any authenticated role
+    //  3. shared_routes          â€” Any authenticated role
     //     Dashboard, search, entity-type config, source systems, AI copilot.
     //     These are accessible to both IT admin and tenant users.
 
@@ -349,7 +349,7 @@ async fn main() {
         router
             // Layer application order: last .layer() = outermost = executes first on the request.
             // Desired execution order:
-            //   request_id → logging → rate_limit → auth → tenant → license_guard → rbac → handler
+            //   request_id â†’ logging â†’ rate_limit â†’ auth â†’ tenant â†’ license_guard â†’ rbac â†’ handler
             //
             // license_guard is added first (innermost of the middleware stack) so it executes
             // after both auth and tenant_middleware have already run and populated extensions.
@@ -362,7 +362,7 @@ async fn main() {
             .layer(axum_middleware::from_fn(request_id_middleware))
     };
 
-    // Platform-level routes skip tenant_middleware — SuperAdmins are not scoped to a tenant.
+    // Platform-level routes skip tenant_middleware â€” SuperAdmins are not scoped to a tenant.
     // license_guard passes through safely when TenantContext is absent.
     let platform_layers = |router: Router<AppState>| {
         router
@@ -373,7 +373,7 @@ async fn main() {
             .layer(axum_middleware::from_fn(request_id_middleware))
     };
 
-    // ── 1. Platform admin routes — SuperAdmin only ────────────────────────────
+    // â”€â”€ 1. Platform admin routes â€” SuperAdmin only â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let platform_admin_routes = platform_layers(
         Router::new()
             .route("/admin/tenants",                get(admin_list_tenants).post(admin_create_tenant))
@@ -381,7 +381,7 @@ async fn main() {
             .layer(axum_middleware::from_fn(require_super_admin))
     );
 
-    // ── 1b. Tenant admin routes — Admin role (tenant admins managing their own tenant) ──
+    // â”€â”€ 1b. Tenant admin routes â€” Admin role (tenant admins managing their own tenant) â”€â”€
     let tenant_admin_routes = common_layers(
         Router::new()
             .route("/admin/users",         get(admin_list_users))
@@ -390,10 +390,10 @@ async fn main() {
             .layer(axum_middleware::from_fn(require_admin))
     );
 
-    // ── 2a. Steward-only routes — require Steward role ─────────────────────────
+    // â”€â”€ 2a. Steward-only routes â€” require Steward role â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Merge and defer permanently alter or postpone master-data decisions.
     // BusinessAdmin, Viewers, and Analysts cannot perform these operations.
-    // SuperAdmin (IT Admin) has full access — they can perform any data operation
+    // SuperAdmin (IT Admin) has full access â€” they can perform any data operation
     // within the tenant they are logged into.
     let steward_routes = common_layers(
         Router::new()
@@ -403,7 +403,7 @@ async fn main() {
             .layer(axum_middleware::from_fn(require_steward))
     );
 
-    // ── 2b. Approve/reject routes — Steward or BusinessAdmin ──────────────────
+    // â”€â”€ 2b. Approve/reject routes â€” Steward or BusinessAdmin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let approve_routes = common_layers(
         Router::new()
             .route("/match/:rid/candidates/:cid/approve", post(approve_match_candidate))
@@ -413,7 +413,7 @@ async fn main() {
             .layer(axum_middleware::from_fn(require_approve))
     );
 
-    // ── 2c. Governance assignment config — BusinessAdmin/Admin only ───────────
+    // â”€â”€ 2c. Governance assignment config â€” BusinessAdmin/Admin only â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let governance_admin_routes = common_layers(
         Router::new()
             .route("/governance/assignments",
@@ -423,19 +423,19 @@ async fn main() {
             .layer(axum_middleware::from_fn(require_admin))
     );
 
-    // ── 2d. Governance workflow — Steward+ submit, Approve-role for approve/reject
+    // â”€â”€ 2d. Governance workflow â€” Steward+ submit, Approve-role for approve/reject
     let governance_workflow_routes = common_layers(
         Router::new()
             // Any authenticated tenant user can see their own assigned types
             .route("/governance/assignments/my-types",
                 get(my_governance_assigned_types))
-            // Pending approvals list — Approve role (Steward owner, BusinessAdmin, Admin)
+            // Pending approvals list â€” Approve role (Steward owner, BusinessAdmin, Admin)
             .route("/entities/pending-approvals",
                 get(list_pending_entity_approvals))
-            // Bulk approve/reject — same access level as single approve/reject
+            // Bulk approve/reject â€” same access level as single approve/reject
             .route("/entities/bulk-approve", post(bulk_approve_entities_proxy))
             .route("/entities/bulk-reject",  post(bulk_reject_entities_proxy))
-            // Approve/reject — Data Owner or Admin
+            // Approve/reject â€” Data Owner or Admin
             .route("/entities/:id/approve",
                 post(approve_entity_proxy))
             .route("/entities/:id/reject",
@@ -451,7 +451,7 @@ async fn main() {
             .layer(axum_middleware::from_fn(require_steward))
     );
 
-    // ── 2e. Steward data mutations — create/edit/delete entities, ingest ───────
+    // â”€â”€ 2e. Steward data mutations â€” create/edit/delete entities, ingest â”€â”€â”€â”€â”€â”€â”€
     // Viewer, Analyst, and BusinessAdmin cannot write entity records.
     let steward_data_routes = common_layers(
         Router::new()
@@ -477,7 +477,7 @@ async fn main() {
             // Entity comment writes
             .route("/entities/:id/comments",                     post(proxy_add_entity_comment))
             .route("/entities/:entity_id/comments/:comment_id",  patch(proxy_edit_entity_comment).delete(proxy_delete_entity_comment))
-            // Unmerge (write — steward minimum)
+            // Unmerge (write â€” steward minimum)
             .route("/entities/:id/unmerge",                      post(proxy_unmerge_entity))
             // Bulk operations (steward minimum)
             .route("/entities/bulk/status",                      post(proxy_bulk_update_status))
@@ -485,14 +485,14 @@ async fn main() {
             .route("/entities/bulk/tag",                         post(proxy_bulk_tag))
             // Hierarchy parent assignment (write)
             .route("/entities/:id/parent",                       patch(proxy_set_entity_parent))
-            // Task management (steward minimum — create + update own tasks)
+            // Task management (steward minimum â€” create + update own tasks)
             .route("/tasks",                                     post(proxy_create_task))
             .route("/tasks/:id",                                 patch(proxy_update_task))
             // Reference data writes (steward can add values; list creation is admin)
             .route("/reference-data/:list_id/values",            post(proxy_upsert_reference_value))
             .route("/reference-data/:list_id/values/bulk",       post(proxy_bulk_import_ref_values))
             .route("/reference-data/:list_id/values/:value_id",  delete(proxy_delete_reference_value))
-            // Transformation rules preview (dry-run — steward minimum)
+            // Transformation rules preview (dry-run â€” steward minimum)
             .route("/transformation-rules/preview",              post(proxy_preview_transformation))
             // Party role writes (steward minimum)
             .route("/entities/:id/roles",                        post(proxy_upsert_party_role))
@@ -500,7 +500,7 @@ async fn main() {
             .layer(axum_middleware::from_fn(require_steward))
     );
 
-    // ── 2f. Admin config mutations — schema, policies, source systems ─────────
+    // â”€â”€ 2f. Admin config mutations â€” schema, policies, source systems â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Only BusinessAdmin and above may modify tenant configuration.
     let admin_config_routes = common_layers(
         Router::new()
@@ -510,10 +510,10 @@ async fn main() {
             .route("/policy/rules/:id/toggle",   patch(toggle_policy_rule))
             // Policy weights update
             .route("/policy/weights",            patch(update_policy_weights))
-            // GDPR operations (admin-only — data erasure and access log)
+            // GDPR operations (admin-only â€” data erasure and access log)
             .route("/policy/gdpr/erasure",       post(gdpr_erasure))
             .route("/policy/gdpr/access",        post(gdpr_access))
-            // Distribution (admin-only — controls downstream data distribution)
+            // Distribution (admin-only â€” controls downstream data distribution)
             .route("/distribution/jobs",         post(enqueue_distribution))
             // Entity type schema management
             .route("/entity-types",              post(create_entity_type))
@@ -568,12 +568,12 @@ async fn main() {
             .layer(axum_middleware::from_fn(require_admin))
     );
 
-    // ── 2g. Tenant data routes — read-only, any authenticated tenant role ─────
+    // â”€â”€ 2g. Tenant data routes â€” read-only, any authenticated tenant role â”€â”€â”€â”€â”€
     let tenant_data_routes = common_layers(
         Router::new()
-            // Hierarchy reads — must come BEFORE /:id routes
+            // Hierarchy reads â€” must come BEFORE /:id routes
             .route("/entities/hierarchy/roots",          get(proxy_hierarchy_roots))
-            // XRef lookup — must come before /:id
+            // XRef lookup â€” must come before /:id
             .route("/xrefs/lookup",                      get(proxy_lookup_by_xref))
             // Entity reads
             .route("/entities",                          get(list_entities))
@@ -583,7 +583,7 @@ async fn main() {
             .route("/lineage/graph",                     get(get_lineage_graph))
             .route("/lineage/stats",                     get(get_lineage_stats))
             .route("/entities/:id/relationships",        get(list_entity_relationships))
-            // Match — execute is read-based (scoring only, no persistence)
+            // Match â€” execute is read-based (scoring only, no persistence)
             .route("/match",
                 post(execute_match)
                     .layer(axum_middleware::from_fn_with_state(state.clone(), operation_cost_middleware))
@@ -620,15 +620,15 @@ async fn main() {
             .route("/analytics/quality-trends",          get(proxy_quality_trends))
             .route("/analytics/quality-dimensions",      get(proxy_quality_dimensions))
             .route("/analytics/source-quality",          get(proxy_source_quality))
-            // Temporal / bitemporal records (reads — any authenticated user)
+            // Temporal / bitemporal records (reads â€” any authenticated user)
             .route("/entities/:id/history",              get(proxy_entity_history))
             .route("/entities/:id/as-of",                get(proxy_entity_as_of))
             .route("/entities/:id/bitemporal",           get(proxy_entity_bitemporal))
             // Data profiling (reads)
             .route("/data-profiling/:entity_type",       get(proxy_get_profile))
-            // Tasks (reads — user sees own tasks; admin sees all via query param)
+            // Tasks (reads â€” user sees own tasks; admin sees all via query param)
             .route("/tasks",                             get(proxy_list_tasks))
-            // Reference data (reads — all authenticated users need for dropdowns)
+            // Reference data (reads â€” all authenticated users need for dropdowns)
             .route("/reference-data",                    get(proxy_list_reference_lists))
             .route("/reference-data/:list_id/values",   get(proxy_get_reference_values))
             // Transformation rules (reads)
@@ -638,7 +638,7 @@ async fn main() {
             .route("/party-roles/by-role",               get(proxy_entities_by_role))
     );
 
-    // ── 3. Shared routes — any authenticated user ─────────────────────────────
+    // â”€â”€ 3. Shared routes â€” any authenticated user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let shared_routes = common_layers(
         Router::new()
             // Dashboard (both IT admin overview and tenant user metrics)
@@ -650,8 +650,8 @@ async fn main() {
             .route("/search",             get(search))
             .route("/search/autocomplete", get(autocomplete))
             // AI Copilot
-            .route("/copilot",            post(copilot))
-            .route("/copilot/stream",     post(copilot_stream))
+            .route("/prism",            post(copilot))
+            .route("/prism/stream",     post(copilot_stream))
             .route("/weights/recommend",  get(recommend_weights))
             .route("/anomalies",
                 get(scan_anomalies)
@@ -681,20 +681,20 @@ async fn main() {
             .route("/domain-policies/:entity_type_code", get(get_domain_policy))
             // Relationship types (read; writes in admin_config_routes)
             .route("/relationship-types",            get(list_relationship_types))
-            // Auth — protected endpoints that require a valid session
+            // Auth â€” protected endpoints that require a valid session
             .route("/auth/logout",                   axum::routing::post(logout))
             .route("/auth/change-password",          axum::routing::post(change_password))
-            // License — tenant's own license info
+            // License â€” tenant's own license info
             .route("/license",                       get(get_my_license))
             // Tenant branding (read; put in admin_config_routes)
             .route("/tenant/branding",               get(get_tenant_branding))
-            // Submasters / reference data (reads — all authenticated users need this for dropdowns)
+            // Submasters / reference data (reads â€” all authenticated users need this for dropdowns)
             .route("/admin/submasters",                        get(list_submaster_types))
             .route("/admin/submasters/:code/values",           get(list_submaster_values))
-            // Quality rules engine (reads — available to all authenticated users)
+            // Quality rules engine (reads â€” available to all authenticated users)
             .route("/admin/quality-rules",                     get(list_quality_rules))
             .route("/admin/quality-violations",                get(list_quality_violations))
-            // AI suggestions (read — any authenticated user can view suggestions for their entities)
+            // AI suggestions (read â€” any authenticated user can view suggestions for their entities)
             .route("/ai-suggestions",                          get(list_ai_suggestions))
             // User notification inbox
             .route("/notifications",                 get(list_notifications))
@@ -717,9 +717,9 @@ async fn main() {
         .merge(shared_routes);
 
     // Initialise metrics for Prometheus scraping
-    nexus_telemetry::metrics::init_metrics("api-gateway");
+    azile_telemetry::metrics::init_metrics("api-gateway");
 
-    // Public routes — no auth required
+    // Public routes â€” no auth required
     let public_routes = Router::new()
         .route("/health",              get(health))
         .route("/metrics",             get(prometheus_metrics))
@@ -730,12 +730,12 @@ async fn main() {
         .route("/auth/forgot-password",  axum::routing::post(forgot_password))
         .route("/auth/reset-password",   axum::routing::post(reset_password))
         .route("/auth/sso-exchange",     axum::routing::post(sso_exchange))
-        // Real-time WebSocket — handler validates JWT from ?token= query param
+        // Real-time WebSocket â€” handler validates JWT from ?token= query param
         // (browsers cannot set Authorization header on WebSocket connections)
         .route("/ws/notifications",      get(ws::handler::websocket_handler));
 
-    // All business routes under /v1 — public ones at root for backward compat
-    // Request body size limits — prevent DoS via oversized payloads
+    // All business routes under /v1 â€” public ones at root for backward compat
+    // Request body size limits â€” prevent DoS via oversized payloads
     // Normal MDM entities: typically < 64 KB
     // Batch ingest: handled separately with its own limit in ingest-service
     let body_limit = tower_http::limit::RequestBodyLimitLayer::new(
@@ -744,7 +744,7 @@ async fn main() {
 
     let app = Router::new()
         .merge(public_routes)
-        // v1 API — all versioned routes live here
+        // v1 API â€” all versioned routes live here
         // Security headers applied to every response
         .nest("/v1", Router::new()
             .route("/auth/me",             get(me))
@@ -756,17 +756,17 @@ async fn main() {
             .route("/auth/reset-password",   axum::routing::post(reset_password))
             .merge(protected_routes.clone())
         )
-        // Legacy unversioned routes (no /v1 prefix) — kept for backward compat
+        // Legacy unversioned routes (no /v1 prefix) â€” kept for backward compat
         .route("/auth/me",  get(me))
         .nest("/", protected_routes)
         .with_state(state.clone())
         .layer(axum::middleware::from_fn(
-            nexus_telemetry::security_headers::security_headers_middleware
+            azile_telemetry::security_headers::security_headers_middleware
         ))
         .layer(body_limit)
         .layer(cors);
 
-    // ---- Redis pub/sub → WebSocket broadcast --------------------------------
+    // ---- Redis pub/sub â†’ WebSocket broadcast --------------------------------
     // Subscribe to tenant-scoped Redis channels and fan notifications to active
     // WS sessions. The subscriber loop restarts automatically on disconnect.
     {
@@ -781,7 +781,7 @@ async fn main() {
     // ---- WebSocket (legacy TCP) --------------------------------------------
     // Build JwtConfig for first-message auth on the port-4000 TCP WS server.
     // If JWT_SECRET is absent we skip the TCP server (it can't validate tokens).
-    if let Ok(jwt_cfg) = nexus_auth::JwtConfig::from_env() {
+    if let Ok(jwt_cfg) = azile_auth::JwtConfig::from_env() {
         let jwt_cfg = Arc::new(jwt_cfg);
         tokio::spawn(async move {
             if let Err(err) = ws::start_ws_server(jwt_cfg).await {
@@ -790,7 +790,7 @@ async fn main() {
         });
     } else {
         tracing::warn!(
-            "JWT_SECRET not configured — legacy TCP WS server on port 4000 not started"
+            "JWT_SECRET not configured â€” legacy TCP WS server on port 4000 not started"
         );
     }
 

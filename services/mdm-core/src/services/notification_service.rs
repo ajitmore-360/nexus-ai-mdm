@@ -1,9 +1,9 @@
-use sqlx::{PgPool, Row};
+﻿use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // EMAIL CLIENT
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Which external email provider to use.
 enum EmailProvider {
@@ -26,13 +26,13 @@ pub struct EmailClient {
 
 impl EmailClient {
     /// Reads configuration from environment variables. Returns `None` when
-    /// neither Mailgun nor SendGrid is configured — callers treat this as
+    /// neither Mailgun nor SendGrid is configured â€” callers treat this as
     /// "email delivery disabled" and log at warn level instead of failing.
     pub fn from_env() -> Option<Self> {
         let from_address = std::env::var("EMAIL_FROM_ADDRESS")
             .unwrap_or_else(|_| "noreply@nexusmdm.io".to_string());
         let from_name = std::env::var("EMAIL_FROM_NAME")
-            .unwrap_or_else(|_| "Nexus MDM".to_string());
+            .unwrap_or_else(|_| "Azile MDM".to_string());
 
         let provider = if let (Ok(key), Ok(domain)) = (
             std::env::var("MAILGUN_API_KEY"),
@@ -51,7 +51,7 @@ impl EmailClient {
         })
     }
 
-    /// Send a plain-text email.  Non-blocking — errors are logged, not bubbled.
+    /// Send a plain-text email.  Non-blocking â€” errors are logged, not bubbled.
     pub async fn send(&self, to: &str, subject: &str, body: &str) {
         let result = match &self.config.provider {
             EmailProvider::Mailgun { api_key, domain } => {
@@ -91,7 +91,7 @@ impl EmailClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let text   = resp.text().await.unwrap_or_default();
-            anyhow::bail!("Mailgun {} — {}", status, text);
+            anyhow::bail!("Mailgun {} â€” {}", status, text);
         }
         Ok(())
     }
@@ -122,15 +122,15 @@ impl EmailClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let text   = resp.text().await.unwrap_or_default();
-            anyhow::bail!("SendGrid {} — {}", status, text);
+            anyhow::bail!("SendGrid {} â€” {}", status, text);
         }
         Ok(())
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // SLACK CLIENT
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub struct SlackClient {
     http:        reqwest::Client,
@@ -146,7 +146,7 @@ impl SlackClient {
         })
     }
 
-    /// Post a notification to Slack. Non-blocking — errors are logged, not bubbled.
+    /// Post a notification to Slack. Non-blocking â€” errors are logged, not bubbled.
     pub async fn send(&self, title: &str, body: &str, severity: &str) {
         let color = match severity {
             "critical" => "#FF0000",
@@ -158,7 +158,7 @@ impl SlackClient {
                 "color":  color,
                 "title":  format!("[{}] {}", severity.to_uppercase(), title),
                 "text":   body,
-                "footer": "Nexus AI MDM"
+                "footer": "Azile AI MDM"
             }]
         });
         match self.http.post(&self.webhook_url).json(&payload).send().await {
@@ -169,9 +169,9 @@ impl SlackClient {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // NOTIFICATION SERVICE
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub struct NotificationService {
     db:           PgPool,
@@ -184,13 +184,13 @@ impl NotificationService {
         let email_client = EmailClient::from_env().map(std::sync::Arc::new);
         if email_client.is_none() {
             tracing::info!(
-                "Email delivery disabled — set MAILGUN_API_KEY/MAILGUN_DOMAIN \
+                "Email delivery disabled â€” set MAILGUN_API_KEY/MAILGUN_DOMAIN \
                  or SENDGRID_API_KEY to enable"
             );
         }
         let slack_client = SlackClient::from_env().map(std::sync::Arc::new);
         if slack_client.is_none() {
-            tracing::info!("Slack notifications disabled — set SLACK_WEBHOOK_URL to enable");
+            tracing::info!("Slack notifications disabled â€” set SLACK_WEBHOOK_URL to enable");
         }
         Self { db, email_client, slack_client }
     }
@@ -254,7 +254,7 @@ impl NotificationService {
     }
 
     /// Returns true if an unread notification of the given type was created for this
-    /// tenant within the last 24 hours — used to debounce quota warnings.
+    /// tenant within the last 24 hours â€” used to debounce quota warnings.
     async fn has_recent(&self, tenant_id: Uuid, event_type: &str) -> bool {
         sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM notifications.inbox \
@@ -282,15 +282,15 @@ impl NotificationService {
         let (event_type, title, body, severity) = if pct >= 0.95 {
             (
                 "quota.records.warning_95pct",
-                "Record quota critical — 95% used",
-                format!("You've used {current} of {limit} records (≥95%). Upgrade your plan before writes are blocked."),
+                "Record quota critical â€” 95% used",
+                format!("You've used {current} of {limit} records (â‰¥95%). Upgrade your plan before writes are blocked."),
                 "critical",
             )
         } else if pct >= 0.80 {
             (
                 "quota.records.warning_80pct",
-                "Record quota warning — 80% used",
-                format!("You've used {current} of {limit} records (≥80%). Consider upgrading your plan."),
+                "Record quota warning â€” 80% used",
+                format!("You've used {current} of {limit} records (â‰¥80%). Consider upgrading your plan."),
                 "warning",
             )
         } else {
@@ -319,15 +319,15 @@ impl NotificationService {
         let (event_type, title, body, severity) = if pct >= 0.95 {
             (
                 "quota.stewards.warning_95pct",
-                "Steward quota critical — 95% used",
-                format!("{current} of {limit} steward seats filled (≥95%). Upgrade to add more."),
+                "Steward quota critical â€” 95% used",
+                format!("{current} of {limit} steward seats filled (â‰¥95%). Upgrade to add more."),
                 "critical",
             )
         } else if pct >= 0.80 {
             (
                 "quota.stewards.warning_80pct",
-                "Steward quota warning — 80% used",
-                format!("{current} of {limit} steward seats filled (≥80%)."),
+                "Steward quota warning â€” 80% used",
+                format!("{current} of {limit} steward seats filled (â‰¥80%)."),
                 "warning",
             )
         } else {
@@ -356,15 +356,15 @@ impl NotificationService {
         let (event_type, title, body, severity) = if pct >= 0.95 {
             (
                 "quota.domains.warning_95pct",
-                "Domain quota critical — 95% used",
-                format!("{current} of {limit} entity types created (≥95%)."),
+                "Domain quota critical â€” 95% used",
+                format!("{current} of {limit} entity types created (â‰¥95%)."),
                 "critical",
             )
         } else if pct >= 0.80 {
             (
                 "quota.domains.warning_80pct",
-                "Domain quota warning — 80% used",
-                format!("{current} of {limit} entity types created (≥80%)."),
+                "Domain quota warning â€” 80% used",
+                format!("{current} of {limit} entity types created (â‰¥80%)."),
                 "warning",
             )
         } else {
@@ -503,7 +503,7 @@ impl NotificationService {
         .await
     }
 
-    // ── Subscription management ───────────────────────────────────────────────
+    // â”€â”€ Subscription management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     pub async fn create_subscription(
         &self,
@@ -582,7 +582,7 @@ impl NotificationService {
         Ok(r.rows_affected() > 0)
     }
 
-    // ── Event dispatch — routes events to all matching subscribers ────────────
+    // â”€â”€ Event dispatch â€” routes events to all matching subscribers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// Dispatch an event to all active subscriptions that match it.
     /// Called fire-and-forget from entity_service, merge_service, etc.
@@ -689,9 +689,9 @@ impl NotificationService {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn subscription_row_to_json(r: &sqlx::postgres::PgRow) -> serde_json::Value {
     use sqlx::Row;
@@ -720,7 +720,7 @@ async fn fetch_admin_emails(
     user_id:   Option<Uuid>,
 ) -> Vec<String> {
     if let Some(uid) = user_id {
-        // Single-user notification — look up their email directly.
+        // Single-user notification â€” look up their email directly.
         let row = sqlx::query_scalar::<_, String>(
             "SELECT email FROM core_mdm.identities WHERE identity_id = $1",
         )
@@ -731,7 +731,7 @@ async fn fetch_admin_emails(
         return row.into_iter().collect();
     }
 
-    // System event — notify all admins for this tenant.
+    // System event â€” notify all admins for this tenant.
     sqlx::query_scalar::<_, String>(
         r#"
         SELECT i.email

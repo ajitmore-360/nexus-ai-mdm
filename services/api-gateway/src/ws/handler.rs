@@ -1,4 +1,4 @@
-use axum::{
+﻿use axum::{
     extract::{Query, State, WebSocketUpgrade},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -9,7 +9,7 @@ use serde::Deserialize;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use nexus_auth::{validate_token, JwtConfig};
+use azile_auth::{validate_token, JwtConfig};
 
 use crate::state::AppState;
 
@@ -24,7 +24,7 @@ pub struct WsQuery {
 /// Browsers cannot set custom headers on WebSocket connections, so this handler
 /// accepts the JWT as a `?token=<jwt>` query parameter and validates it inline.
 /// The `tenant_id` query param is used as a fallback when the JWT's tenant claim
-/// is nil (service-account path — not expected for browser clients).
+/// is nil (service-account path â€” not expected for browser clients).
 pub async fn websocket_handler(
     ws:              WebSocketUpgrade,
     State(state):    State<AppState>,
@@ -84,7 +84,7 @@ async fn handle_socket(
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
 
     if !ws_manager.register(session_id, tenant_id, tx) {
-        // Tenant is at the per-tenant connection limit — send close and return.
+        // Tenant is at the per-tenant connection limit â€” send close and return.
         let _ = sender.send(Message::Close(None)).await;
         return;
     }
@@ -98,7 +98,7 @@ async fn handle_socket(
         }
     });
 
-    // Drain inbound messages — server-push only; we only care about Close.
+    // Drain inbound messages â€” server-push only; we only care about Close.
     while let Some(result) = receiver.next().await {
         match result {
             Ok(Message::Close(_)) | Err(_) => break,

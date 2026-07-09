@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import '../../../../core/auth/auth_manager.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -190,9 +190,9 @@ class _SourceSystemsPageState extends State<SourceSystemsPage> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Source card
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SourceCard extends StatelessWidget {
   final SourceSystemModel source;
@@ -397,9 +397,9 @@ class _EntityTypeTag extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Add source dialog
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _AddSourceDialog extends StatefulWidget {
   final String tenantId;
@@ -489,16 +489,16 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
 
   String _connectorIcon(String type) {
     return switch (type) {
-      'salesforce' => '☁️',
-      'sap'        => '🏭',
-      'oracle'     => '🔶',
-      'hubspot'    => '🧡',
-      'jdbc'       => '🗄️',
-      's3'         => '🪣',
-      'kafka'      => '📨',
-      'csv'        => '📄',
-      'database'   => '🐘',
-      _            => '🔌',
+      'salesforce' => 'â˜ï¸',
+      'sap'        => 'ðŸ­',
+      'oracle'     => 'ðŸ”¶',
+      'hubspot'    => 'ðŸ§¡',
+      'jdbc'       => 'ðŸ—„ï¸',
+      's3'         => 'ðŸª£',
+      'kafka'      => 'ðŸ“¨',
+      'csv'        => 'ðŸ“„',
+      'database'   => 'ðŸ˜',
+      _            => 'ðŸ”Œ',
     };
   }
 
@@ -599,7 +599,7 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                       items: const ['manual', 'scheduled', 'realtime'],
                       onChanged: (v) => setState(() => _syncMode = v!),
                     ),
-                    // ── Connector-specific credential fields ───────────────
+                    // â”€â”€ Connector-specific credential fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                     if (_ConfigField.forConnector(_connectorType).isNotEmpty) ...[
                       const SizedBox(height: 20),
                       Row(children: [
@@ -708,9 +708,9 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Connection config field definition + per-connector field lists
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ConfigField {
   final String key;
@@ -777,7 +777,7 @@ class _ConfigField {
     'kafka': [
       _ConfigField(key: 'bootstrap_servers', label: 'BOOTSTRAP SERVERS', hint: 'broker1:9092,broker2:9092', required: true),
       _ConfigField(key: 'topic',             label: 'TOPIC',             hint: 'entity.updates', required: true),
-      _ConfigField(key: 'group_id',          label: 'CONSUMER GROUP',    hint: 'nexus-mdm'),
+      _ConfigField(key: 'group_id',          label: 'CONSUMER GROUP',    hint: 'azile-mdm'),
       _ConfigField(key: 'sasl_username',     label: 'SASL USERNAME',     hint: 'kafka-user', secret: true),
       _ConfigField(key: 'sasl_password',     label: 'SASL PASSWORD',     hint: '...', secret: true),
     ],
@@ -806,9 +806,9 @@ class _ConfigField {
       _byConnector[type] ?? [];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Confirm delete dialog
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ConfirmDeleteDialog extends StatelessWidget {
   @override

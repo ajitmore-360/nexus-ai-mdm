@@ -1,0 +1,99 @@
+﻿{{/*
+=============================================================================
+Azile AI MDM Platform â€” Nginx Ingress
+Routes external traffic to the API Gateway.
+Supports: TLS termination, rate limiting, WebSocket upgrade, CORS headers.
+=============================================================================
+*/}}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "azile-mdm.fullname" . }}
+  namespace: {{ include "azile-mdm.namespace" . }}
+  labels:
+    {{- include "azile-mdm.labels" . | nindent 4 }}
+  annotations:
+    # â”€â”€ Ingress class â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    kubernetes.io/ingress.class: {{ .Values.ingress.className | quote }}
+
+    # â”€â”€ TLS / Certificate Manager â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    {{- if .Values.ingress.tls.enabled }}
+    cert-manager.io/cluster-issuer: {{ index .Values.ingress.annotations "cert-manager.io/cluster-issuer" | default "letsencrypt-prod" | quote }}
+    {{- end }}
+
+    # â”€â”€ Rate limiting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # 100 requests per minute per client IP at the ingress layer.
+    # Additional per-tenant rate limiting is enforced inside the API Gateway
+    # using Redis sliding-window counters.
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-rpm: {{ index .Values.ingress.annotations "nginx.ingress.kubernetes.io/rate-limit" | default "100" | quote }}
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+
+    # â”€â”€ Proxy timeouts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ index .Values.ingress.annotations "nginx.ingress.kubernetes.io/proxy-read-timeout" | default "300" | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ index .Values.ingress.annotations "nginx.ingress.kubernetes.io/proxy-send-timeout" | default "300" | quote }}
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: {{ index .Values.ingress.annotations "nginx.ingress.kubernetes.io/proxy-connect-timeout" | default "60" | quote }}
+
+    # â”€â”€ WebSocket support â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Required for the /ws endpoint served by the notification-service
+    # via the API Gateway WebSocket proxy.
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+
+    # â”€â”€ HTTPS redirect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Force all HTTP traffic to HTTPS. Only effective when TLS is enabled.
+    {{- if .Values.ingress.tls.enabled }}
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- end }}
+
+    # â”€â”€ Body size â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Allow up to 50 MB for CSV/batch ingest payloads routed via the gateway.
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+
+    # â”€â”€ Security headers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-Frame-Options "DENY" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          # â”€â”€ Health check (unauthenticated) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "azile-mdm.fullname" . }}-{{ .Values.apiGateway.name }}
+                port:
+                  name: http
+
+          # â”€â”€ API endpoints (auth-protected inside the gateway) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "azile-mdm.fullname" . }}-{{ .Values.apiGateway.name }}
+                port:
+                  name: http
+{{- end }}

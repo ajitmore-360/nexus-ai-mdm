@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::{
@@ -23,7 +23,7 @@ pub struct LicenseCacheEntry {
     pub tier: String,
     pub features: serde_json::Value,
     pub max_records: i64,
-    // Quota limits — deserialized for forward-compat; enforcement is handled by mdm-core.
+    // Quota limits â€” deserialized for forward-compat; enforcement is handled by mdm-core.
     #[allow(dead_code)]
     pub max_domains: i32,
     #[allow(dead_code)]
@@ -56,7 +56,7 @@ fn tier_for_feature(f: &str) -> &str {
 fn required_feature(raw_path: &str, method: &axum::http::Method) -> Option<&'static str> {
     let path = raw_path.strip_prefix("/v1").unwrap_or(raw_path);
 
-    if path.starts_with("/copilot")
+    if path.starts_with("/prism")
         || path.starts_with("/anomalies")
         || path.starts_with("/weights/recommend")
     {
@@ -88,7 +88,7 @@ fn required_feature(raw_path: &str, method: &axum::http::Method) -> Option<&'sta
         return Some("governance");
     }
 
-    // Only the write path is gated — tenants can always read their own branding.
+    // Only the write path is gated â€” tenants can always read their own branding.
     if path.starts_with("/tenant/branding")
         && (method == axum::http::Method::PUT || method == axum::http::Method::PATCH)
     {
@@ -98,7 +98,7 @@ fn required_feature(raw_path: &str, method: &axum::http::Method) -> Option<&'sta
     None
 }
 
-/// Load the license entry for a tenant — from cache if fresh, or from mdm-core otherwise.
+/// Load the license entry for a tenant â€” from cache if fresh, or from mdm-core otherwise.
 async fn load_license(
     tenant_id: Uuid,
     cache: &DashMap<Uuid, (LicenseCacheEntry, Instant)>,
@@ -138,7 +138,7 @@ async fn load_license(
     Ok(entry)
 }
 
-/// LicenseGuard middleware — gates feature access based on the tenant's license tier.
+/// LicenseGuard middleware â€” gates feature access based on the tenant's license tier.
 ///
 /// - Reads tenant_id from the TenantContext extension (injected by tenant_middleware).
 /// - Determines which feature (if any) the current path requires.
@@ -150,7 +150,7 @@ pub async fn license_guard(
     req: Request<Body>,
     next: Next,
 ) -> Response {
-    // Extract TenantContext — if missing, pass through (auth middleware will handle it).
+    // Extract TenantContext â€” if missing, pass through (auth middleware will handle it).
     let tenant_id = match req.extensions().get::<TenantContext>() {
         Some(ctx) => ctx.tenant_id,
         None => return next.run(req).await,
@@ -161,7 +161,7 @@ pub async fn license_guard(
     let method = req.method().clone();
     let feature = required_feature(&path, &method);
 
-    // No gate for this path — let it through immediately.
+    // No gate for this path â€” let it through immediately.
     let feature = match feature {
         Some(f) => f,
         None => return next.run(req).await,
@@ -183,7 +183,7 @@ pub async fn license_guard(
             tracing::error!(
                 tenant_id = %tenant_id,
                 error = %err,
-                "LicenseGuard: failed to load license — returning 503"
+                "LicenseGuard: failed to load license â€” returning 503"
             );
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
@@ -197,7 +197,7 @@ pub async fn license_guard(
         }
     };
 
-    // Enterprise shortcut — max_records == -1 means unlimited / enterprise tier.
+    // Enterprise shortcut â€” max_records == -1 means unlimited / enterprise tier.
     if entry.max_records == -1 {
         return next.run(req).await;
     }
@@ -214,7 +214,7 @@ pub async fn license_guard(
             tenant_id = %tenant_id,
             tier = %entry.tier,
             feature = %feature,
-            "LicenseGuard: feature not licensed — returning 402"
+            "LicenseGuard: feature not licensed â€” returning 402"
         );
         return (
             StatusCode::PAYMENT_REQUIRED,

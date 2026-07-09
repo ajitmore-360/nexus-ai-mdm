@@ -1,4 +1,4 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
@@ -11,7 +11,7 @@ import '../../../../core/auth/sso_service.dart';
 import '../../../../core/branding/branding_manager.dart';
 import '../../../../core/license/license_manager.dart';
 import '../../../../core/network/api_client.dart';
-import '../../../../shared/widgets/nexus_logo.dart';
+import '../../../../shared/widgets/azile_logo.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -63,7 +63,7 @@ class _LoginPageState extends State<LoginPage> {
 
       final body = response.data;
 
-      // Server found multiple tenant memberships — show picker then retry.
+      // Server found multiple tenant memberships â€” show picker then retry.
       if (body?['requires_tenant_selection'] == true) {
         setState(() => _isLoading = false);
         final tenants = (body!['tenants'] as List?)?.cast<Map<String, dynamic>>() ?? [];
@@ -77,7 +77,7 @@ class _LoginPageState extends State<LoginPage> {
         throw Exception(body?['error'] ?? 'Login failed');
       }
 
-      // Persist tokens securely (Keychain / Keystore — never plaintext)
+      // Persist tokens securely (Keychain / Keystore â€” never plaintext)
       final data        = body!['data'] as Map<String, dynamic>;
       final token       = data['access_token']   as String;
       final refresh     = data['refresh_token']  as String? ?? '';
@@ -110,7 +110,7 @@ class _LoginPageState extends State<LoginPage> {
       apiClient.setAuthToken(token);
       apiClient.setTenantId(tenantId);
 
-      // Load license + branding in parallel — both are fire-and-forget safe;
+      // Load license + branding in parallel â€” both are fire-and-forget safe;
       // failures fall back to defaults without blocking navigation.
       await Future.wait([
         LicenseManager.loadFromServer(),
@@ -201,7 +201,7 @@ class _LoginPageState extends State<LoginPage> {
         case 'okta':
           SsoService.startOktaFlow();
       }
-      // Browser will redirect — no further action in this widget.
+      // Browser will redirect â€” no further action in this widget.
     } on SsoConfigException catch (e) {
       setState(() => _errorMessage = e.message);
     }
@@ -221,12 +221,12 @@ class _LoginPageState extends State<LoginPage> {
   Widget _buildDesktopLayout() {
     return Row(
       children: [
-        // Left panel — branding
+        // Left panel â€” branding
         Expanded(
           flex: 5,
           child: _buildBrandPanel(),
         ),
-        // Right panel — login form
+        // Right panel â€” login form
         Expanded(
           flex: 4,
           child: _buildFormPanel(),
@@ -283,7 +283,7 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const NexusLogo(size: 48)
+                const AzileLogo(size: 48)
                     .animate()
                     .fadeIn(duration: const Duration(milliseconds: 600)),
 
@@ -427,7 +427,7 @@ class _LoginPageState extends State<LoginPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const NexusLogo(size: 40),
+          const AzileLogo(size: 40),
           const SizedBox(height: 24),
           Text(
             'Unify your data.',
@@ -459,7 +459,7 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 6),
                 Text(
-                  'Sign in to your Nexus AI MDM account',
+                  'Sign in to your Azile AI MDM account',
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: AppColors.secondaryText,
                   ),
@@ -513,7 +513,7 @@ class _LoginPageState extends State<LoginPage> {
                         onFieldSubmitted: (_) => _handleLogin(),
                         decoration: InputDecoration(
                           labelText: 'Password',
-                          hintText: '••••••••',
+                          hintText: 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢',
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
                             icon: Icon(

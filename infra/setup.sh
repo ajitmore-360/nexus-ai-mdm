@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Nexus AI MDM — Complete Setup Script
+# Azile AI MDM — Complete Setup Script
 # =============================================================================
 # Usage:
 #   ./setup.sh               Full setup (infra + build all services)
@@ -50,15 +50,15 @@ setup_env() {
     warn ".env not found — copying from template"
     cp .env.template .env 2>/dev/null || cat > .env << 'EOF'
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=nexus_dev_2024
+POSTGRES_PASSWORD=azile_dev_2024
 POSTGRES_PORT=5433
-REDIS_PASSWORD=nexus_redis_pass
+REDIS_PASSWORD=azile_redis_pass
 PGADMIN_EMAIL=admin@nexus.ai
-PGADMIN_PASSWORD=nexus_pgadmin_dev
+PGADMIN_PASSWORD=AZILE_pgadmin_dev
 AUTH_DISABLED=false
 JWT_SECRET=nexus-local-dev-jwt-secret-min-32-chars!!
 API_BEARER_TOKEN=nexus-local-dev-token
-GRAFANA_PASSWORD=nexus_grafana_dev
+GRAFANA_PASSWORD=AZILE_grafana_dev
 OLLAMA_URL=http://ollama:11434
 LLM_MODEL=llama3.2:8b
 EMBED_MODEL=nomic-embed-text
@@ -138,7 +138,7 @@ run_migrations() {
   info "Verifying key tables exist..."
 
   # Quick sanity check
-  docker exec nexus-postgres psql -U postgres -d nexus_mdm -c "
+  docker exec azile-postgres psql -U postgres -d azile_mdm -c "
     SELECT schemaname, COUNT(*) as table_count
     FROM information_schema.tables
     WHERE schemaname IN ('core_mdm','event_store','ai','governance','platform','audit')
@@ -187,7 +187,7 @@ pull_models() {
 print_status() {
   echo
   echo -e "${CYAN}════════════════════════════════════════════════════════════${NC}"
-  echo -e "${CYAN}  Nexus AI MDM — Service Status${NC}"
+  echo -e "${CYAN}  Azile AI MDM — Service Status${NC}"
   echo -e "${CYAN}════════════════════════════════════════════════════════════${NC}"
   $COMPOSE ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || \
   $COMPOSE ps
@@ -197,13 +197,13 @@ print_status() {
 print_access_info() {
   echo
   echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
-  echo -e "${GREEN}  Nexus AI MDM is ready!${NC}"
+  echo -e "${GREEN}  Azile AI MDM is ready!${NC}"
   echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
   echo
   echo "  🌐 Web UI:         http://localhost:3000"
   echo "  🔌 API Gateway:    http://localhost:8080"
-  echo "  📊 Grafana:        http://localhost:3001   (admin / nexus_grafana_dev)"
-  echo "  🗄️  PgAdmin:       http://localhost:5050   (admin@nexus.ai / nexus_pgadmin_dev)"
+  echo "  📊 Grafana:        http://localhost:3001   (admin / AZILE_grafana_dev)"
+  echo "  🗄️  PgAdmin:       http://localhost:5050   (admin@nexus.ai / AZILE_pgadmin_dev)"
   echo "  📨 Kafka UI:       http://localhost:9000"
   echo "  📈 Prometheus:     http://localhost:9090"
   echo
@@ -265,8 +265,8 @@ main() {
       start_infra
       start_observability
       info "Infrastructure ready. Run services locally:"
-      info "  DATABASE_URL=postgres://postgres:nexus_dev_2024@localhost:5433/nexus_mdm \\"
-      info "  REDIS_URL=redis://:nexus_redis_pass@localhost:6379 \\"
+      info "  DATABASE_URL=postgres://postgres:azile_dev_2024@localhost:5433/azile_mdm \\"
+      info "  REDIS_URL=redis://:azile_redis_pass@localhost:6379 \\"
       info "  AUTH_DISABLED=true JWT_SECRET=nexus-local-dev-jwt-secret-min-32-chars!! \\"
       info "  cargo run -p mdm-core"
       ;;

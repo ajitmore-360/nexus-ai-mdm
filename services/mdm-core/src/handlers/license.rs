@@ -1,4 +1,4 @@
-use axum::{
+﻿use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
@@ -34,17 +34,17 @@ pub struct ActivateLicenseBody {
 
 //
 // ========================================
-// KEY → TIER MAPPING (server-side only)
+// KEY â†’ TIER MAPPING (server-side only)
 // ========================================
 //
 // These canonical key prefixes are validated on the server. The client never
-// stores a local key→tier table — every key is authorised by this endpoint.
+// stores a local keyâ†’tier table â€” every key is authorised by this endpoint.
 //
 
 fn tier_from_key(key: &str) -> Option<&'static str> {
     let upper = key.trim().to_uppercase();
-    // Environment-variable override: NEXUS_LICENSE_MASTER_KEY=<key>:<tier>
-    if let Ok(master) = std::env::var("NEXUS_LICENSE_MASTER_KEY") {
+    // Environment-variable override: AZILE_LICENSE_MASTER_KEY=<key>:<tier>
+    if let Ok(master) = std::env::var("AZILE_LICENSE_MASTER_KEY") {
         let parts: Vec<&str> = master.splitn(2, ':').collect();
         if parts.len() == 2 && parts[0] == upper {
             let tier = match parts[1] {
@@ -152,7 +152,7 @@ pub async fn get_my_license(
 }
 
 /// GET /internal/license/:tenant_id
-/// No auth — internal gateway use only.
+/// No auth â€” internal gateway use only.
 /// Returns the same license + usage shape for gateway feature-gating and caching.
 pub async fn internal_get_license(
     State(state):          State<Arc<AppState>>,
@@ -216,7 +216,7 @@ pub async fn admin_upsert_license(
 
 /// POST /license/activate
 /// Tenant-initiated license key activation. Validates the key server-side
-/// against the `tier_from_key` mapping (which checks the `NEXUS_LICENSE_MASTER_KEY`
+/// against the `tier_from_key` mapping (which checks the `AZILE_LICENSE_MASTER_KEY`
 /// env override first, then well-known key prefixes). On success the tier is
 /// upserted for the calling tenant and the updated license is returned.
 pub async fn activate_license(

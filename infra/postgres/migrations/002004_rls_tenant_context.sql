@@ -1,11 +1,11 @@
--- ============================================================================
+﻿-- ============================================================================
 -- Migration 002004: Activate Row-Level Security via application tenant context
 --
--- Until now nexus_app had BYPASSRLS set, making all RLS policies inactive.
+-- Until now azile_app had BYPASSRLS set, making all RLS policies inactive.
 -- This migration:
 --   1. Replaces app_context.set_tenant with a LOCAL (transaction-scoped) version
 --      so the context is never shared between pooled connections.
---   2. Removes BYPASSRLS from nexus_app — RLS policies are now enforced.
+--   2. Removes BYPASSRLS from azile_app â€” RLS policies are now enforced.
 --   3. The application layer MUST call app_context.set_tenant(tenant_id) at the
 --      start of every transaction that touches tenant-scoped tables.
 --
@@ -15,7 +15,7 @@
 --  in services/mdm-core/src/db/tenant_context.rs.
 -- ============================================================================
 
--- ── 1. Replace set_tenant with a LOCAL (transaction-scoped) variant ──────────
+-- â”€â”€ 1. Replace set_tenant with a LOCAL (transaction-scoped) variant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Using is_local=true means the setting is automatically reset at COMMIT/ROLLBACK,
 -- so no connection-pool leakage is possible even with connection reuse.
 
@@ -28,7 +28,7 @@ BEGIN
 END;
 $$;
 
--- ── 2. Also expose as a set_returning variant for use inside SELECT lists ─────
+-- â”€â”€ 2. Also expose as a set_returning variant for use inside SELECT lists â”€â”€â”€â”€â”€
 CREATE OR REPLACE FUNCTION app_context.set_tenant_returning(tenant UUID)
 RETURNS UUID
 LANGUAGE plpgsql
@@ -39,11 +39,11 @@ BEGIN
 END;
 $$;
 
--- ── 3. Remove BYPASSRLS from nexus_app ───────────────────────────────────────
+-- â”€â”€ 3. Remove BYPASSRLS from azile_app â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- After this change every SQL statement executed by the application goes through
 -- the RLS policies defined on tenant-scoped tables.  The policy USING clause
 --   tenant_id = current_setting('app.current_tenant', true)::uuid
--- means queries return zero rows when set_tenant has not been called — which is
+-- means queries return zero rows when set_tenant has not been called â€” which is
 -- correct behaviour (defence in depth on top of the WHERE tenant_id = $1 clauses
 -- that already exist in every repository query).
-ALTER ROLE nexus_app NOBYPASSRLS;
+ALTER ROLE azile_app NOBYPASSRLS;

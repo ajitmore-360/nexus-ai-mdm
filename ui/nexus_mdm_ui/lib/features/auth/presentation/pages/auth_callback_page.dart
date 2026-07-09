@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,23 +10,23 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // AuthCallbackPage
 //
 // Handles the OAuth2 redirect callback at /auth-callback.
 //
 // GoRouter passes the query parameters as constructor arguments:
-//   code  — authorization code from the provider (success path)
-//   error — provider error code (cancelled / denied)
+//   code  â€” authorization code from the provider (success path)
+//   error â€” provider error code (cancelled / denied)
 //
 // On mount this page:
 //   1. Reads the PKCE verifier, provider, and token URL from sessionStorage.
 //   2. Exchanges the authorization code for an access token at the provider.
-//   3. Sends the access token to POST /auth/sso-exchange to get Nexus JWTs.
+//   3. Sends the access token to POST /auth/sso-exchange to get AZILE JWTs.
 //   4. Persists tokens via AuthManager and navigates to /dashboard.
 //
 // On any error it shows the message and a "Try again" link back to /login.
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class AuthCallbackPage extends StatefulWidget {
   final String? code;
@@ -125,7 +125,7 @@ class _AuthCallbackPageState extends State<AuthCallbackPage> {
       children: [
         const CircularProgressIndicator(),
         const SizedBox(height: 24),
-        Text('Completing sign-in…', style: AppTextStyles.bodyMedium),
+        Text('Completing sign-inâ€¦', style: AppTextStyles.bodyMedium),
       ],
     );
   }

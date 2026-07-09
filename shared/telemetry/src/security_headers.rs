@@ -1,4 +1,4 @@
-use axum::{
+﻿use axum::{
     http::Request,
     middleware::Next,
     response::Response,
@@ -10,7 +10,7 @@ use axum::http::HeaderValue;
 /// Apply to every service router:
 /// ```ignore
 /// app.layer(axum::middleware::from_fn(
-///     nexus_telemetry::security_headers::security_headers_middleware
+///     azile_telemetry::security_headers::security_headers_middleware
 /// ))
 /// ```
 pub async fn security_headers_middleware(
@@ -32,13 +32,13 @@ pub async fn security_headers_middleware(
         HeaderValue::from_static("nosniff"),
     );
 
-    // Referrer policy — don't leak internal URLs
+    // Referrer policy â€” don't leak internal URLs
     headers.insert(
         "referrer-policy",
         HeaderValue::from_static("strict-origin-when-cross-origin"),
     );
 
-    // Permissions policy — disable unused browser features
+    // Permissions policy â€” disable unused browser features
     headers.insert(
         "permissions-policy",
         HeaderValue::from_static(
@@ -46,13 +46,13 @@ pub async fn security_headers_middleware(
         ),
     );
 
-    // Content Security Policy — strict for API (no HTML rendered)
+    // Content Security Policy â€” strict for API (no HTML rendered)
     headers.insert(
         "content-security-policy",
         HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'"),
     );
 
-    // HSTS — enforce HTTPS for 1 year (only add once TLS is terminated)
+    // HSTS â€” enforce HTTPS for 1 year (only add once TLS is terminated)
     // Commented out for local dev; enable behind TLS termination proxy
     // headers.insert(
     //     "strict-transport-security",

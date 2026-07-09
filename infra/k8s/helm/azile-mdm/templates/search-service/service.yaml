@@ -1,0 +1,16 @@
+﻿apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "azile-mdm.fullname" . }}-{{ .Values.searchService.name }}
+  namespace: {{ include "azile-mdm.namespace" . }}
+  labels:
+    {{- include "azile-mdm.serviceLabels" (dict "root" . "service" .Values.searchService.name) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "azile-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.searchService.name) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.searchService.port }}
+      targetPort: http
+      protocol: TCP

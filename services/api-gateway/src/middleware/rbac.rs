@@ -1,11 +1,11 @@
-use axum::{
+﻿use axum::{
     extract::Request,
     http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
     Json,
 };
-use nexus_auth::{Claims, Role};
+use azile_auth::{Claims, Role};
 
 /// Block `SuperAdmin` (the platform IT admin / Product Admin role) from reaching
 /// any tenant-data endpoint.
@@ -27,7 +27,7 @@ pub async fn block_super_admin(
                 StatusCode::FORBIDDEN,
                 Json(serde_json::json!({
                     "success": false,
-                    "error":   "product admin role does not have access to tenant data — \
+                    "error":   "product admin role does not have access to tenant data â€” \
                                use a tenant admin or steward account to access this resource"
                 })),
             )
@@ -39,7 +39,7 @@ pub async fn block_super_admin(
 
 /// Require `SuperAdmin` role for platform-level administration routes.
 ///
-/// This protects routes that manage tenants and platform-wide users — operations
+/// This protects routes that manage tenants and platform-wide users â€” operations
 /// that only the internal IT team (Product Admin) should perform.
 /// Regular tenant admins and stewards are rejected with 403.
 ///
@@ -102,7 +102,7 @@ pub async fn require_approve(
                 role = %claims.nxs_role,
                 user = %claims.sub,
                 path = %request.uri().path(),
-                "steward or business_admin role required — access denied"
+                "steward or business_admin role required â€” access denied"
             );
             return (
                 StatusCode::FORBIDDEN,
@@ -120,7 +120,7 @@ pub async fn require_approve(
 /// Require at least `Steward` role for data-mutation operations.
 ///
 /// Applied to merge and bulk match operations that permanently alter master data.
-/// BusinessAdmin, Viewers and Analysts are rejected — they can read but not mutate.
+/// BusinessAdmin, Viewers and Analysts are rejected â€” they can read but not mutate.
 pub async fn require_steward(
     request: Request,
     next:    Next,
@@ -131,7 +131,7 @@ pub async fn require_steward(
                 role = %claims.nxs_role,
                 user = %claims.sub,
                 path = %request.uri().path(),
-                "steward role required — access denied"
+                "steward role required â€” access denied"
             );
             return (
                 StatusCode::FORBIDDEN,

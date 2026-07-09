@@ -1,4 +1,4 @@
---
+﻿--
 -- ============================================================
 -- SEED SYSTEM TENANT
 -- FILE: 000019_seed_system_tenant.sql
@@ -153,7 +153,7 @@ VALUES
         'owner', 'platform',
 
         'description',
-        'Default system tenant for Nexus MDM platform'
+        'Default system tenant for Azile MDM platform'
     ),
 
     NOW(),

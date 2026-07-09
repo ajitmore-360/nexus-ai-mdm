@@ -1,4 +1,4 @@
-use axum::{
+﻿use axum::{
     extract::Request,
     http::StatusCode,
     middleware::Next,
@@ -13,10 +13,10 @@ pub struct TenantContext {
     pub tenant_id: Uuid,
 }
 
-/// Tenant context middleware — enforces that:
+/// Tenant context middleware â€” enforces that:
 ///
 /// 1. `x-tenant-id` header is present and a valid UUID.
-/// 2. If a validated JWT is present (injected by auth middleware as `nexus_auth::Claims`),
+/// 2. If a validated JWT is present (injected by auth middleware as `azile_auth::Claims`),
 ///    the tenant_id in the JWT **must match** the `x-tenant-id` header.
 ///    This prevents a valid token from one tenant being used to access another
 ///    tenant's data (horizontal privilege escalation / IDOR on multi-tenancy).
@@ -53,12 +53,12 @@ pub async fn tenant_middleware(
         .map(|v| v == "true" || v == "1")
         .unwrap_or(false);
 
-    // When a JWT is present, its tenant claim is authoritative — the x-tenant-id
+    // When a JWT is present, its tenant claim is authoritative â€” the x-tenant-id
     // header is a routing hint only.  If the header disagrees with the JWT, reject
     // the request (IDOR / horizontal privilege escalation attempt).
     // Without a JWT (service-to-service via API_BEARER_TOKEN) the header is trusted.
     let authoritative_tenant = if !auth_disabled {
-        if let Some(claims) = request.extensions().get::<nexus_auth::Claims>() {
+        if let Some(claims) = request.extensions().get::<azile_auth::Claims>() {
             if claims.nxs_tenant_id != tenant_id {
                 tracing::warn!(
                     jwt_tenant  = %claims.nxs_tenant_id,
@@ -75,14 +75,14 @@ pub async fn tenant_middleware(
                 )
                     .into_response();
             }
-            // JWT wins — use its value regardless of what the header said
+            // JWT wins â€” use its value regardless of what the header said
             claims.nxs_tenant_id
         } else {
-            // No JWT (API_BEARER_TOKEN path, service-to-service) — trust header
+            // No JWT (API_BEARER_TOKEN path, service-to-service) â€” trust header
             tenant_id
         }
     } else {
-        // AUTH_DISABLED dev mode — trust header
+        // AUTH_DISABLED dev mode â€” trust header
         tenant_id
     };
 

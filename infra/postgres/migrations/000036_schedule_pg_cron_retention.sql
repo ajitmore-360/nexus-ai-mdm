@@ -1,5 +1,5 @@
--- ============================================================================
--- Nexus MDM — pg_cron Scheduled Retention Jobs
+﻿-- ============================================================================
+-- Azile MDM â€” pg_cron Scheduled Retention Jobs
 -- Migration: 000036
 -- ============================================================================
 -- Requires: pg_cron extension; must run as superuser or pg_cron owner.
@@ -15,9 +15,9 @@
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 -- Grant usage to migration role so this script can proceed
-GRANT USAGE ON SCHEMA cron TO nexus_app;
+GRANT USAGE ON SCHEMA cron TO azile_app;
 
--- ── Remove stale jobs (allows re-running this migration safely) ──────────────
+-- â”€â”€ Remove stale jobs (allows re-running this migration safely) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 SELECT cron.unschedule(jobid)
 FROM cron.job
 WHERE jobname IN (
@@ -27,22 +27,22 @@ WHERE jobname IN (
     'nexus-notifications-cleanup'
 );
 
--- ── Master retention policy: runs ALL sub-policies in sequence ───────────────
+-- â”€â”€ Master retention policy: runs ALL sub-policies in sequence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Runs at 02:00 UTC daily.  Calls platform.run_retention_policies() which
 -- internally invokes:
---   event_store.cleanup_old_events(24)          → keep 24 months
---   event_store.purge_old_outbox_events(90)     → keep 90 days
---   event_store.purge_old_dlq_events(180)       → keep 180 days
---   ai.purge_old_steward_feedback(365)          → keep 1 year
---   platform.purge_expired_revoked_tokens()     → clear tokens > 8 days
---   platform.purge_old_notifications(30)        → keep 30 days
+--   event_store.cleanup_old_events(24)          â†’ keep 24 months
+--   event_store.purge_old_outbox_events(90)     â†’ keep 90 days
+--   event_store.purge_old_dlq_events(180)       â†’ keep 180 days
+--   ai.purge_old_steward_feedback(365)          â†’ keep 1 year
+--   platform.purge_expired_revoked_tokens()     â†’ clear tokens > 8 days
+--   platform.purge_old_notifications(30)        â†’ keep 30 days
 SELECT cron.schedule(
     'nexus-retention-daily',
     '0 2 * * *',
     $$SELECT platform.run_retention_policies()$$
 );
 
--- ── Audit log pruning: separate job so a slow retention run doesn't block it ─
+-- â”€â”€ Audit log pruning: separate job so a slow retention run doesn't block it â”€
 -- Keeps the last 90 days of audit logs.
 -- Runs at 03:00 UTC daily (1 hour after master policy to stagger DB load).
 SELECT cron.schedule(
@@ -57,7 +57,7 @@ SELECT cron.schedule(
     $$
 );
 
--- ── Revoked JWT tokens: short TTL, run more frequently ───────────────────────
+-- â”€â”€ Revoked JWT tokens: short TTL, run more frequently â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Runs every hour at :15 past to avoid concurrent execution with the daily job.
 SELECT cron.schedule(
     'nexus-revoked-tokens-cleanup',
@@ -65,7 +65,7 @@ SELECT cron.schedule(
     $$SELECT platform.purge_expired_revoked_tokens()$$
 );
 
--- ── Notification pruning: run nightly ────────────────────────────────────────
+-- â”€â”€ Notification pruning: run nightly â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Keeps the last 30 days; runs at 04:00 UTC.
 SELECT cron.schedule(
     'nexus-notifications-cleanup',
@@ -73,7 +73,7 @@ SELECT cron.schedule(
     $$SELECT platform.purge_old_notifications(30)$$
 );
 
--- ── Verify scheduled jobs ─────────────────────────────────────────────────────
+-- â”€â”€ Verify scheduled jobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 DO $$
 DECLARE
     job_count INTEGER;

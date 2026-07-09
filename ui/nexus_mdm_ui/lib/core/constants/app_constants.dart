@@ -1,8 +1,8 @@
-class AppConstants {
+﻿class AppConstants {
   AppConstants._();
 
   // App Info
-  static const String appName = 'Nexus AI MDM';
+  static const String appName = 'Azile AI MDM';
   static const String appVersion = '1.0.0';
   static const String appTagline = 'Intelligent Master Data Management';
 
@@ -17,7 +17,7 @@ class AppConstants {
   static const int receiveTimeout = 60000;
   static const int sendTimeout = 30000;
 
-  // API Paths — must match api-gateway routes exactly
+  // API Paths â€” must match api-gateway routes exactly
   // Auth routes are served at root (no /v1 prefix) by the gateway.
   static const String authPath           = '/auth';
   static const String loginPath          = '/auth/login';
@@ -33,8 +33,8 @@ class AppConstants {
   static const String matchQueuePath     = '/v1/match';
   static const String queueMetricsPath   = '/v1/match/queue-metrics';
   // AI
-  static const String aiCopilotPath       = '/v1/copilot';
-  static const String aiCopilotStreamPath = '/v1/copilot/stream';
+  static const String aiPrismPath       = '/v1/prism';
+  static const String aiPrismStreamPath = '/v1/prism/stream';
   static const String aiWeightsPath      = '/v1/weights/recommend';
   static const String aiAnomaliesPath    = '/v1/anomalies';
   // Search
@@ -55,7 +55,7 @@ class AppConstants {
   static const String distributionPath   = '/v1/distribution/jobs';
   // Metrics & health
   static const String metricsPath        = '/metrics';
-  // Dashboard — dedicated aggregate endpoints on mdm-core
+  // Dashboard â€” dedicated aggregate endpoints on mdm-core
   static const String dashboardStatsPath         = '/v1/dashboard/stats';
   static const String activityPath               = '/v1/dashboard/activity';
   static const String stewardPerformancePath           = '/v1/dashboard/steward-performance';
@@ -107,7 +107,7 @@ class AppConstants {
   static const String domainPoliciesPath = '/v1/domain-policies';
   static const String relationshipTypesPath = '/v1/relationship-types';
 
-  // SSO / OAuth2 PKCE (web redirect flow — S256 code challenge)
+  // SSO / OAuth2 PKCE (web redirect flow â€” S256 code challenge)
   // Client IDs are injected at build time via --dart-define:
   //   flutter build web --dart-define=GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
   //   flutter build web --dart-define=AZURE_CLIENT_ID=yyy --dart-define=AZURE_TENANT_ID=zzz
@@ -152,7 +152,7 @@ class AppConstants {
   static const int maxPageSize = 100;
   static const int defaultPage = 1;
 
-  // Entity Types — must match the backend EntityType enum in shared/contracts
+  // Entity Types â€” must match the backend EntityType enum in shared/contracts
   static const String entityTypeCustomer     = 'Customer';
   static const String entityTypeVendor       = 'Vendor';
   static const String entityTypeMaterial     = 'Material';
@@ -210,8 +210,8 @@ class AppConstants {
   static const double matchScoreLowConfidence = 0.55;
   static const double matchScoreNoMatch = 0.40;
 
-  // AI Copilot
-  static const String aiModelName = 'Nexus AI v2.1';
+  // AI Prism
+  static const String aiModelName = 'Azile AI v2.1';
   static const int maxChatHistory = 50;
   static const int aiResponseStreamDelayMs = 30;
 

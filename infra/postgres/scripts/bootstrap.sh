@@ -1,9 +1,9 @@
-#!/bin/bash
+﻿#!/bin/bash
 
 set -e
 
 echo "===================================="
-echo "NEXUS AI MDM BOOTSTRAP"
+echo "Azile AI MDM BOOTSTRAP"
 echo "===================================="
 
 ./reset.sh

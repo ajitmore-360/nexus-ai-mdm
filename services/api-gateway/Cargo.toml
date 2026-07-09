@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "api-gateway"
 version = "0.1.0"
 edition = "2021"
@@ -53,9 +53,9 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # INTERNAL SERVICES
 # =========================
 contracts   = { path = "../../shared/contracts" }
-nexus-redis      = { workspace = true }
-nexus-auth       = { workspace = true }
-nexus-telemetry  = { workspace = true }
+azile-redis      = { workspace = true }
+azile-auth       = { workspace = true }
+azile-telemetry  = { workspace = true }
 prometheus       = { workspace = true }
 
 # =========================

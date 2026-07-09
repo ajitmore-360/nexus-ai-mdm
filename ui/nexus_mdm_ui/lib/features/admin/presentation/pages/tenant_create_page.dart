@@ -1,4 +1,4 @@
-import 'dart:math';
+﻿import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -181,8 +181,8 @@ class _TenantCreatePageState extends State<TenantCreatePage> {
             Text('New Tenant', style: AppTextStyles.titleMedium),
             Text(
               _step == 1
-                  ? 'Step 1 of 2 · Tenant details'
-                  : 'Step 2 of 2 · Admin user',
+                  ? 'Step 1 of 2 Â· Tenant details'
+                  : 'Step 2 of 2 Â· Admin user',
               style: AppTextStyles.bodySmall,
             ),
           ],
@@ -231,7 +231,7 @@ class _TenantCreatePageState extends State<TenantCreatePage> {
             label: 'SUBDOMAIN',
             controller: _subdomainCtrl,
             hint: 'acme',
-            suffixText: '.nexusmdm.io',
+            suffixText: '.azilemdm.io',
             validator: Validators.subdomain,
           ),
           const SizedBox(height: 16),
@@ -378,7 +378,7 @@ class _TenantCreatePageState extends State<TenantCreatePage> {
                     color: AppColors.primary, strokeWidth: 2),
               )
             : AdminGradientButton(
-                label: _step == 1 ? 'Next →' : 'Create Tenant',
+                label: _step == 1 ? 'Next â†’' : 'Create Tenant',
                 onTap: _step == 1 ? _goToStep2 : _submitStep2,
               ),
       ],
@@ -386,9 +386,9 @@ class _TenantCreatePageState extends State<TenantCreatePage> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Step dot indicator
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _StepDot extends StatelessWidget {
   final int number;

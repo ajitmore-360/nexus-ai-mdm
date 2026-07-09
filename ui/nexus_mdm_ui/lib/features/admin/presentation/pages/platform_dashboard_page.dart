@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -173,7 +173,7 @@ class _PlatformDashboardPageState extends State<PlatformDashboardPage> {
               children: [
                 Text('Platform Overview', style: AppTextStyles.headlineSmall),
                 Text(
-                  'Nexus AI MDM — Super Admin Console',
+                  'Azile AI MDM â€” Super Admin Console',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.secondaryText,
                   ),
@@ -414,7 +414,7 @@ class _PlatformDashboardPageState extends State<PlatformDashboardPage> {
   }
 }
 
-// ─── Data models ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Data models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _PlatformStats {
   final int tenantCount;
@@ -456,7 +456,7 @@ class _QuickAction {
   });
 }
 
-// ─── Sub-widgets ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Sub-widgets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _RefreshButton extends StatelessWidget {
   final VoidCallback onTap;

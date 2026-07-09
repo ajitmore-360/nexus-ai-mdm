@@ -1,4 +1,4 @@
-use futures_util::StreamExt;
+﻿use futures_util::StreamExt;
 use uuid::Uuid;
 
 use super::manager::WsManager;
@@ -22,13 +22,13 @@ async fn subscribe_once(redis_url: &str, ws_manager: &WsManager) -> anyhow::Resu
     let conn   = client.get_async_connection().await?;
     let mut pubsub = conn.into_pubsub();
 
-    pubsub.psubscribe("nexus:tenant:*").await?;
+    pubsub.psubscribe("azile:tenant:*").await?;
     tracing::info!("Redis pub/sub subscribed to nexus:tenant:*");
 
     let mut stream = pubsub.into_on_message();
     while let Some(msg) = stream.next().await {
         let channel: String = msg.get_channel_name().to_string();
-        let tenant_str = channel.strip_prefix("nexus:tenant:").unwrap_or_default();
+        let tenant_str = channel.strip_prefix("azile:tenant:").unwrap_or_default();
         let Ok(tenant_id) = Uuid::parse_str(tenant_str) else { continue; };
         let Ok(payload) = msg.get_payload::<String>() else { continue; };
         ws_manager.broadcast_to_tenant(&tenant_id, payload);

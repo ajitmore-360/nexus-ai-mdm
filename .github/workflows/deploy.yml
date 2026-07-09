@@ -1,4 +1,4 @@
-name: Deploy
+﻿name: Deploy
 
 on:
   push:
@@ -11,9 +11,9 @@ env:
   IMAGE_ORG:  ${{ github.repository_owner }}
 
 jobs:
-  # ─────────────────────────────────────────────────────────────────────────
+  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   # Build and push Docker images for all Rust services
-  # ─────────────────────────────────────────────────────────────────────────
+  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   build-and-push:
     name: Build Docker Images
     runs-on: ubuntu-latest
@@ -69,9 +69,9 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to:   type=gha,scope=${{ matrix.service }},mode=max
 
-  # ─────────────────────────────────────────────────────────────────────────
+  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   # Build and push Flutter web image
-  # ─────────────────────────────────────────────────────────────────────────
+  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   build-ui:
     name: Build Flutter UI
     runs-on: ubuntu-latest
@@ -95,17 +95,17 @@ jobs:
       - name: Build and push UI
         uses: docker/build-push-action@v5
         with:
-          context: ui/nexus_mdm_ui
+          context: ui/azile_mdm_ui
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/nexus-ui:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/nexus-ui:${{ github.sha }}
-          cache-from: type=gha,scope=nexus-ui
-          cache-to:   type=gha,scope=nexus-ui,mode=max
+            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/azile-ui:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/azile-ui:${{ github.sha }}
+          cache-from: type=gha,scope=azile-ui
+          cache-to:   type=gha,scope=azile-ui,mode=max
 
-  # ─────────────────────────────────────────────────────────────────────────
+  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   # Deploy to Kubernetes (on tag push only)
-  # ─────────────────────────────────────────────────────────────────────────
+  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   deploy:
     name: Deploy to Kubernetes
     runs-on: ubuntu-latest
@@ -126,12 +126,12 @@ jobs:
       - name: Update image tags in Helm values
         run: |
           TAG=${GITHUB_REF_NAME}
-          sed -i "s/tag: latest/tag: ${TAG}/g" infra/k8s/helm/nexus-mdm/values.yaml
+          sed -i "s/tag: latest/tag: ${TAG}/g" infra/k8s/helm/azile-mdm/values.yaml
 
       - name: Helm upgrade
         run: |
-          helm upgrade --install nexus-mdm ./infra/k8s/helm/nexus-mdm \
-            --namespace nexus-mdm \
+          helm upgrade --install azile-mdm ./infra/k8s/helm/azile-mdm \
+            --namespace azile-mdm \
             --create-namespace \
             --wait \
             --timeout 10m \

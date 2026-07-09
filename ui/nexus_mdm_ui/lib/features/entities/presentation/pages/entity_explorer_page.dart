@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -44,14 +44,14 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
   final Set<String> _hiddenColumns = {};
   EntityPage? _lastEntityPage;
 
-  // Sort state — column key matches backend allowlist + asc/desc toggle
+  // Sort state â€” column key matches backend allowlist + asc/desc toggle
   String _sortBy  = 'created_at';
   bool   _sortAsc = false; // false = DESC (newest first default)
 
   // BL-044: Steward-scoped type filter
   List<String>? _stewardEntityTypes; // null = no restriction, [] = error/empty
 
-  // Role — used to show/hide governance actions
+  // Role â€” used to show/hide governance actions
   String? _userRole;
   bool _isBulkActioning = false;
 
@@ -168,7 +168,7 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
     try {
       final client = ApiClient();
       final resp = await client.post<Map<String, dynamic>>(
-        '/v1/copilot',
+        '/v1/prism',
         data: {
           'message': 'Extract entity search filters from this query as JSON with '
               'optional keys: type (one of ${AppConstants.entityTypes.join(", ")}), '
@@ -276,7 +276,7 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
     final baseTypes = allowedTypes != null && allowedTypes.isNotEmpty
         ? allowedTypes
         : AppConstants.entityTypes;
-    // Single-type stewards don't need an "All Types" chip — it's redundant.
+    // Single-type stewards don't need an "All Types" chip â€” it's redundant.
     final types = (_stewardEntityTypes?.length == 1)
         ? baseTypes.map<String?>((t) => t).toList()
         : [null, ...baseTypes];
@@ -439,7 +439,7 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
             controller: ctrl,
             decoration: const InputDecoration(
               labelText: 'Reviewer notes (optional)',
-              hintText: 'Reason for rejection…',
+              hintText: 'Reason for rejectionâ€¦',
             ),
             maxLines: 3,
           ),
@@ -535,7 +535,7 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
     ).animate().fadeIn(duration: 400.ms);
   }
 
-  // ── Sortable column header ───────────────────────────────────────────────
+  // â”€â”€ Sortable column header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Tapping a header column toggles direction if already active, or activates
   // it ascending.  Columns without a backend sort key (source) are non-sortable.
 

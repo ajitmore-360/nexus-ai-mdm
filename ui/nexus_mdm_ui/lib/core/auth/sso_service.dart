@@ -1,4 +1,4 @@
-// ignore: avoid_web_libraries_in_flutter — this app is web-only.
+﻿// ignore: avoid_web_libraries_in_flutter â€” this app is web-only.
 // ignore: deprecated_member_use
 import 'dart:html' as html;
 
@@ -11,8 +11,8 @@ import 'package:dio/dio.dart';
 import '../constants/app_constants.dart';
 import '../network/api_client.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SsoService — OAuth2 Authorization Code + PKCE (S256) for Flutter Web
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// SsoService â€” OAuth2 Authorization Code + PKCE (S256) for Flutter Web
 //
 // Flow:
 //   1. Caller invokes start*Flow().  The browser is redirected to the
@@ -23,29 +23,29 @@ import '../network/api_client.dart';
 //      The AuthCallbackPage calls completeFlow(code, client).
 //   3. completeFlow() exchanges the authorization code for an access_token
 //      directly at the provider's token endpoint (public PKCE client, no secret).
-//   4. The access_token is sent to POST /auth/sso-exchange on the Nexus backend,
+//   4. The access_token is sent to POST /auth/sso-exchange on the AZILE backend,
 //      which validates it via the provider's userinfo endpoint and returns a
-//      Nexus JWT pair.
+//      AZILE JWT pair.
 //
 // Required --dart-define flags at build time:
-//   GOOGLE_CLIENT_ID   — Google OAuth2 client ID (Web Application type)
-//   AZURE_CLIENT_ID    — Azure AD application (client) ID
-//   AZURE_TENANT_ID    — Azure AD tenant ID (default: "common")
-//   OKTA_CLIENT_ID     — Okta OIDC application client ID
-//   OKTA_ISSUER        — Okta org authorization server URL (e.g. https://xxx.okta.com)
-// ─────────────────────────────────────────────────────────────────────────────
+//   GOOGLE_CLIENT_ID   â€” Google OAuth2 client ID (Web Application type)
+//   AZURE_CLIENT_ID    â€” Azure AD application (client) ID
+//   AZURE_TENANT_ID    â€” Azure AD tenant ID (default: "common")
+//   OKTA_CLIENT_ID     â€” Okta OIDC application client ID
+//   OKTA_ISSUER        â€” Okta org authorization server URL (e.g. https://xxx.okta.com)
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SsoService {
   SsoService._();
 
-  // sessionStorage keys — cleared immediately after the callback reads them.
-  static const _kVerifier  = 'nexus_pkce_verifier';
-  static const _kProvider  = 'nexus_sso_provider';
-  static const _kTokenUrl  = 'nexus_sso_token_url';
-  static const _kClientId  = 'nexus_sso_client_id';
+  // sessionStorage keys â€” cleared immediately after the callback reads them.
+  static const _kVerifier  = 'azile_pkce_verifier';
+  static const _kProvider  = 'AZILE_sso_provider';
+  static const _kTokenUrl  = 'AZILE_sso_token_url';
+  static const _kClientId  = 'AZILE_sso_client_id';
 
   // ---------------------------------------------------------------------------
-  // Start flows — redirects the browser to the provider
+  // Start flows â€” redirects the browser to the provider
   // ---------------------------------------------------------------------------
 
   static void startGoogleFlow() {
@@ -85,11 +85,11 @@ class SsoService {
   }
 
   // ---------------------------------------------------------------------------
-  // Complete flow — called by AuthCallbackPage with the authorization code
+  // Complete flow â€” called by AuthCallbackPage with the authorization code
   // ---------------------------------------------------------------------------
 
   /// Exchanges [code] for an access token at the provider, then sends the
-  /// access token to the Nexus backend's /auth/sso-exchange endpoint.
+  /// access token to the AZILE backend's /auth/sso-exchange endpoint.
   /// Returns the `data` map from the backend response (access_token, user, etc.)
   static Future<Map<String, dynamic>> completeFlow({
     required String code,
@@ -115,7 +115,7 @@ class SsoService {
     }
 
     // Exchange authorization code for provider access token.
-    // The token endpoint is called directly (public PKCE client — no client_secret).
+    // The token endpoint is called directly (public PKCE client â€” no client_secret).
     final tokenDio = Dio();
     final formBody = [
       'grant_type=authorization_code',
@@ -150,7 +150,7 @@ class SsoService {
       throw const SsoException('Provider did not return an access token.');
     }
 
-    // Send to Nexus backend — backend validates against provider's userinfo endpoint.
+    // Send to AZILE backend â€” backend validates against provider's userinfo endpoint.
     final exchangeResp = await client.post<Map<String, dynamic>>(
       AppConstants.ssoExchangePath,
       data: {'provider': provider, 'access_token': accessToken},
@@ -228,9 +228,9 @@ class SsoService {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Exceptions
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SsoException implements Exception {
   final String message;

@@ -1,5 +1,5 @@
-# ============================================================================
-# Grafana Tempo — All-in-one configuration for Nexus AI MDM
+﻿# ============================================================================
+# Grafana Tempo â€” All-in-one configuration for Azile AI MDM
 # ============================================================================
 # Single-binary mode: distributor + ingester + querier + compactor all in one
 # process. Suitable for development and small production deployments.
@@ -12,7 +12,7 @@ server:
   http_listen_port: 3200
   log_level: warn
 
-# ── OTLP receivers (gRPC :4317 and HTTP :4318) ───────────────────────────────
+# â”€â”€ OTLP receivers (gRPC :4317 and HTTP :4318) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 distributor:
   receivers:
     otlp:
@@ -22,19 +22,19 @@ distributor:
         http:
           endpoint: 0.0.0.0:4318
 
-# ── Ingester: buffer spans in memory before flushing to storage ──────────────
+# â”€â”€ Ingester: buffer spans in memory before flushing to storage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ingester:
   max_block_duration: 5m
   trace_idle_period: 10s
   max_block_bytes: 100_000_000   # 100 MB per block
 
-# ── Compactor: merge and expire old trace blocks ─────────────────────────────
+# â”€â”€ Compactor: merge and expire old trace blocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 compactor:
   compaction:
     block_retention: 72h          # keep traces for 3 days in dev
     compacted_block_retention: 1h
 
-# ── Storage: local filesystem (switch to S3/GCS for production HA) ───────────
+# â”€â”€ Storage: local filesystem (switch to S3/GCS for production HA) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 storage:
   trace:
     backend: local
@@ -46,7 +46,7 @@ storage:
       max_workers: 100
       queue_depth: 10000
 
-# ── Query frontend ────────────────────────────────────────────────────────────
+# â”€â”€ Query frontend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 query_frontend:
   search:
     duration_slo: 5s
@@ -55,13 +55,13 @@ query_frontend:
 querier:
   max_concurrent_queries: 20
 
-# ── Metrics generator: derives RED metrics from trace data ───────────────────
+# â”€â”€ Metrics generator: derives RED metrics from trace data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Writes to Prometheus remote-write endpoint so Grafana can correlate traces
 # with metrics on the same dashboard.
 metrics_generator:
   registry:
     external_labels:
-      platform: nexus-ai-mdm
+      platform: azile-ai-mdm
   storage:
     path: /var/tempo/generator/wal
     remote_write:

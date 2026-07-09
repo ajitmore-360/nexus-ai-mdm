@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -84,7 +84,7 @@ class _LicenseManagementPageState extends State<LicenseManagementPage> {
               Text('License Manager', style: AppTextStyles.headlineSmall),
               const SizedBox(height: 4),
               Text(
-                '${_tenants.length} tenants  ·  $_licensedCount with paid plans',
+                '${_tenants.length} tenants  Â·  $_licensedCount with paid plans',
                 style: AppTextStyles.bodySmall,
               ),
             ],
@@ -252,7 +252,7 @@ class _LicenseManagementPageState extends State<LicenseManagementPage> {
           Expanded(
             flex: 2,
             child: Text(
-              '${t.subdomain}.nexusmdm.io',
+              '${t.subdomain}.azilemdm.io',
               style: AppTextStyles.tableCell
                   .copyWith(color: AppColors.cyan, fontSize: 12),
             ),
@@ -294,7 +294,7 @@ class _LicenseManagementPageState extends State<LicenseManagementPage> {
                     const Icon(Icons.edit_outlined,
                         size: 14, color: AppColors.secondaryText),
                     const SizedBox(width: 8),
-                    Text('Custom…', style: AppTextStyles.bodySmall),
+                    Text('Customâ€¦', style: AppTextStyles.bodySmall),
                   ],
                 ),
               ),
@@ -371,7 +371,7 @@ class _LicenseManagementPageState extends State<LicenseManagementPage> {
   }
 }
 
-// ─── Summary card ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Summary card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SummaryCard extends StatelessWidget {
   final IconData icon;
@@ -423,7 +423,7 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-// ─── Confirm dialog ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Confirm dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ConfirmLicenseDialog extends StatelessWidget {
   final TenantModel tenant;
@@ -478,7 +478,7 @@ class _ConfirmLicenseDialog extends StatelessWidget {
   }
 }
 
-// ─── Custom license dialog ────────────────────────────────────────────────────
+// â”€â”€â”€ Custom license dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _CustomLicenseDialog extends StatefulWidget {
   final TenantModel tenant;

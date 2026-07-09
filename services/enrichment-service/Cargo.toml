@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name        = "enrichment-service"
 version     = "0.1.0"
 edition     = "2021"
@@ -25,7 +25,7 @@ sqlx.workspace               = true
 # Observability
 tracing.workspace            = true
 tracing-subscriber.workspace         = true
-nexus-telemetry                      = { workspace = true }
+azile-telemetry                      = { workspace = true }
 
 # UUID / time
 uuid.workspace               = true
@@ -53,7 +53,7 @@ rdkafka.workspace            = true
 # Shared workspace crates
 contracts   = { path = "../../shared/contracts" }
 database    = { workspace = true }
-nexus-redis = { workspace = true }
+azile-redis = { workspace = true }
 
 # Deterministic mock data generation
 rand        = "0.8"

@@ -1,6 +1,6 @@
---
+﻿--
 -- =========================================================
--- Nexus MDM Platform
+-- Azile MDM Platform
 -- Production Extension Initialization
 -- File: 001_extensions.sql
 -- =========================================================

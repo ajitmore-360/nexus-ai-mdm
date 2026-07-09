@@ -1,12 +1,12 @@
--- ============================================================
--- 002011 — tenant_branding
+﻿-- ============================================================
+-- 002011 â€” tenant_branding
 -- White-label customisation per tenant (Enterprise tier only).
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS core_mdm.tenant_branding (
     tenant_id       UUID PRIMARY KEY
                         REFERENCES core_mdm.tenants(tenant_id) ON DELETE CASCADE,
-    product_name    TEXT,           -- overrides "Nexus AI MDM" in the UI
+    product_name    TEXT,           -- overrides "Azile AI MDM" in the UI
     logo_url        TEXT,           -- absolute URL to the tenant logo
     favicon_url     TEXT,           -- absolute URL to the favicon
     primary_color   TEXT,           -- hex string e.g. '#00C896'
@@ -17,12 +17,12 @@ CREATE TABLE IF NOT EXISTS core_mdm.tenant_branding (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ── Index ────────────────────────────────────────────────────────────────────
+-- â”€â”€ Index â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 CREATE INDEX IF NOT EXISTS idx_tenant_branding_tenant_id
     ON core_mdm.tenant_branding(tenant_id);
 
--- ── RLS ─────────────────────────────────────────────────────────────────────
+-- â”€â”€ RLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 ALTER TABLE core_mdm.tenant_branding ENABLE ROW LEVEL SECURITY;
 

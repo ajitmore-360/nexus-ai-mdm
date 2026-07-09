@@ -1,0 +1,155 @@
+﻿{{/*
+=============================================================================
+AI Service â€” Deployment
+Port: 8082
+Owns: LLM copilot, semantic matching, embeddings, RAG, anomaly scanning
+Requires: PostgreSQL, Redis, Ollama (external LLM backend)
+=============================================================================
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "azile-mdm.fullname" . }}-{{ .Values.aiService.name }}
+  namespace: {{ include "azile-mdm.namespace" . }}
+  labels:
+    {{- include "azile-mdm.serviceLabels" (dict "root" . "service" .Values.aiService.name) | nindent 4 }}
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: {{ .Values.aiService.replicas }}
+  selector:
+    matchLabels:
+      {{- include "azile-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.aiService.name) | nindent 6 }}
+  strategy:
+    type: {{ .Values.aiService.strategy.type }}
+    {{- if eq .Values.aiService.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ .Values.aiService.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.aiService.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "azile-mdm.serviceLabels" (dict "root" . "service" .Values.aiService.name) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: ai-service
+          image: "{{ tpl .Values.aiService.image.repository . }}:{{ .Values.aiService.image.tag }}"
+          imagePullPolicy: {{ .Values.aiService.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.aiService.port }}
+              protocol: TCP
+          env:
+            - name: AI_SERVICE_HOST
+              value: "0.0.0.0"
+            - name: AI_SERVICE_PORT
+              value: {{ .Values.aiService.port | toString | quote }}
+            - name: RUST_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: RUST_LOG
+            - name: OLLAMA_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: OLLAMA_URL
+            - name: LLM_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: LLM_MODEL
+            - name: EMBED_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: EMBED_MODEL
+            - name: LLM_TEMPERATURE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: LLM_TEMPERATURE
+            - name: LLM_MAX_TOKENS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: LLM_MAX_TOKENS
+            - name: LLM_TIMEOUT_SECS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: LLM_TIMEOUT_SECS
+            # ---- Secrets -----------------------------------------------------
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.existingSecret }}
+                  key: {{ .Values.postgresql.databaseUrlKey }}
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.existingSecret }}
+                  key: {{ .Values.redis.redisUrlKey }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.jwtSecretKey }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.aiService.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.aiService.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.aiService.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.aiService.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.aiService.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.aiService.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.aiService.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.aiService.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.aiService.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.aiService.probes.readiness.failureThreshold }}
+          resources:
+            {{- include "azile-mdm.resources" .Values.aiService.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            # AI model cache (embeddings cache on disk)
+            - name: model-cache
+              mountPath: /app/cache
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: model-cache
+          emptyDir:
+            sizeLimit: "2Gi"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "azile-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.aiService.name) | nindent 20 }}
+                topologyKey: kubernetes.io/hostname

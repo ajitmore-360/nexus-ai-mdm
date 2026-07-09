@@ -1,6 +1,6 @@
---
+﻿--
 -- =========================================================
--- Nexus MDM Platform
+-- Azile MDM Platform
 -- Production Schema Initialization
 -- File: 002_schemas.sql
 -- =========================================================
@@ -40,15 +40,15 @@ CREATE SCHEMA IF NOT EXISTS core;
 -- =========================================================
 --
 
-ALTER SCHEMA core_mdm OWNER TO nexus_migration;
-ALTER SCHEMA event_store OWNER TO nexus_migration;
-ALTER SCHEMA audit OWNER TO nexus_migration;
-ALTER SCHEMA lineage OWNER TO nexus_migration;
-ALTER SCHEMA ai OWNER TO nexus_migration;
-ALTER SCHEMA governance OWNER TO nexus_migration;
-ALTER SCHEMA platform OWNER TO nexus_migration;
-ALTER SCHEMA app_context OWNER TO nexus_migration;
-ALTER SCHEMA core OWNER TO nexus_migration;
+ALTER SCHEMA core_mdm OWNER TO azile_migration;
+ALTER SCHEMA event_store OWNER TO azile_migration;
+ALTER SCHEMA audit OWNER TO azile_migration;
+ALTER SCHEMA lineage OWNER TO azile_migration;
+ALTER SCHEMA ai OWNER TO azile_migration;
+ALTER SCHEMA governance OWNER TO azile_migration;
+ALTER SCHEMA platform OWNER TO azile_migration;
+ALTER SCHEMA app_context OWNER TO azile_migration;
+ALTER SCHEMA core OWNER TO azile_migration;
 
 --
 -- =========================================================
@@ -72,15 +72,15 @@ REVOKE ALL ON SCHEMA core FROM PUBLIC;
 -- =========================================================
 --
 
-GRANT USAGE ON SCHEMA core_mdm TO nexus_app;
-GRANT USAGE ON SCHEMA event_store TO nexus_app;
-GRANT USAGE ON SCHEMA audit TO nexus_app;
-GRANT USAGE ON SCHEMA lineage TO nexus_app;
-GRANT USAGE ON SCHEMA ai TO nexus_app;
-GRANT USAGE ON SCHEMA governance TO nexus_app;
-GRANT USAGE ON SCHEMA platform TO nexus_app;
-GRANT USAGE ON SCHEMA app_context TO nexus_app;
-GRANT USAGE ON SCHEMA core TO nexus_app;
+GRANT USAGE ON SCHEMA core_mdm TO azile_app;
+GRANT USAGE ON SCHEMA event_store TO azile_app;
+GRANT USAGE ON SCHEMA audit TO azile_app;
+GRANT USAGE ON SCHEMA lineage TO azile_app;
+GRANT USAGE ON SCHEMA ai TO azile_app;
+GRANT USAGE ON SCHEMA governance TO azile_app;
+GRANT USAGE ON SCHEMA platform TO azile_app;
+GRANT USAGE ON SCHEMA app_context TO azile_app;
+GRANT USAGE ON SCHEMA core TO azile_app;
 
 --
 -- =========================================================
@@ -88,10 +88,10 @@ GRANT USAGE ON SCHEMA core TO nexus_app;
 -- =========================================================
 --
 
-GRANT USAGE ON SCHEMA core_mdm TO nexus_readonly;
-GRANT USAGE ON SCHEMA audit TO nexus_readonly;
-GRANT USAGE ON SCHEMA lineage TO nexus_readonly;
-GRANT USAGE ON SCHEMA platform TO nexus_readonly;
+GRANT USAGE ON SCHEMA core_mdm TO azile_readonly;
+GRANT USAGE ON SCHEMA audit TO azile_readonly;
+GRANT USAGE ON SCHEMA lineage TO azile_readonly;
+GRANT USAGE ON SCHEMA platform TO azile_readonly;
 
 --
 -- =========================================================
@@ -99,15 +99,15 @@ GRANT USAGE ON SCHEMA platform TO nexus_readonly;
 -- =========================================================
 --
 
-GRANT ALL ON SCHEMA core_mdm TO nexus_migration;
-GRANT ALL ON SCHEMA event_store TO nexus_migration;
-GRANT ALL ON SCHEMA audit TO nexus_migration;
-GRANT ALL ON SCHEMA lineage TO nexus_migration;
-GRANT ALL ON SCHEMA ai TO nexus_migration;
-GRANT ALL ON SCHEMA governance TO nexus_migration;
-GRANT ALL ON SCHEMA platform TO nexus_migration;
-GRANT ALL ON SCHEMA app_context TO nexus_migration;
-GRANT ALL ON SCHEMA core TO nexus_migration;
+GRANT ALL ON SCHEMA core_mdm TO azile_migration;
+GRANT ALL ON SCHEMA event_store TO azile_migration;
+GRANT ALL ON SCHEMA audit TO azile_migration;
+GRANT ALL ON SCHEMA lineage TO azile_migration;
+GRANT ALL ON SCHEMA ai TO azile_migration;
+GRANT ALL ON SCHEMA governance TO azile_migration;
+GRANT ALL ON SCHEMA platform TO azile_migration;
+GRANT ALL ON SCHEMA app_context TO azile_migration;
+GRANT ALL ON SCHEMA core TO azile_migration;
 
 --
 -- =========================================================
@@ -115,7 +115,7 @@ GRANT ALL ON SCHEMA core TO nexus_migration;
 -- =========================================================
 --
 
-ALTER ROLE nexus_app
+ALTER ROLE azile_app
 SET search_path =
     core_mdm,
     event_store,
@@ -127,7 +127,7 @@ SET search_path =
     platform,
     public;
 
-ALTER ROLE nexus_readonly
+ALTER ROLE azile_readonly
 SET search_path =
     core_mdm,
     audit,
@@ -135,7 +135,7 @@ SET search_path =
     platform,
     public;
 
-ALTER ROLE nexus_migration
+ALTER ROLE azile_migration
 SET search_path =
     core_mdm,
     event_store,

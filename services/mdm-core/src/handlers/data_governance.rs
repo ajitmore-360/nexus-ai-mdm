@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use axum::{
     extract::{Path, State},
@@ -11,13 +11,13 @@ use serde_json::json;
 use sqlx::Row;
 use uuid::Uuid;
 
-use nexus_auth::Role;
+use azile_auth::Role;
 
 use crate::middleware::tenant::TenantContext;
 use crate::services::audit_service::AuditEvent;
 use crate::AppState;
 
-// ── Shared response helper ────────────────────────────────────────────────────
+// â”€â”€ Shared response helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn ok(data: serde_json::Value) -> Response {
     (StatusCode::OK, Json(json!({ "success": true, "data": data }))).into_response()
@@ -31,9 +31,9 @@ fn err(status: StatusCode, msg: &str) -> Response {
     (status, Json(json!({ "success": false, "error": msg }))).into_response()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // ASSIGNMENT CRUD
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Deserialize)]
 pub struct CreateAssignmentRequest {
@@ -42,12 +42,12 @@ pub struct CreateAssignmentRequest {
     pub assignment_type:  String, // "owner" | "steward"
 }
 
-/// GET /governance/assignments — list all assignments for this tenant.
+/// GET /governance/assignments â€” list all assignments for this tenant.
 /// Required role: BusinessAdmin or Admin.
 pub async fn list_assignments(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
 ) -> Response {
     if !claims.nxs_role.can_admin() {
         return err(StatusCode::FORBIDDEN, "admin or business_admin role required");
@@ -89,12 +89,12 @@ pub async fn list_assignments(
     }
 }
 
-/// GET /governance/assignments/my-types — list entity types the calling user is assigned to.
+/// GET /governance/assignments/my-types â€” list entity types the calling user is assigned to.
 /// Used by Steward-role users to know what they can access.
 pub async fn my_assigned_types(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
 ) -> Response {
     let identity_id = match Uuid::parse_str(&claims.sub) {
         Ok(id) => id,
@@ -131,12 +131,12 @@ pub async fn my_assigned_types(
     }
 }
 
-/// POST /governance/assignments — create an entity-type assignment.
+/// POST /governance/assignments â€” create an entity-type assignment.
 /// Required role: BusinessAdmin or Admin.
 pub async fn create_assignment(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
     Json(req):             Json<CreateAssignmentRequest>,
 ) -> Response {
     if !claims.nxs_role.can_admin() {
@@ -175,7 +175,7 @@ pub async fn create_assignment(
             if msg.contains("entity_type_assignments_one_owner_idx") {
                 return err(
                     StatusCode::CONFLICT,
-                    "this entity type already has a Data Owner — remove the existing owner first",
+                    "this entity type already has a Data Owner â€” remove the existing owner first",
                 );
             }
             tracing::error!(error=?e, "create_assignment failed");
@@ -184,12 +184,12 @@ pub async fn create_assignment(
     }
 }
 
-/// DELETE /governance/assignments/:id — remove an assignment.
+/// DELETE /governance/assignments/:id â€” remove an assignment.
 /// Required role: BusinessAdmin or Admin.
 pub async fn delete_assignment(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
     Path(assignment_id):   Path<Uuid>,
 ) -> Response {
     if !claims.nxs_role.can_admin() {
@@ -214,9 +214,9 @@ pub async fn delete_assignment(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // APPROVAL WORKFLOW
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Deserialize)]
 pub struct SubmitForReviewRequest {
@@ -234,7 +234,7 @@ pub struct RejectEntityRequest {
 pub async fn submit_for_review(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
     Path(entity_id):       Path<Uuid>,
     Json(req):             Json<SubmitForReviewRequest>,
 ) -> Response {
@@ -243,7 +243,7 @@ pub async fn submit_for_review(
         Err(_) => return err(StatusCode::UNAUTHORIZED, "invalid identity in token"),
     };
 
-    // Load entity — verify it belongs to this tenant
+    // Load entity â€” verify it belongs to this tenant
     let entity_row = sqlx::query(
         "SELECT entity_id, entity_type, status FROM core_mdm.entities WHERE entity_id = $1 AND tenant_id = $2",
     )
@@ -371,12 +371,12 @@ pub async fn submit_for_review(
     }))
 }
 
-/// GET /entities/pending-approvals — returns entities awaiting the caller's approval.
+/// GET /entities/pending-approvals â€” returns entities awaiting the caller's approval.
 /// Data Owners see entities of their owned type. Admins/BusinessAdmins see all pending.
 pub async fn list_pending_approvals(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
 ) -> Response {
     let identity_id = Uuid::parse_str(&claims.sub).unwrap_or(Uuid::nil());
 
@@ -444,11 +444,11 @@ pub async fn list_pending_approvals(
     }
 }
 
-/// POST /entities/:id/approve — Data Owner approves an entity and publishes it.
+/// POST /entities/:id/approve â€” Data Owner approves an entity and publishes it.
 pub async fn approve_entity(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
     Path(entity_id):       Path<Uuid>,
 ) -> Response {
     let identity_id = match Uuid::parse_str(&claims.sub) {
@@ -495,7 +495,7 @@ pub async fn approve_entity(
         }
     }
 
-    // Both writes must succeed atomically — dropped txn auto-rolls-back on early return.
+    // Both writes must succeed atomically â€” dropped txn auto-rolls-back on early return.
     let mut txn = match state.db.begin().await {
         Ok(t)  => t,
         Err(e) => {
@@ -558,11 +558,11 @@ pub async fn approve_entity(
     ok(json!({ "entity_id": entity_id, "status": "Active" }))
 }
 
-/// POST /entities/:id/reject — Data Owner rejects a pending entity with notes.
+/// POST /entities/:id/reject â€” Data Owner rejects a pending entity with notes.
 pub async fn reject_entity(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
     Path(entity_id):       Path<Uuid>,
     Json(req):             Json<RejectEntityRequest>,
 ) -> Response {
@@ -678,7 +678,7 @@ pub async fn reject_entity(
     ok(json!({ "entity_id": entity_id, "status": "Draft", "reviewer_notes": req.reviewer_notes }))
 }
 
-// ── Bulk entity actions ───────────────────────────────────────────────────────
+// â”€â”€ Bulk entity actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Deserialize)]
 pub struct BulkEntityActionRequest {
@@ -686,14 +686,14 @@ pub struct BulkEntityActionRequest {
     pub reviewer_notes: Option<String>,
 }
 
-/// POST /entities/bulk-approve — approve multiple pending entities in one call.
+/// POST /entities/bulk-approve â€” approve multiple pending entities in one call.
 ///
 /// Returns a summary with `succeeded`, `skipped` (no pending request, or
 /// caller lacks permission for that type), and `failed` (DB error) entity IDs.
 pub async fn bulk_approve_entities(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
     Json(req):             Json<BulkEntityActionRequest>,
 ) -> Response {
     let identity_id = match Uuid::parse_str(&claims.sub) {
@@ -774,7 +774,7 @@ pub async fn bulk_approve_entities(
         .execute(&mut *txn).await.is_err() {
             tracing::error!(entity_id=%entity_id, "bulk_approve: request update failed");
             failed.push(entity_id.to_string());
-            continue; // txn dropped → auto-rollback
+            continue; // txn dropped â†’ auto-rollback
         }
 
         if sqlx::query(
@@ -832,11 +832,11 @@ pub async fn bulk_approve_entities(
     ok(json!({ "succeeded": succeeded, "skipped": skipped, "failed": failed }))
 }
 
-/// POST /entities/bulk-reject — reject multiple pending entities in one call.
+/// POST /entities/bulk-reject â€” reject multiple pending entities in one call.
 pub async fn bulk_reject_entities(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
     Json(req):             Json<BulkEntityActionRequest>,
 ) -> Response {
     let identity_id = match Uuid::parse_str(&claims.sub) {

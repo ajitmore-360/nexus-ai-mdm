@@ -1,5 +1,5 @@
-# ============================================================================
-# Nexus AI MDM — DEVELOPMENT OVERRIDE
+﻿# ============================================================================
+# Azile AI MDM â€” DEVELOPMENT OVERRIDE
 # Starts ONLY infrastructure (PostgreSQL, Redis, Kafka, OPA, Ollama).
 # Run Rust services locally with: cargo run -p <service-name>
 #
@@ -11,7 +11,7 @@
 # ============================================================================
 
 services:
-  # Disable all Rust services — run them locally instead
+  # Disable all Rust services â€” run them locally instead
   api-gateway:
     profiles: ["disabled"]
   mdm-core:
@@ -34,11 +34,11 @@ services:
     profiles: ["disabled"]
   kafka-event-service:
     profiles: ["disabled"]
-  nexus-ui:
+  azile-ui:
     profiles: ["disabled"]
   ollama-init:
     profiles: ["disabled"]
-  # Disable monitoring stack — depends on api-gateway which is also disabled
+  # Disable monitoring stack â€” depends on api-gateway which is also disabled
   prometheus:
     profiles: ["disabled"]
   alertmanager:
@@ -60,7 +60,7 @@ services:
     ports:
       - "9000:8080"
 
-  # Mailhog — local SMTP test server for invite emails
+  # Mailhog â€” local SMTP test server for invite emails
   # Web UI: http://localhost:8025  |  SMTP: localhost:1025
   mailhog:
     image: mailhog/mailhog:latest

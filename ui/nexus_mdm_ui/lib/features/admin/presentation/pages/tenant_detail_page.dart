@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
@@ -155,7 +155,7 @@ class _TenantDetailPageState extends State<TenantDetailPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${t.subdomain}.nexusmdm.io  ·  ${t.region}  ·  ID: ${t.id}',
+                  '${t.subdomain}.azilemdm.io  Â·  ${t.region}  Â·  ID: ${t.id}',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: AppColors.secondaryText,
                   ),
@@ -471,7 +471,7 @@ class _TenantDetailPageState extends State<TenantDetailPage> {
   }
 }
 
-// ─── Invite user dialog ────────────────────────────────────────────────────────
+// â”€â”€â”€ Invite user dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _InviteUserDialog extends StatefulWidget {
   final String tenantId;
@@ -678,7 +678,7 @@ class _InviteUserDialogState extends State<_InviteUserDialog> {
   }
 }
 
-// ─── Small widgets ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Small widgets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _MetricTile extends StatelessWidget {
   final String label;

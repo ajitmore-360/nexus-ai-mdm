@@ -1,4 +1,4 @@
-use dotenvy::dotenv;
+﻿use dotenvy::dotenv;
 
 use sqlx::{
     postgres::PgPoolOptions,
@@ -51,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     // ====================================
     //
 
-    nexus_telemetry::tracing_init::init_tracing("kafka-event-service");
+    azile_telemetry::tracing_init::init_tracing("kafka-event-service");
 
     info!("Starting Kafka Event Service...");
 
@@ -153,14 +153,14 @@ async fn main() -> anyhow::Result<()> {
     info!("Shutdown signal received");
 
     // Flush OTLP spans before exit
-    nexus_telemetry::tracing_init::shutdown_tracing();
+    azile_telemetry::tracing_init::shutdown_tracing();
 
     info!("Kafka Event Service stopped");
 
     Ok(())
 }
 
-// ── Health HTTP server ────────────────────────────────────────────────────────
+// â”€â”€ Health HTTP server â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async fn start_health_server(
     pool: PgPool,
@@ -174,7 +174,7 @@ async fn start_health_server(
         .and_then(|v| v.parse().ok())
         .unwrap_or(8087);
 
-    nexus_telemetry::metrics::init_metrics("kafka-event-service");
+    azile_telemetry::metrics::init_metrics("kafka-event-service");
 
     let app = Router::new()
         .route("/health",  get({
@@ -224,6 +224,6 @@ async fn health_handler(
 }
 
 async fn metrics_handler() -> String {
-    nexus_telemetry::metrics::render_metrics()
+    azile_telemetry::metrics::render_metrics()
         .unwrap_or_else(|e| format!("# metrics error: {}", e))
 }

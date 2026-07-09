@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -139,7 +139,7 @@ class _ScimTokensPageState extends State<ScimTokensPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Copy this token now — it will NOT be shown again.',
+                        'Copy this token now â€” it will NOT be shown again.',
                         style: AppTextStyles.bodySmall.copyWith(color: AppColors.warning),
                       ),
                     ),
@@ -277,7 +277,7 @@ class _ScimTokensPageState extends State<ScimTokensPage> {
           const SizedBox(height: 8),
           Text(
             'SCIM tokens allow your Identity Provider (Okta, Azure AD, Ping Identity, etc.) to '
-            'automatically create, update, and deactivate user accounts in Nexus MDM.\n\n'
+            'automatically create, update, and deactivate user accounts in Azile MDM.\n\n'
             'SCIM Base URL: https://your-domain.com/scim/{tenant-id}/v2/',
             style: AppTextStyles.bodySmall.copyWith(color: AppColors.secondaryText),
           ),
@@ -328,7 +328,7 @@ class _ScimTokensPageState extends State<ScimTokensPage> {
 
   Widget _tokenCard(Map<String, dynamic> token) {
     final isActive  = token['is_active'] as bool? ?? true;
-    final desc      = token['description'] as String? ?? '—';
+    final desc      = token['description'] as String? ?? 'â€”';
     final createdAt = _fmtDate(token['created_at'] as String?);
     final lastUsed  = _fmtDate(token['last_used_at'] as String?);
     final expiresAt = _fmtDate(token['expires_at'] as String?);
@@ -379,8 +379,8 @@ class _ScimTokensPageState extends State<ScimTokensPage> {
                 const SizedBox(height: 4),
                 Text(
                   'Created $createdAt'
-                  '${lastUsed != null ? '  ·  Last used $lastUsed' : ''}'
-                  '${expiresAt != null ? '  ·  Expires $expiresAt' : ''}',
+                  '${lastUsed != null ? '  Â·  Last used $lastUsed' : ''}'
+                  '${expiresAt != null ? '  Â·  Expires $expiresAt' : ''}',
                   style: AppTextStyles.bodySmall.copyWith(color: AppColors.secondaryText),
                 ),
               ],

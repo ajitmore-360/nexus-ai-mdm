@@ -1,4 +1,4 @@
-mod connectors;
+﻿mod connectors;
 mod processor;
 
 use std::net::SocketAddr;
@@ -22,11 +22,11 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 async fn metrics_handler() -> String {
-    nexus_telemetry::metrics::render_metrics()
+    azile_telemetry::metrics::render_metrics()
         .unwrap_or_else(|e| format!("# metrics error: {}", e))
 }
 
-/// POST /jobs  — enqueue a distribution job from another service
+/// POST /jobs  â€” enqueue a distribution job from another service
 async fn enqueue_job(
     axum::extract::State(pool): axum::extract::State<sqlx::PgPool>,
     Json(req): Json<EnqueueJobRequest>,
@@ -189,8 +189,8 @@ async fn get_job(
 async fn main() {
     dotenvy::dotenv().ok();
 
-    nexus_telemetry::tracing_init::init_tracing("distribution-service");
-    nexus_telemetry::metrics::init_metrics("distribution-service");
+    azile_telemetry::tracing_init::init_tracing("distribution-service");
+    azile_telemetry::metrics::init_metrics("distribution-service");
 
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     tracing::info!(app_env = %app_env, "Distribution Service environment loaded");

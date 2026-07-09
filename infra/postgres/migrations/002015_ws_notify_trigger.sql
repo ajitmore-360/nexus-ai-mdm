@@ -1,17 +1,17 @@
--- Migration 002015: PostgreSQL NOTIFY trigger for real-time WebSocket push
+﻿-- Migration 002015: PostgreSQL NOTIFY trigger for real-time WebSocket push
 --
 -- Problem: when a record is created/updated by any service (mdm-core, ingest,
 -- match engine, etc.), the API gateway's WebSocket clients need to be notified
--- immediately — not just the originating service instance.
+-- immediately â€” not just the originating service instance.
 --
 -- Solution: a NOTIFY trigger on core MDM tables fires a pg_notify payload that
 -- the API gateway can subscribe to via LISTEN. The gateway then fans the message
 -- out to the appropriate tenant's WebSocket sessions via WsManager.
 --
 -- Channel conventions:
---   nexus_entity_changes   — entity create/update/delete events
---   nexus_review_events    — new match candidates added to the review queue
---   nexus_inbox_events     — new rows in notifications.inbox (per-user toasts)
+--   AZILE_entity_changes   â€” entity create/update/delete events
+--   AZILE_review_events    â€” new match candidates added to the review queue
+--   AZILE_inbox_events     â€” new rows in notifications.inbox (per-user toasts)
 --
 -- Payload schema (JSON):
 --   {
@@ -25,7 +25,7 @@
 -- Note: pg_notify payload is limited to 8 000 bytes.  We send only IDs, never
 -- full payloads, so the WebSocket client fetches fresh data via the REST API.
 
--- ── Helper: generic NOTIFY trigger function ──────────────────────────────────
+-- â”€â”€ Helper: generic NOTIFY trigger function â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 CREATE OR REPLACE FUNCTION core_mdm.notify_change()
 RETURNS TRIGGER
@@ -41,7 +41,7 @@ BEGIN
     -- Resolve per-table channel and event_type.
     CASE TG_TABLE_NAME
         WHEN 'entities' THEN
-            v_channel      := 'nexus_entity_changes';
+            v_channel      := 'AZILE_entity_changes';
             v_resource_id  := COALESCE(NEW.entity_id, OLD.entity_id)::TEXT;
             v_tenant_id    := COALESCE(NEW.tenant_id, OLD.tenant_id)::TEXT;
             v_event_type   := CASE TG_OP
@@ -52,7 +52,7 @@ BEGIN
                               END;
 
         WHEN 'match_review_queue' THEN
-            v_channel      := 'nexus_review_events';
+            v_channel      := 'AZILE_review_events';
             v_resource_id  := COALESCE(NEW.review_id, OLD.review_id)::TEXT;
             v_tenant_id    := COALESCE(NEW.tenant_id, OLD.tenant_id)::TEXT;
             v_event_type   := CASE TG_OP
@@ -62,7 +62,7 @@ BEGIN
                               END;
 
         WHEN 'inbox' THEN
-            v_channel      := 'nexus_inbox_events';
+            v_channel      := 'AZILE_inbox_events';
             v_resource_id  := COALESCE(NEW.notification_id, OLD.notification_id)::TEXT;
             v_tenant_id    := COALESCE(NEW.tenant_id, OLD.tenant_id)::TEXT;
             v_event_type   := CASE TG_OP
@@ -72,7 +72,7 @@ BEGIN
                               END;
 
         ELSE
-            -- Unknown table — no-op rather than erroring.
+            -- Unknown table â€” no-op rather than erroring.
             RETURN COALESCE(NEW, OLD);
     END CASE;
 
@@ -91,7 +91,7 @@ BEGIN
 END;
 $$;
 
--- ── Entities table — AFTER INSERT / UPDATE / DELETE ──────────────────────────
+-- â”€â”€ Entities table â€” AFTER INSERT / UPDATE / DELETE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 DROP TRIGGER IF EXISTS trg_notify_entity_change ON core_mdm.entities;
 
@@ -101,7 +101,7 @@ CREATE TRIGGER trg_notify_entity_change
     FOR EACH ROW
     EXECUTE FUNCTION core_mdm.notify_change();
 
--- ── Match review queue — AFTER INSERT / UPDATE ───────────────────────────────
+-- â”€â”€ Match review queue â€” AFTER INSERT / UPDATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 DROP TRIGGER IF EXISTS trg_notify_review_change ON core_mdm.match_review_queue;
 
@@ -111,7 +111,7 @@ CREATE TRIGGER trg_notify_review_change
     FOR EACH ROW
     EXECUTE FUNCTION core_mdm.notify_change();
 
--- ── Notification inbox — AFTER INSERT / UPDATE ───────────────────────────────
+-- â”€â”€ Notification inbox â€” AFTER INSERT / UPDATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 DROP TRIGGER IF EXISTS trg_notify_inbox_change ON notifications.inbox;
 

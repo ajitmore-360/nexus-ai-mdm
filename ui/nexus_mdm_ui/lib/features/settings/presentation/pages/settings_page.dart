@@ -1,4 +1,4 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -10,9 +10,9 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/validation/validators.dart';
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Models
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SourceSystem {
   final String id;
@@ -28,7 +28,7 @@ class _SourceSystem {
     required this.name,
     required this.type,
     this.url = '',
-    this.lastSync = '—',
+    this.lastSync = 'â€”',
     required this.trustScore,
     required this.isActive,
   });
@@ -66,9 +66,9 @@ class _ApiKey {
 }
 
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Helpers
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 Color _roleColor(String role) {
   switch (role) {
@@ -132,9 +132,9 @@ Widget _sectionCard({required String title, String? subtitle, required Widget ch
   );
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Main Page
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -253,9 +253,9 @@ class _SettingsPageState extends State<SettingsPage>
   }
 }
 
-// ─────────────────────────────────────────────
-// Tab 1 – AI Configuration
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Tab 1 â€“ AI Configuration
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _AiConfigTab extends StatefulWidget {
   const _AiConfigTab();
@@ -273,7 +273,7 @@ class _AiConfigTabState extends State<_AiConfigTab> {
 
   // AI Feature switches
   bool _aiMatchAssist = true;
-  bool _ragCopilot = true;
+  bool _ragPrism = true;
   bool _autoSurvivorship = true;
   bool _anomalyDetection = true;
   bool _adaptiveWeights = false;
@@ -325,7 +325,7 @@ class _AiConfigTabState extends State<_AiConfigTab> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(models.isNotEmpty
-                    ? 'Connected · ${models.length} model${models.length == 1 ? '' : 's'}: ${models.take(3).join(', ')}'
+                    ? 'Connected Â· ${models.length} model${models.length == 1 ? '' : 's'}: ${models.take(3).join(', ')}'
                     : 'Connected to Ollama at $baseUrl'),
               ),
             ],
@@ -488,19 +488,19 @@ class _AiConfigTabState extends State<_AiConfigTab> {
                   _AiFeatureSwitch(
                     title: 'AI Match Assist',
                     subtitle:
-                        'Llama resolves ambiguous matches (0.75–0.95 score)',
+                        'Llama resolves ambiguous matches (0.75â€“0.95 score)',
                     value: _aiMatchAssist,
                     icon: Icons.auto_awesome_rounded,
                     onChanged: (v) =>
                         setState(() => _aiMatchAssist = v),
                   ),
                   _AiFeatureSwitch(
-                    title: 'RAG Copilot',
+                    title: 'RAG Prism',
                     subtitle:
                         'Knowledge-grounded natural language Q&A',
-                    value: _ragCopilot,
+                    value: _ragPrism,
                     icon: Icons.chat_rounded,
-                    onChanged: (v) => setState(() => _ragCopilot = v),
+                    onChanged: (v) => setState(() => _ragPrism = v),
                   ),
                   _AiFeatureSwitch(
                     title: 'Auto Survivorship',
@@ -757,9 +757,9 @@ class _ThresholdSlider extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-// Tab 2 – Source Systems
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Tab 2 â€“ Source Systems
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SourceSystemsTab extends StatefulWidget {
   const _SourceSystemsTab();
@@ -983,7 +983,7 @@ class _SourceCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '${source.type} · Last sync: ${source.lastSync}',
+                      '${source.type} Â· Last sync: ${source.lastSync}',
                       style: AppTextStyles.bodySmall,
                     ),
                   ],
@@ -1243,9 +1243,9 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
   }
 }
 
-// ─────────────────────────────────────────────
-// Tab 3 – Administration
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Tab 3 â€“ Administration
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _AdministrationTab extends StatefulWidget {
   const _AdministrationTab();
@@ -1255,13 +1255,13 @@ class _AdministrationTab extends StatefulWidget {
 }
 
 class _AdministrationTabState extends State<_AdministrationTab> {
-  // ── Users state ───────────────────────────────────────────────────────────
+  // â”€â”€ Users state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   List<_AppUser> _users = [];
   bool _usersLoading = true;
 
-  // ── Tenant info state ─────────────────────────────────────────────────────
-  String _tenantId   = '—';
-  String _tenantName = '—';
+  // â”€â”€ Tenant info state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  String _tenantId   = 'â€”';
+  String _tenantName = 'â€”';
   String _planName   = 'Enterprise';
   int    _entityCurrent = 0;
   int    _entityLimit   = 10000000;
@@ -1269,11 +1269,11 @@ class _AdministrationTabState extends State<_AdministrationTab> {
   int    _userLimit     = 100;
   bool   _tenantLoading = true;
 
-  // ── API keys state ────────────────────────────────────────────────────────
+  // â”€â”€ API keys state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final List<_ApiKey> _apiKeys = [];
   int? _hoveredUserRow;
 
-  // ── Change-password state ─────────────────────────────────────────────────
+  // â”€â”€ Change-password state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final _pwFormKey    = GlobalKey<FormState>();
   final _curPwCtrl    = TextEditingController();
   final _newPwCtrl    = TextEditingController();
@@ -1298,8 +1298,8 @@ class _AdministrationTabState extends State<_AdministrationTab> {
       final tenantName = await AuthManager.getTenantName();
       if (!mounted) return;
       setState(() {
-        _tenantId   = tenantId   ?? '—';
-        _tenantName = tenantName ?? '—';
+        _tenantId   = tenantId   ?? 'â€”';
+        _tenantName = tenantName ?? 'â€”';
       });
 
       // Load quota + plan from license endpoint
@@ -1806,7 +1806,7 @@ class _AdministrationTabState extends State<_AdministrationTab> {
                             Expanded(
                               flex: 2,
                               child: Text(
-                                  u.lastLogin.isEmpty ? '—' : u.lastLogin,
+                                  u.lastLogin.isEmpty ? 'â€”' : u.lastLogin,
                                   style: AppTextStyles.tableCell
                                       .copyWith(
                                           color:
@@ -1943,7 +1943,7 @@ class _AdministrationTabState extends State<_AdministrationTab> {
     );
   }
 
-  // ── Change password section ───────────────────────────────────────────────
+  // â”€â”€ Change password section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildChangePassword() {
     return _sectionCard(
@@ -2058,7 +2058,7 @@ class _AdministrationTabState extends State<_AdministrationTab> {
                             color: Colors.white, strokeWidth: 2),
                       )
                     : const Icon(Icons.lock_reset_rounded, size: 16),
-                label: Text(_pwSaving ? 'Saving…' : 'Update Password',
+                label: Text(_pwSaving ? 'Savingâ€¦' : 'Update Password',
                     style: AppTextStyles.buttonSmall
                         .copyWith(color: Colors.white)),
                 style: ElevatedButton.styleFrom(
@@ -2099,7 +2099,7 @@ class _AdministrationTabState extends State<_AdministrationTab> {
           validator: validator,
           style: AppTextStyles.inputText,
           decoration: InputDecoration(
-            hintText: '••••••••',
+            hintText: 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢',
             hintStyle: AppTextStyles.inputHint,
             filled: true,
             fillColor: AppColors.inputFill,
@@ -2144,9 +2144,9 @@ class _AdministrationTabState extends State<_AdministrationTab> {
   }
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Shared small widgets
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _InfoRow extends StatelessWidget {
   final String label;

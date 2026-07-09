@@ -1,5 +1,5 @@
-# ============================================================================
-# Alertmanager configuration for Nexus AI MDM
+﻿# ============================================================================
+# Alertmanager configuration for Azile AI MDM
 #
 # Routes all alerts to a webhook receiver by default.
 # Set ALERTMANAGER_WEBHOOK_URL in infra/.env to receive alerts (e.g. Slack,

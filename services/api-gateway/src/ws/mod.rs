@@ -1,4 +1,4 @@
-pub mod client;
+﻿pub mod client;
 pub mod events;
 pub mod handler;
 pub mod manager;
@@ -29,18 +29,18 @@ const AUTH_TIMEOUT_SECS: u64 = 5;
 /// { "token": "Bearer <jwt>" }
 /// ```
 ///
-/// The JWT is validated with `nexus_auth`; on success the `nxs_tenant_id` claim
+/// The JWT is validated with `azile_auth`; on success the `nxs_tenant_id` claim
 /// is extracted and the connection is handed to `handle_client`. Any failure
 /// (bad JWT, timeout, malformed message) closes the socket immediately.
 ///
-/// Set `DISABLE_LEGACY_WS=true` to skip starting this server entirely — the
+/// Set `DISABLE_LEGACY_WS=true` to skip starting this server entirely â€” the
 /// authenticated Axum `/ws/notifications` endpoint is the preferred path.
-pub async fn start_ws_server(jwt_config: Arc<nexus_auth::JwtConfig>) -> anyhow::Result<()> {
+pub async fn start_ws_server(jwt_config: Arc<azile_auth::JwtConfig>) -> anyhow::Result<()> {
     if std::env::var("DISABLE_LEGACY_WS")
         .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
         .unwrap_or(false)
     {
-        tracing::info!("DISABLE_LEGACY_WS=true — TCP WS server on port 4000 not started");
+        tracing::info!("DISABLE_LEGACY_WS=true â€” TCP WS server on port 4000 not started");
         return Ok(());
     }
 
@@ -64,7 +64,7 @@ pub async fn start_ws_server(jwt_config: Arc<nexus_auth::JwtConfig>) -> anyhow::
                 }
             };
 
-            // ── First-message JWT auth (5-second window) ──────────────────
+            // â”€â”€ First-message JWT auth (5-second window) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             let tenant_id = match tokio::time::timeout(
                 Duration::from_secs(AUTH_TIMEOUT_SECS),
                 ws.next(),
@@ -105,7 +105,7 @@ pub async fn start_ws_server(jwt_config: Arc<nexus_auth::JwtConfig>) -> anyhow::
 /// Parse and validate the auth first-message.
 /// Expects `{ "token": "Bearer <jwt>" }` or `{ "token": "<raw-jwt>" }`.
 fn authenticate_first_message(
-    jwt_config: &nexus_auth::JwtConfig,
+    jwt_config: &azile_auth::JwtConfig,
     text: &str,
 ) -> Result<Uuid, String> {
     let payload: serde_json::Value = serde_json::from_str(text)
@@ -120,7 +120,7 @@ fn authenticate_first_message(
         .strip_prefix("Bearer ")
         .unwrap_or(raw_token);
 
-    let claims = nexus_auth::validate_token(jwt_config, token)
+    let claims = azile_auth::validate_token(jwt_config, token)
         .map_err(|e| format!("invalid JWT: {e}"))?;
 
     Ok(claims.nxs_tenant_id)

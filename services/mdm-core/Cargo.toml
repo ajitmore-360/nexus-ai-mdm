@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "mdm-core"
 version = "0.1.0"
 edition = "2021"
@@ -36,12 +36,12 @@ flate2.workspace      = true
 rsa.workspace         = true
 x509-parser.workspace = true
 
-# Internal shared crates — used in production code (handlers, services, main)
+# Internal shared crates â€” used in production code (handlers, services, main)
 database        = { workspace = true }
-nexus-redis     = { workspace = true }
-nexus-auth      = { workspace = true }
-nexus-telemetry = { workspace = true }
-nexus-security  = { workspace = true }
+azile-redis     = { workspace = true }
+azile-auth      = { workspace = true }
+azile-telemetry = { workspace = true }
+azile-security  = { workspace = true }
 contracts       = { path = "../../shared/contracts" }
 
 [dev-dependencies]

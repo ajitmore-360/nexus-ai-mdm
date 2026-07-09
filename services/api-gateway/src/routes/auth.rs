@@ -1,4 +1,4 @@
-use axum::{
+﻿use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -8,16 +8,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 
-use nexus_auth::{
+use azile_auth::{
     issue_tokens, validate_token,
     Claims, JwtConfig, Role, TokenPurpose,
 };
 
 use crate::state::AppState;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // LOGIN
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginRequest {
@@ -50,7 +50,7 @@ pub async fn login(
         .map(|v| v == "true" || v == "1")
         .unwrap_or(false);
 
-    // ── Dev bypass: accept any credentials ────────────────────────────────
+    // â”€â”€ Dev bypass: accept any credentials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if auth_disabled {
         let cfg = match JwtConfig::from_env() {
             Ok(c) => c,
@@ -86,7 +86,7 @@ pub async fn login(
         }))).into_response();
     }
 
-    // ── Production: validate against user store ────────────────────────────
+    // â”€â”€ Production: validate against user store â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Resolve tenant_id: body takes priority, then X-Tenant-ID header.
     let tenant_id = req.tenant_id.or_else(|| {
         headers
@@ -123,9 +123,9 @@ pub async fn login(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // REFRESH
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Deserialize)]
 pub struct RefreshRequest {
@@ -166,7 +166,7 @@ pub async fn refresh(
         ).into_response();
     }
 
-    // Check blocklist — fail-open on Redis errors so an outage never locks out all users.
+    // Check blocklist â€” fail-open on Redis errors so an outage never locks out all users.
     if let Some(blocklist) = &state.token_blocklist {
         match blocklist.is_revoked(claims.nxs_jti).await {
             Ok(true) => {
@@ -237,9 +237,9 @@ pub async fn refresh(
     }))).into_response()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // LOGOUT
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// POST /auth/logout
 ///
@@ -279,7 +279,7 @@ pub async fn logout(
             }
         }
 
-        // Revoke refresh token if supplied — validate it belongs to the same user.
+        // Revoke refresh token if supplied â€” validate it belongs to the same user.
         if let Some(rt) = body.and_then(|b| b.0.refresh_token) {
             match validate_token(&cfg, &rt) {
                 Ok(rc) if rc.nxs_purpose == TokenPurpose::Refresh && rc.sub == claims.sub => {
@@ -291,25 +291,25 @@ pub async fn logout(
                     }
                 }
                 Ok(_) => {
-                    tracing::warn!("logout: refresh token subject mismatch — refresh not revoked");
+                    tracing::warn!("logout: refresh token subject mismatch â€” refresh not revoked");
                 }
                 Err(e) => {
-                    tracing::warn!(error=%e, "logout: invalid refresh token supplied — refresh not revoked");
+                    tracing::warn!(error=%e, "logout: invalid refresh token supplied â€” refresh not revoked");
                 }
             }
         }
     } else {
-        tracing::warn!("logout called but Redis is unavailable — tokens not revoked server-side");
+        tracing::warn!("logout called but Redis is unavailable â€” tokens not revoked server-side");
     }
 
     (StatusCode::OK, Json(json!({ "success": true, "message": "logged out" }))).into_response()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // ME (current user info)
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/// GET /auth/me — returns the current user's claims from the JWT.
+/// GET /auth/me â€” returns the current user's claims from the JWT.
 pub async fn me(
     axum::Extension(claims): axum::Extension<Claims>,
 ) -> Response {

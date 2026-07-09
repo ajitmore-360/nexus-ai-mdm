@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use anyhow::Result;
 use tracing::{debug, error, info, warn};
@@ -9,10 +9,10 @@ use crate::hub::{ConnectionHub, PushNotification};
 /// Subscribes to Redis pub/sub channels and forwards messages to WebSocket clients.
 ///
 /// Listens on:
-///   - `nexus:tenant:{tenant_id}` — per-tenant broadcast channel (from ai-service PubSubClient)
-///   - `nexus:match:detected`     — match events (any tenant)
-///   - `nexus:merge:completed`    — merge events
-///   - `nexus:quality:alert`      — anomaly / DQ alerts
+///   - `nexus:tenant:{tenant_id}` â€” per-tenant broadcast channel (from ai-service PubSubClient)
+///   - `nexus:match:detected`     â€” match events (any tenant)
+///   - `nexus:merge:completed`    â€” merge events
+///   - `nexus:quality:alert`      â€” anomaly / DQ alerts
 pub struct RedisListener {
     redis_url: String,
     hub:       Arc<ConnectionHub>,
@@ -26,7 +26,7 @@ impl RedisListener {
         }
     }
 
-    /// Start listening — runs forever, reconnects on error.
+    /// Start listening â€” runs forever, reconnects on error.
     pub async fn run(self) -> Result<()> {
         loop {
             match self.listen_once().await {
@@ -45,7 +45,7 @@ impl RedisListener {
         let mut pubsub = conn.into_pubsub();
 
         // Subscribe to global event channels
-        pubsub.psubscribe("nexus:tenant:*").await?;
+        pubsub.psubscribe("azile:tenant:*").await?;
         pubsub.subscribe("nexus:match:detected").await?;
         pubsub.subscribe("nexus:merge:completed").await?;
         pubsub.subscribe("nexus:quality:alert").await?;

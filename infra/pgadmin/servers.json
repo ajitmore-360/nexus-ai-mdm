@@ -1,12 +1,12 @@
-{
+﻿{
   "Servers": {
     "1": {
-      "Name": "Nexus PostgreSQL",
+      "Name": "Azile PostgreSQL",
       "Group": "Servers",
       "Host": "postgres",
       "Port": 5432,
-      "MaintenanceDB": "nexus_mdm",
-      "Username": "nexus",
+      "MaintenanceDB": "azile_mdm",
+      "Username": "azile",
       "SSLMode": "prefer"
     }
   }

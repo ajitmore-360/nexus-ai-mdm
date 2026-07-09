@@ -1,23 +1,23 @@
--- ============================================================================
+﻿-- ============================================================================
 -- Migration 001004: RLS for remaining tenant-scoped tables
 --
 -- Covers two gaps left after 001003:
 --
 -- (a) Tables that had ENABLE ROW LEVEL SECURITY in 000031 but were never
---     given a CREATE POLICY — PostgreSQL default-deny means nexus_readonly
+--     given a CREATE POLICY â€” PostgreSQL default-deny means azile_readonly
 --     (no BYPASSRLS) sees zero rows for these tables.
 --
--- (b) Tenant-scoped tables that have no RLS at all — missing ENABLE and
---     no policy — exposing cross-tenant data to direct DB connections and
---     to nexus_readonly.
+-- (b) Tenant-scoped tables that have no RLS at all â€” missing ENABLE and
+--     no policy â€” exposing cross-tenant data to direct DB connections and
+--     to azile_readonly.
 --
--- nexus_app has BYPASSRLS (granted in 001003) so the service account is
+-- azile_app has BYPASSRLS (granted in 001003) so the service account is
 -- unaffected by these changes. All new policies follow the same
 -- current_setting('app.current_tenant', true)::uuid pattern used
 -- throughout the rest of the schema.
 -- ============================================================================
 
--- ── (a) Tables with ENABLE but no policy ──────────────────────────────────────
+-- â”€â”€ (a) Tables with ENABLE but no policy â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 -- entity_attributes: PII attribute values keyed per entity per tenant
 CREATE POLICY entity_attributes_tenant_policy
@@ -29,7 +29,7 @@ CREATE POLICY golden_records_tenant_policy
     ON core_mdm.golden_records
     USING (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
--- ── (b) Tables with no RLS at all ────────────────────────────────────────────
+-- â”€â”€ (b) Tables with no RLS at all â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 -- users
 ALTER TABLE core_mdm.users ENABLE ROW LEVEL SECURITY;

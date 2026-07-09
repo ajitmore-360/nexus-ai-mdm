@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "ingest-service"
 version = "0.1.0"
 edition = "2021"
@@ -12,7 +12,7 @@ serde_json.workspace    = true
 sqlx.workspace          = true
 tracing.workspace       = true
 tracing-subscriber.workspace  = true
-nexus-telemetry               = { workspace = true }
+azile-telemetry               = { workspace = true }
 uuid.workspace          = true
 chrono.workspace        = true
 anyhow.workspace        = true
@@ -30,5 +30,5 @@ rand    = "0.8"
 
 contracts   = { path = "../../shared/contracts" }
 database    = { workspace = true }
-nexus-redis = { workspace = true }
-nexus-auth  = { workspace = true }
+azile-redis = { workspace = true }
+azile-auth  = { workspace = true }

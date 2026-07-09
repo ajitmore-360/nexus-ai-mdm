@@ -1,8 +1,8 @@
--- ============================================================================
+﻿-- ============================================================================
 -- Migration 001005: Define all pg_cron retention functions
 --
 -- Context: Migration 000036 schedules pg_cron jobs that call functions
--- referenced in its comments as coming from "0005_data_retention.sql" — a
+-- referenced in its comments as coming from "0005_data_retention.sql" â€” a
 -- file that was never created in this migration sequence. All five platform
 -- retention functions were missing. pg_cron would silently fail at runtime.
 --
@@ -11,7 +11,7 @@
 -- re-runs from failing.
 -- ============================================================================
 
--- ── Ensure platform.notifications table exists ────────────────────────────────
+-- â”€â”€ Ensure platform.notifications table exists â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- notification-service stores transient push messages here. The table is
 -- referenced by pg_cron cleanup but was not in the numbered migration sequence.
 CREATE TABLE IF NOT EXISTS platform.notifications (
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS platform.notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_tenant_created
     ON platform.notifications (tenant_id, created_at DESC);
 
--- ── Ensure platform.revoked_tokens table exists ───────────────────────────────
+-- â”€â”€ Ensure platform.revoked_tokens table exists â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Used by api-gateway to check JWT revocation; also referenced by RLS in 001004.
 CREATE TABLE IF NOT EXISTS platform.revoked_tokens (
     token_id    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -48,8 +48,8 @@ CREATE TABLE IF NOT EXISTS platform.revoked_tokens (
 CREATE INDEX IF NOT EXISTS idx_revoked_tokens_jti ON platform.revoked_tokens (jti);
 CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires ON platform.revoked_tokens (expires_at);
 
--- ── Ensure ai.steward_feedback table exists ───────────────────────────────────
--- AI steward feedback loop — records human corrections to ML merge decisions.
+-- â”€â”€ Ensure ai.steward_feedback table exists â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- AI steward feedback loop â€” records human corrections to ML merge decisions.
 CREATE TABLE IF NOT EXISTS ai.steward_feedback (
     feedback_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id     UUID        NOT NULL,
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS ai.steward_feedback (
 CREATE INDEX IF NOT EXISTS idx_steward_feedback_tenant_created
     ON ai.steward_feedback (tenant_id, created_at DESC);
 
--- ── Ensure distribution_jobs table exists ────────────────────────────────────
+-- â”€â”€ Ensure distribution_jobs table exists â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Already referenced in distribution-service code; defined here as a safety net.
 CREATE TABLE IF NOT EXISTS platform.distribution_jobs (
     job_id        UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -93,7 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_distribution_jobs_tenant
 -- RETENTION FUNCTIONS
 -- ============================================================================
 
--- ── 1. event_store.purge_old_outbox_events ───────────────────────────────────
+-- â”€â”€ 1. event_store.purge_old_outbox_events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Removes processed outbox events older than `days`. Unprocessed events
 -- (status != 'processed') are retained regardless of age.
 CREATE OR REPLACE FUNCTION event_store.purge_old_outbox_events(
@@ -113,7 +113,7 @@ BEGIN
 END;
 $$;
 
--- ── 2. event_store.purge_old_dlq_events ──────────────────────────────────────
+-- â”€â”€ 2. event_store.purge_old_dlq_events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Removes dead-letter events older than `days`. These are events that
 -- exhausted all retries and were moved to the DLQ for manual review.
 CREATE OR REPLACE FUNCTION event_store.purge_old_dlq_events(
@@ -132,7 +132,7 @@ BEGIN
 END;
 $$;
 
--- ── 3. ai.purge_old_steward_feedback ─────────────────────────────────────────
+-- â”€â”€ 3. ai.purge_old_steward_feedback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Removes AI steward feedback older than `days`. Feedback is used for
 -- model fine-tuning; once exported / incorporated it can be pruned.
 CREATE OR REPLACE FUNCTION ai.purge_old_steward_feedback(
@@ -151,7 +151,7 @@ BEGIN
 END;
 $$;
 
--- ── 4. platform.purge_expired_revoked_tokens ─────────────────────────────────
+-- â”€â”€ 4. platform.purge_expired_revoked_tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Removes JWT revocation entries whose `expires_at` has passed. Once a
 -- token's natural expiry has passed, the revocation record is redundant
 -- because the token would be rejected on the expiry check anyway.
@@ -170,7 +170,7 @@ BEGIN
 END;
 $$;
 
--- ── 5. platform.purge_old_notifications ──────────────────────────────────────
+-- â”€â”€ 5. platform.purge_old_notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Removes notification records older than `days`. Read notifications are
 -- pruned first; unread ones are kept for the full retention window.
 CREATE OR REPLACE FUNCTION platform.purge_old_notifications(
@@ -189,7 +189,7 @@ BEGIN
 END;
 $$;
 
--- ── 6. platform.run_retention_policies ───────────────────────────────────────
+-- â”€â”€ 6. platform.run_retention_policies â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Master orchestrator called by the 'nexus-retention-daily' pg_cron job.
 -- Runs all sub-policies in sequence and logs a summary. Failures in any
 -- sub-policy are caught and logged; the orchestrator continues to run
@@ -207,7 +207,7 @@ DECLARE
     notif_del       BIGINT := 0;
     err_msg         TEXT;
 BEGIN
-    -- (a) Processed outbox events — 90-day retention
+    -- (a) Processed outbox events â€” 90-day retention
     BEGIN
         outbox_del := event_store.purge_old_outbox_events(90);
     EXCEPTION WHEN OTHERS THEN
@@ -224,7 +224,7 @@ BEGIN
         RAISE WARNING 'retention: cleanup_old_events failed: %', err_msg;
     END;
 
-    -- (c) DLQ events — 180-day retention
+    -- (c) DLQ events â€” 180-day retention
     BEGIN
         dlq_del := event_store.purge_old_dlq_events(180);
     EXCEPTION WHEN OTHERS THEN
@@ -232,7 +232,7 @@ BEGIN
         RAISE WARNING 'retention: purge_old_dlq_events failed: %', err_msg;
     END;
 
-    -- (d) AI steward feedback — 1-year retention
+    -- (d) AI steward feedback â€” 1-year retention
     BEGIN
         feedback_del := ai.purge_old_steward_feedback(365);
     EXCEPTION WHEN OTHERS THEN
@@ -248,7 +248,7 @@ BEGIN
         RAISE WARNING 'retention: purge_expired_revoked_tokens failed: %', err_msg;
     END;
 
-    -- (f) Old notifications — 30-day retention
+    -- (f) Old notifications â€” 30-day retention
     BEGIN
         notif_del := platform.purge_old_notifications(30);
     EXCEPTION WHEN OTHERS THEN
@@ -263,9 +263,9 @@ END;
 $$;
 
 -- Grant execute rights to the application role
-GRANT EXECUTE ON FUNCTION event_store.purge_old_outbox_events(INTEGER)  TO nexus_app;
-GRANT EXECUTE ON FUNCTION event_store.purge_old_dlq_events(INTEGER)     TO nexus_app;
-GRANT EXECUTE ON FUNCTION ai.purge_old_steward_feedback(INTEGER)        TO nexus_app;
-GRANT EXECUTE ON FUNCTION platform.purge_expired_revoked_tokens()       TO nexus_app;
-GRANT EXECUTE ON FUNCTION platform.purge_old_notifications(INTEGER)     TO nexus_app;
-GRANT EXECUTE ON FUNCTION platform.run_retention_policies()             TO nexus_app;
+GRANT EXECUTE ON FUNCTION event_store.purge_old_outbox_events(INTEGER)  TO azile_app;
+GRANT EXECUTE ON FUNCTION event_store.purge_old_dlq_events(INTEGER)     TO azile_app;
+GRANT EXECUTE ON FUNCTION ai.purge_old_steward_feedback(INTEGER)        TO azile_app;
+GRANT EXECUTE ON FUNCTION platform.purge_expired_revoked_tokens()       TO azile_app;
+GRANT EXECUTE ON FUNCTION platform.purge_old_notifications(INTEGER)     TO azile_app;
+GRANT EXECUTE ON FUNCTION platform.run_retention_policies()             TO azile_app;

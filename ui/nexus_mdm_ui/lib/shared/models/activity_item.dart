@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 
 enum ActivityType {
   entityCreated,
@@ -89,7 +89,7 @@ class ActivityItem extends Equatable {
         entityName:   json['entity_name'] as String?,
         userId:       json['user_id'] as String?,
         userName:     json['user_name'] as String?,
-        sourceSystem: json['source_system'] as String? ?? 'Nexus AI',
+        sourceSystem: json['source_system'] as String? ?? 'Azile AI',
         timestamp:    DateTime.tryParse(json['timestamp'] as String? ?? '') ??
                       DateTime.now(),
         metadata:     json['metadata'] as Map<String, dynamic>? ?? const {},

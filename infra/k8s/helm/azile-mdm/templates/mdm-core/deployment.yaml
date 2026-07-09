@@ -1,0 +1,140 @@
+﻿{{/*
+=============================================================================
+MDM Core â€” Deployment
+Port: 8081
+Owns: entity lifecycle, matching, merging, golden records, survivorship
+Requires: PostgreSQL, Redis (optional for task queue)
+=============================================================================
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "azile-mdm.fullname" . }}-{{ .Values.mdmCore.name }}
+  namespace: {{ include "azile-mdm.namespace" . }}
+  labels:
+    {{- include "azile-mdm.serviceLabels" (dict "root" . "service" .Values.mdmCore.name) | nindent 4 }}
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: {{ .Values.mdmCore.replicas }}
+  selector:
+    matchLabels:
+      {{- include "azile-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.mdmCore.name) | nindent 6 }}
+  strategy:
+    type: {{ .Values.mdmCore.strategy.type }}
+    {{- if eq .Values.mdmCore.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ .Values.mdmCore.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.mdmCore.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "azile-mdm.serviceLabels" (dict "root" . "service" .Values.mdmCore.name) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mdm-core
+          image: "{{ tpl .Values.mdmCore.image.repository . }}:{{ .Values.mdmCore.image.tag }}"
+          imagePullPolicy: {{ .Values.mdmCore.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.mdmCore.port }}
+              protocol: TCP
+          env:
+            - name: MDM_CORE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: GATEWAY_HOST
+            - name: MDM_CORE_PORT
+              value: {{ .Values.mdmCore.port | toString | quote }}
+            - name: APP_ENV
+              value: "production"
+            - name: RUST_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: RUST_LOG
+            - name: KAFKA_BROKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: KAFKA_BROKERS
+            - name: KAFKA_TOPIC_ENTITY_EVENTS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: KAFKA_TOPIC_ENTITY_EVENTS
+            # ---- Secrets -----------------------------------------------------
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.existingSecret }}
+                  key: {{ .Values.postgresql.databaseUrlKey }}
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.existingSecret }}
+                  key: {{ .Values.redis.redisUrlKey }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.jwtSecretKey }}
+            - name: FIELD_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.fieldEncryption.existingSecret }}
+                  key: {{ .Values.fieldEncryption.encryptionKeyKey }}
+                  optional: true
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.mdmCore.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.mdmCore.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.mdmCore.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.mdmCore.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.mdmCore.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.mdmCore.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.mdmCore.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.mdmCore.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.mdmCore.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.mdmCore.probes.readiness.failureThreshold }}
+          resources:
+            {{- include "azile-mdm.resources" .Values.mdmCore.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "azile-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.mdmCore.name) | nindent 20 }}
+                topologyKey: kubernetes.io/hostname

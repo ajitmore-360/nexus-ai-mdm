@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/auth/auth_manager.dart';
@@ -9,7 +9,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/branding/branding_manager.dart';
-import '../../../../shared/widgets/nexus_logo.dart';
+import '../../../../shared/widgets/azile_logo.dart';
 import '../../../../shared/widgets/command_palette.dart';
 import '../../../../shared/models/user.dart';
 import '../../../notifications/presentation/pages/notification_center_page.dart';
@@ -39,9 +39,9 @@ User _userFromAuth({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Data models for grouped nav
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _NavItem {
   final IconData icon;
@@ -77,9 +77,9 @@ class _NavGroup {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Shell page
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ShellPage extends StatefulWidget {
   final Widget child;
@@ -95,16 +95,16 @@ class _ShellPageState extends State<ShellPage> {
   int _notificationCount = 0;
   int _matchQueueCount = 0;
   User _currentUser = User(
-    id: '', email: '', name: 'Loading…', role: UserRole.viewer,
+    id: '', email: '', name: 'Loadingâ€¦', role: UserRole.viewer,
     tenantId: '', tenantName: '', createdAt: DateTime(2024),
   );
   bool _paletteOpen = false;
   Set<LicensedModule> _activeModules = {};
 
-  // ── Grouped nav definition ────────────────────────────────────────────────
+  // â”€â”€ Grouped nav definition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static const _navGroups = [
-    // ── Super Admin (productAdmin) only ───────────────────────────────────
+    // â”€â”€ Super Admin (productAdmin) only â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     _NavGroup(
       label: 'PLATFORM ADMIN',
       visibleTo: [UserRole.productAdmin],
@@ -115,7 +115,7 @@ class _ShellPageState extends State<ShellPage> {
       ],
     ),
 
-    // ── All authenticated roles see their role-specific dashboard ────────────
+    // â”€â”€ All authenticated roles see their role-specific dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     _NavGroup(
       label: 'OVERVIEW',
       visibleTo: [UserRole.productAdmin, UserRole.admin, UserRole.businessAdmin, UserRole.steward, UserRole.viewer],
@@ -124,8 +124,8 @@ class _ShellPageState extends State<ShellPage> {
       ],
     ),
 
-    // ── Org configuration ─────────────────────────────────────────────────────
-    // ITAdmin (productAdmin) can only manage users — not tenant data config.
+    // â”€â”€ Org configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ITAdmin (productAdmin) can only manage users â€” not tenant data config.
     // BusinessAdmin has access to all items in this group.
     _NavGroup(
       label: 'ORG SETUP',
@@ -157,7 +157,7 @@ class _ShellPageState extends State<ShellPage> {
       ],
     ),
 
-    // ── Data access: admin and stewards only — BusinessAdmin excluded ──────
+    // â”€â”€ Data access: admin and stewards only â€” BusinessAdmin excluded â”€â”€â”€â”€â”€â”€
     _NavGroup(
       label: 'ENTITIES',
       visibleTo: [UserRole.admin, UserRole.steward, UserRole.viewer],
@@ -192,8 +192,8 @@ class _ShellPageState extends State<ShellPage> {
       label: 'AI & INSIGHTS',
       visibleTo: [UserRole.admin, UserRole.steward, UserRole.viewer],
       items: [
-        _NavItem(icon: Icons.auto_awesome_outlined, label: 'AI Copilot',   route: '/dashboard/ai-copilot', isAi: true,
-            module: LicensedModule.aiCopilot),
+        _NavItem(icon: Icons.auto_awesome_outlined, label: 'AI Prism',   route: '/dashboard/ai-prism', isAi: true,
+            module: LicensedModule.aiPrism),
         _NavItem(icon: Icons.verified_outlined,     label: 'Data Quality', route: '/dashboard/data-quality',
             module: LicensedModule.dataQuality),
         _NavItem(icon: Icons.bar_chart_outlined,    label: 'Data Profiling', route: '/dashboard/data-profiling',
@@ -207,7 +207,7 @@ class _ShellPageState extends State<ShellPage> {
       ],
     ),
 
-    // ── Governance policy config: admin only ──────────────────────────────
+    // â”€â”€ Governance policy config: admin only â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     _NavGroup(
       label: 'GOVERNANCE',
       visibleTo: [UserRole.admin],
@@ -226,11 +226,11 @@ class _ShellPageState extends State<ShellPage> {
     _NavItem(icon: Icons.home_outlined, label: 'Dashboard', route: '/dashboard'),
     _NavItem(icon: Icons.search_outlined, label: 'Explorer', route: '/dashboard/entities'),
     _NavItem(icon: Icons.gps_fixed_outlined, label: 'Queue', route: '/dashboard/match-queue'),
-    _NavItem(icon: Icons.auto_awesome_outlined, label: 'AI', route: '/dashboard/ai-copilot', isAi: true),
+    _NavItem(icon: Icons.auto_awesome_outlined, label: 'AI', route: '/dashboard/ai-prism', isAi: true),
     _NavItem(icon: Icons.settings_outlined, label: 'Settings', route: '/dashboard/settings'),
   ];
 
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
+  // â”€â”€ Lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   @override
   void initState() {
@@ -322,7 +322,7 @@ class _ShellPageState extends State<ShellPage> {
     super.dispose();
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  // â”€â”€ Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   @override
   Widget build(BuildContext context) {
@@ -374,7 +374,7 @@ class _ShellPageState extends State<ShellPage> {
       backgroundColor: AppColors.cardSurface,
       leading: const Padding(
         padding: EdgeInsets.all(12),
-        child: NexusLogo(size: 28, showText: false),
+        child: AzileLogo(size: 28, showText: false),
       ),
       title: Text(BrandingManager.productName, style: AppTextStyles.titleMedium),
       actions: [
@@ -385,7 +385,7 @@ class _ShellPageState extends State<ShellPage> {
     );
   }
 
-  // ── Sidebar ───────────────────────────────────────────────────────────────
+  // â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildSidebar(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
@@ -410,7 +410,7 @@ class _ShellPageState extends State<ShellPage> {
             ),
             child: Row(
               children: [
-                NexusLogo(
+                AzileLogo(
                   size: 32,
                   showText: _isSidebarExpanded,
                 ),
@@ -726,7 +726,7 @@ class _ShellPageState extends State<ShellPage> {
     );
   }
 
-  // ── Top bar ───────────────────────────────────────────────────────────────
+  // â”€â”€ Top bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildTopBar(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
@@ -774,12 +774,12 @@ class _ShellPageState extends State<ShellPage> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Search pages, actions, records…',
+                          'Search pages, actions, recordsâ€¦',
                           style: AppTextStyles.inputHint.copyWith(fontSize: 13),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const _KeyboardShortcutHint(text: '⌘K'),
+                      const _KeyboardShortcutHint(text: 'âŒ˜K'),
                     ],
                   ),
                 ),
@@ -935,7 +935,7 @@ class _ShellPageState extends State<ShellPage> {
     );
   }
 
-  // ── Mobile bottom nav ─────────────────────────────────────────────────────
+  // â”€â”€ Mobile bottom nav â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildBottomNav(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
@@ -969,7 +969,7 @@ class _ShellPageState extends State<ShellPage> {
     );
   }
 
-  // ── Page title map ────────────────────────────────────────────────────────
+  // â”€â”€ Page title map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   String _getPageTitle(String location) {
     if (location == '/dashboard') return 'Dashboard';
@@ -989,7 +989,7 @@ class _ShellPageState extends State<ShellPage> {
     if (location.startsWith('/dashboard/matching-rules')) return 'Matching Rules';
     if (location.startsWith('/dashboard/merge')) return 'Merge Studio';
     if (location.startsWith('/dashboard/golden-records')) return 'Golden Records';
-    if (location.startsWith('/dashboard/ai-copilot')) return 'AI Copilot';
+    if (location.startsWith('/dashboard/ai-prism')) return 'AI Prism';
     if (location.startsWith('/dashboard/data-quality')) return 'Data Quality';
     if (location.startsWith('/dashboard/lineage')) return 'Data Lineage';
     if (location.startsWith('/dashboard/governance')) return 'Governance';
@@ -1009,7 +1009,7 @@ class _ShellPageState extends State<ShellPage> {
     showNotificationCenter(
       context,
       onDismiss: () {
-        // Re-fetch the live count after the panel closes — the user may have
+        // Re-fetch the live count after the panel closes â€” the user may have
         // read some notifications but not all.
         _loadUnreadCount();
       },
@@ -1022,9 +1022,9 @@ class _ShellPageState extends State<ShellPage> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Private helper widgets
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _KeyboardShortcutHint extends StatelessWidget {
   final String text;

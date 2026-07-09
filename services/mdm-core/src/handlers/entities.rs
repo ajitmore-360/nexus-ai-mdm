@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use axum::{
     extract::{Path, Query, State},
@@ -20,9 +20,9 @@ use crate::middleware::tenant::TenantContext;
 use crate::services::audit_service::AuditEvent;
 use crate::AppState;
 
-// nexus_auth::Claims is used by gdpr_erase_entity — referenced via full path below.
+// azile_auth::Claims is used by gdpr_erase_entity â€” referenced via full path below.
 
-// ── Query params for GET /entities ──────────────────────────────────────────
+// â”€â”€ Query params for GET /entities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Deserialize)]
 pub struct ListEntitiesParams {
@@ -62,9 +62,9 @@ pub async fn create_entity(
             );
         }
         Err(e) => {
-            // Quota service unavailable — log and continue (fail open to avoid
+            // Quota service unavailable â€” log and continue (fail open to avoid
             // blocking legitimate creates when the license table is unreachable).
-            error!(error=?e, "record quota check failed — proceeding without enforcement");
+            error!(error=?e, "record quota check failed â€” proceeding without enforcement");
         }
         Ok(quota) => {
             // Fire quota-proximity notification (debounced to once per 24 h).
@@ -77,7 +77,7 @@ pub async fn create_entity(
         }
     }
 
-    // ── Input validation ──────────────────────────────────────────────────────
+    // â”€â”€ Input validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Checked here (not in the service) because the service accepts trusted
     // internal callers that bypass the HTTP boundary.
     if let Some(err) = validate_entity_attributes(&request.entity.attributes) {
@@ -97,7 +97,7 @@ pub async fn create_entity(
         .and_then(|v| v.to_str().ok())
         .and_then(|s| Uuid::parse_str(s).ok());
 
-    // ── Quality rules check ───────────────────────────────────────────────────
+    // â”€â”€ Quality rules check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Run active quality rules against incoming attributes before persisting.
     // Blocking actions (reject/quarantine) return 422; non-blocking violations
     // are saved asynchronously after the entity is written.
@@ -172,15 +172,15 @@ pub async fn create_entity(
             }
             // Enqueue embedding so new entity is immediately searchable via vector ANN.
             if let Some(queue) = &state.task_queue {
-                let task = nexus_redis::queue::Task::new(
-                    nexus_redis::queue::task_types::ENTITY_EMBED,
+                let task = azile_redis::queue::Task::new(
+                    azile_redis::queue::task_types::ENTITY_EMBED,
                     tenant_ctx.tenant_id.to_string(),
                     serde_json::json!({
                         "entity_id": response.entity_id,
                         "tenant_id": tenant_ctx.tenant_id,
                     }),
                 );
-                if let Err(e) = queue.enqueue(nexus_redis::queue::task_types::ENTITY_EMBED, &task).await {
+                if let Err(e) = queue.enqueue(azile_redis::queue::task_types::ENTITY_EMBED, &task).await {
                     tracing::warn!(error=%e, entity_id=%response.entity_id, "embed task enqueue failed after create");
                 }
             }
@@ -230,12 +230,12 @@ pub(crate) fn extract_request_context(
     RequestContext::new(tenant_ctx.tenant_id, user_id, trace_id)
 }
 
-// ── GET /entities — paginated list ──────────────────────────────────────────
+// â”€â”€ GET /entities â€” paginated list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn list_entities(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
     Query(params):         Query<ListEntitiesParams>,
 ) -> impl IntoResponse {
     let page      = params.page.unwrap_or(1).max(1);
@@ -257,7 +257,7 @@ pub async fn list_entities(
 
     // Stewards can only see entity types they are explicitly assigned to.
     // Admins, BusinessAdmins, Analysts, and Viewers see all types (no scoping).
-    let allowed_types: Option<Vec<String>> = if claims.nxs_role == nexus_auth::Role::Steward {
+    let allowed_types: Option<Vec<String>> = if claims.nxs_role == azile_auth::Role::Steward {
         if let Ok(identity_id) = Uuid::parse_str(&claims.sub) {
             let rows = sqlx::query_scalar::<_, String>(
                 "SELECT entity_type_code FROM core_mdm.entity_type_assignments WHERE tenant_id=$1 AND identity_id=$2"
@@ -269,7 +269,7 @@ pub async fn list_entities(
             .unwrap_or_default();
             Some(rows)
         } else {
-            Some(vec![]) // invalid sub → empty result set
+            Some(vec![]) // invalid sub â†’ empty result set
         }
     } else {
         None // no restriction
@@ -315,7 +315,7 @@ pub async fn list_entities(
     }
 }
 
-// ── GET /entities/:id — single entity ───────────────────────────────────────
+// â”€â”€ GET /entities/:id â€” single entity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn get_entity_by_id(
     State(state):          State<Arc<AppState>>,
@@ -392,7 +392,7 @@ pub async fn get_entity_by_id(
                         .keys()
                         .next()
                         .cloned()
-                        .unwrap_or_else(|| "Nexus MDM".to_string())
+                        .unwrap_or_else(|| "Azile MDM".to_string())
                 });
 
             let source_systems: Vec<String> = {
@@ -481,7 +481,7 @@ pub async fn get_entity_by_id(
     }
 }
 
-// ── PATCH /entities/:id — partial entity update ──────────────────────────────
+// â”€â”€ PATCH /entities/:id â€” partial entity update â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(serde::Deserialize)]
 pub struct PatchEntityRequest {
@@ -580,8 +580,8 @@ pub async fn patch_entity(
             // BL-026: re-embed entity when attributes are updated
             if request.attributes.is_some() {
                 if let Some(queue) = &state.task_queue {
-                    let task = nexus_redis::queue::Task::new(
-                        nexus_redis::queue::task_types::ENTITY_EMBED,
+                    let task = azile_redis::queue::Task::new(
+                        azile_redis::queue::task_types::ENTITY_EMBED,
                         tenant_ctx.tenant_id.to_string(),
                         serde_json::json!({
                             "entity_id": entity_uuid,
@@ -589,7 +589,7 @@ pub async fn patch_entity(
                             "attributes": request.attributes,
                         }),
                     );
-                    if let Err(e) = queue.enqueue(nexus_redis::queue::task_types::ENTITY_EMBED, &task).await {
+                    if let Err(e) = queue.enqueue(azile_redis::queue::task_types::ENTITY_EMBED, &task).await {
                         tracing::warn!(error=%e, %entity_uuid, "re-embed task enqueue failed after PATCH");
                     }
                 }
@@ -613,7 +613,7 @@ pub async fn patch_entity(
     }
 }
 
-// ── DELETE /entities/:id/gdpr-erase — permanent GDPR Art. 17 erasure ──────────
+// â”€â”€ DELETE /entities/:id/gdpr-erase â€” permanent GDPR Art. 17 erasure â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Hard-deletes an entity and all its personal data.
 ///
@@ -623,7 +623,7 @@ pub async fn patch_entity(
 pub async fn gdpr_erase_entity(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
-    Extension(claims):     Extension<nexus_auth::Claims>,
+    Extension(claims):     Extension<azile_auth::Claims>,
     Path(entity_id_str):   Path<String>,
 ) -> impl IntoResponse {
     if !claims.nxs_role.can_admin() {
@@ -650,7 +650,7 @@ pub async fn gdpr_erase_entity(
 
     let tenant_id = tenant_ctx.tenant_id;
 
-    // Call stored procedure — runs all deletes in FK-safe order atomically.
+    // Call stored procedure â€” runs all deletes in FK-safe order atomically.
     let deleted: i32 = match sqlx::query_scalar(
         "SELECT core_mdm.gdpr_erase_entity($1, $2)",
     )
@@ -706,7 +706,7 @@ pub async fn gdpr_erase_entity(
         .into_response()
 }
 
-// ── Local type-mapping helpers (use string variants from DB) ─────────────────
+// â”€â”€ Local type-mapping helpers (use string variants from DB) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn entity_type_to_flutter_type(et: &EntityType) -> &'static str {
     match et {
@@ -730,7 +730,7 @@ fn entity_status_to_flutter_status(es: &EntityStatus) -> &'static str {
     }
 }
 
-// ── Input validation ──────────────────────────────────────────────────────────
+// â”€â”€ Input validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const MAX_ATTRIBUTES:     usize = 200;
 const MAX_ATTR_KEY_LEN:   usize = 256;
@@ -766,7 +766,7 @@ pub(crate) fn validate_entity_attributes(
                 &attr.key[..32.min(attr.key.len())],
             ));
         }
-        // Validate string values only — numbers/bools/arrays are fine at any size.
+        // Validate string values only â€” numbers/bools/arrays are fine at any size.
         if let serde_json::Value::String(s) = &attr.value {
             if s.len() > MAX_ATTR_VALUE_LEN {
                 return Some(format!(

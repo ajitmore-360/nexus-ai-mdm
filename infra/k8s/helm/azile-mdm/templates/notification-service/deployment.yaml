@@ -1,0 +1,114 @@
+﻿{{/*
+=============================================================================
+Notification Service â€” Deployment
+Port: 8086
+Owns: WebSocket connections hub, Redis pub/sub subscription, push delivery
+Requires: Redis (pub/sub listener)
+=============================================================================
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "azile-mdm.fullname" . }}-{{ .Values.notificationService.name }}
+  namespace: {{ include "azile-mdm.namespace" . }}
+  labels:
+    {{- include "azile-mdm.serviceLabels" (dict "root" . "service" .Values.notificationService.name) | nindent 4 }}
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: {{ .Values.notificationService.replicas }}
+  selector:
+    matchLabels:
+      {{- include "azile-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.notificationService.name) | nindent 6 }}
+  strategy:
+    type: {{ .Values.notificationService.strategy.type }}
+    {{- if eq .Values.notificationService.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ .Values.notificationService.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.notificationService.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "azile-mdm.serviceLabels" (dict "root" . "service" .Values.notificationService.name) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: notification-service
+          image: "{{ tpl .Values.notificationService.image.repository . }}:{{ .Values.notificationService.image.tag }}"
+          imagePullPolicy: {{ .Values.notificationService.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.notificationService.port }}
+              protocol: TCP
+          env:
+            - name: NOTIFICATION_HOST
+              value: "0.0.0.0"
+            - name: NOTIFICATION_PORT
+              value: {{ .Values.notificationService.port | toString | quote }}
+            - name: RUST_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: RUST_LOG
+            - name: REDIS_KEY_PREFIX
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "azile-mdm.fullname" . }}-config
+                  key: REDIS_KEY_PREFIX
+            # ---- Secrets -----------------------------------------------------
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.existingSecret }}
+                  key: {{ .Values.redis.redisUrlKey }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.notificationService.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.notificationService.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.notificationService.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.notificationService.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.notificationService.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.notificationService.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.notificationService.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.notificationService.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.notificationService.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.notificationService.probes.readiness.failureThreshold }}
+          resources:
+            {{- include "azile-mdm.resources" .Values.notificationService.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "azile-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.notificationService.name) | nindent 20 }}
+                topologyKey: kubernetes.io/hostname

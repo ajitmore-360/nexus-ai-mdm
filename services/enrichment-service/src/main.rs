@@ -1,4 +1,4 @@
-mod config;
+﻿mod config;
 mod consumer;
 mod enricher;
 mod handlers;
@@ -29,8 +29,8 @@ use state::AppState;
 async fn main() {
     dotenvy::dotenv().ok();
 
-    nexus_telemetry::tracing_init::init_tracing("enrichment-service");
-    nexus_telemetry::metrics::init_metrics("enrichment-service");
+    azile_telemetry::tracing_init::init_tracing("enrichment-service");
+    azile_telemetry::metrics::init_metrics("enrichment-service");
 
     let settings = EnrichmentSettings::from_env().unwrap_or_else(|e| {
         eprintln!("[FATAL] Configuration error: {e}");
@@ -38,7 +38,7 @@ async fn main() {
     });
     tracing::info!("Enrichment Service starting on port {}", settings.port);
 
-    // ── Build providers ─────────────────────────────────────────────────────
+    // â”€â”€ Build providers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let mut providers: Vec<Arc<dyn EnrichmentProvider>> = vec![
         Arc::new(AddressProvider::new(settings.mock_mode, None)),
     ];
@@ -58,13 +58,13 @@ async fn main() {
         "enrichment providers initialised"
     );
 
-    // ── Build orchestrator ──────────────────────────────────────────────────
+    // â”€â”€ Build orchestrator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let orchestrator = Arc::new(EnrichmentOrchestrator::new(
         providers,
         settings.mdm_core_url.clone(),
     ));
 
-    // ── Kafka consumer (background) ─────────────────────────────────────────
+    // â”€â”€ Kafka consumer (background) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if !settings.kafka_brokers.is_empty() {
         let orch_clone = Arc::clone(&orchestrator);
         let brokers    = settings.kafka_brokers.clone();
@@ -78,17 +78,17 @@ async fn main() {
                     }
                 }
                 Err(e) => {
-                    tracing::warn!(error=%e, "failed to start Kafka consumer — REST-only mode");
+                    tracing::warn!(error=%e, "failed to start Kafka consumer â€” REST-only mode");
                 }
             }
         });
     } else {
-        tracing::warn!("KAFKA_BROKERS not configured — running in REST-only mode");
+        tracing::warn!("KAFKA_BROKERS not configured â€” running in REST-only mode");
     }
 
     let state = AppState { orchestrator };
 
-    // ── Startup safety checks ─────────────────────────────────────────────────
+    // â”€â”€ Startup safety checks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
 
     if settings.mock_mode
@@ -105,7 +105,7 @@ async fn main() {
         );
     }
 
-    // ── CORS ─────────────────────────────────────────────────────────────────
+    // â”€â”€ CORS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let allowed_origins_raw = std::env::var("ALLOWED_ORIGINS")
         .unwrap_or_else(|_| "http://localhost:3000,http://localhost:4000".to_string());
     if matches!(app_env.as_str(), "production" | "prod" | "staging" | "stage") {
@@ -131,7 +131,7 @@ async fn main() {
         ])
         .allow_credentials(true);
 
-    // ── Router ──────────────────────────────────────────────────────────────
+    // â”€â”€ Router â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     let app = Router::new()
         .route("/health",              get(health))
@@ -159,6 +159,6 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 async fn metrics_handler() -> String {
-    nexus_telemetry::metrics::render_metrics()
+    azile_telemetry::metrics::render_metrics()
         .unwrap_or_else(|e| format!("# metrics error: {}", e))
 }

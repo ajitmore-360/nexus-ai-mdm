@@ -9,7 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use nexus_auth::Claims;
+use azile_auth::Claims;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -802,7 +802,7 @@ pub async fn admin_invite_user(
     Json(mut body): Json<Value>,
 ) -> Response {
     // Inject invited_by from the caller's JWT claims when available.
-    // Falls back to "Nexus AI MDM" in AUTH_DISABLED=true dev mode.
+    // Falls back to "Azile AI MDM" in AUTH_DISABLED=true dev mode.
     if body.get("invited_by").is_none() {
         if let Some(Extension(claims)) = opt_claims {
             body["invited_by"] = json!(claims.nxs_email);

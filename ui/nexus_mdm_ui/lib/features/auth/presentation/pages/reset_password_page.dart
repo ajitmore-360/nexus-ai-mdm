@@ -1,4 +1,4 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
@@ -7,7 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/network/api_client.dart';
-import '../../../../shared/widgets/nexus_logo.dart';
+import '../../../../shared/widgets/azile_logo.dart';
 
 class ResetPasswordPage extends StatefulWidget {
   final String token;
@@ -32,7 +32,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   void initState() {
     super.initState();
     if (widget.token.isEmpty) {
-      _error = 'Invalid reset link — token is missing.';
+      _error = 'Invalid reset link â€” token is missing.';
     }
   }
 
@@ -46,7 +46,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (widget.token.isEmpty) {
-      setState(() => _error = 'Invalid reset link — token is missing.');
+      setState(() => _error = 'Invalid reset link â€” token is missing.');
       return;
     }
 
@@ -132,7 +132,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const NexusLogo(size: 48)
+                const AzileLogo(size: 48)
                     .animate()
                     .fadeIn(duration: 600.ms),
                 const Spacer(),
@@ -192,7 +192,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
       child: Column(
         children: [
-          const NexusLogo(size: 36),
+          const AzileLogo(size: 36),
           const SizedBox(height: 16),
           Text('Choose a new password',
               style:     AppTextStyles.titleMedium,
@@ -264,7 +264,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
               const SizedBox(height: 6),
               _passwordField(
                 controller: _passwordCtrl,
-                hint:       '••••••••••••',
+                hint:       'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢',
                 obscure:    _obscurePassword,
                 toggle:     () =>
                     setState(() => _obscurePassword = !_obscurePassword),
@@ -280,7 +280,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
               const SizedBox(height: 6),
               _passwordField(
                 controller: _confirmCtrl,
-                hint:       '••••••••••••',
+                hint:       'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢',
                 obscure:    _obscureConfirm,
                 toggle:     () =>
                     setState(() => _obscureConfirm = !_obscureConfirm),

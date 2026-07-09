@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use anyhow::Result;
 use sqlx::{PgPool, Row};
@@ -19,9 +19,9 @@ impl PolicyEvaluator {
     }
 
     /// Main evaluation entry-point: evaluate all active rules for the tenant
-    /// and aggregate the decisions (any deny → denied, union of masks).
+    /// and aggregate the decisions (any deny â†’ denied, union of masks).
     ///
-    /// Each DB rule is uploaded to OPA under the key `nexus_rule_{rule_id}`
+    /// Each DB rule is uploaded to OPA under the key `AZILE_rule_{rule_id}`
     /// before evaluation so OPA always has the latest version.  All rules must
     /// declare `package mdm.policy` so OPA merges them into one namespace and
     /// a single `POST /v1/data/mdm/policy` call returns the combined decision.
@@ -38,10 +38,10 @@ impl PolicyEvaluator {
         }
 
         // Upload each rule to OPA (idempotent PUT) so OPA has the latest rego.
-        // Rules use package mdm.policy — OPA merges them; one evaluation covers all.
+        // Rules use package mdm.policy â€” OPA merges them; one evaluation covers all.
         let mut applied_rules = Vec::<String>::new();
         for (rule_id, rego) in &rules {
-            let policy_key = format!("nexus_rule_{}", rule_id.as_simple());
+            let policy_key = format!("AZILE_rule_{}", rule_id.as_simple());
             if let Err(e) = self.opa.upload_policy(&policy_key, rego).await {
                 tracing::warn!(rule_id=%rule_id, error=%e, "failed to upload rule to OPA; skipping");
                 continue;
@@ -53,7 +53,7 @@ impl PolicyEvaluator {
             return Ok(PolicyDecision::permissive("no rules could be uploaded to OPA"));
         }
 
-        // One evaluation call — OPA aggregates all uploaded mdm.policy rules.
+        // One evaluation call â€” OPA aggregates all uploaded mdm.policy rules.
         let decision = self.opa.evaluate("mdm/policy", ctx).await;
 
         Ok(PolicyDecision {
@@ -86,7 +86,7 @@ impl PolicyEvaluator {
     /// Remove a rule from OPA when it is deleted or deactivated.
     /// Called by CRUD handlers via `AppState::opa`.
     pub async fn remove_from_opa(&self, rule_id: Uuid) {
-        let policy_key = format!("nexus_rule_{}", rule_id.as_simple());
+        let policy_key = format!("AZILE_rule_{}", rule_id.as_simple());
         if let Err(e) = self.opa.delete_policy(&policy_key).await {
             tracing::warn!(rule_id=%rule_id, error=%e, "failed to remove rule from OPA");
         }

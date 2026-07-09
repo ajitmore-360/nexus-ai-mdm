@@ -1,24 +1,24 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # ============================================================================
-# Nexus AI MDM — Database Seeder (Linux/Mac)
+# Azile AI MDM â€” Database Seeder (Linux/Mac)
 # Usage: ./seed.sh          # load sample data
 #        ./seed.sh --reset  # wipe and re-seed
 # ============================================================================
 set -euo pipefail
 
-CONTAINER="nexus-postgres"
+CONTAINER="azile-postgres"
 DB_USER="postgres"
-DB_NAME="nexus_mdm"
+DB_NAME="azile_mdm"
 SEED_FILE="$(dirname "$0")/postgres/seeds/001_sample_data.sql"
 
 GREEN='\033[0;32m'; CYAN='\033[0;36m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
-ok()   { echo -e "${GREEN}✓${NC} $*"; }
-info() { echo -e "${CYAN}→${NC} $*"; }
-warn() { echo -e "${YELLOW}⚠${NC}  $*"; }
-fail() { echo -e "${RED}✗${NC} $*"; exit 1; }
+ok()   { echo -e "${GREEN}âœ“${NC} $*"; }
+info() { echo -e "${CYAN}â†’${NC} $*"; }
+warn() { echo -e "${YELLOW}âš ${NC}  $*"; }
+fail() { echo -e "${RED}âœ—${NC} $*"; exit 1; }
 
 echo ""
-echo -e "${CYAN}  Nexus AI MDM — Database Seeder${NC}"
+echo -e "${CYAN}  Azile AI MDM â€” Database Seeder${NC}"
 echo ""
 
 info "Checking database container..."
@@ -39,7 +39,7 @@ docker exec "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" \
 ok "pgcrypto available"
 
 if [[ "${1:-}" == "--reset" ]]; then
-  warn "Reset mode — removing existing seed data..."
+  warn "Reset mode â€” removing existing seed data..."
   docker exec "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c "
     DELETE FROM core_mdm.match_candidates  WHERE tenant_id = '00000000-0000-0000-0000-000000000001';
     DELETE FROM core_mdm.golden_records    WHERE tenant_id = '00000000-0000-0000-0000-000000000001';
@@ -57,7 +57,7 @@ info "Loading sample data..."
 docker exec -i "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" < "$SEED_FILE"
 
 echo ""
-echo -e "${GREEN}════════════════════════════════════════════${NC}"
+echo -e "${GREEN}â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•${NC}"
 echo -e "${GREEN}  Seed complete! Log in at:${NC}"
 echo "    http://localhost:3000"
 echo ""
@@ -66,5 +66,5 @@ echo "    admin@nexus.ai   /  Admin@123456   (full access)"
 echo "    steward@nexus.ai /  Steward@123    (merge reviews)"
 echo "    analyst@nexus.ai /  Analyst@123    (read + reports)"
 echo "    viewer@nexus.ai  /  Viewer@123     (read only)"
-echo -e "${GREEN}════════════════════════════════════════════${NC}"
+echo -e "${GREEN}â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•${NC}"
 echo ""

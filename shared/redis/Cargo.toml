@@ -1,5 +1,5 @@
-[package]
-name = "nexus-redis"
+﻿[package]
+name = "azile-redis"
 version = "0.1.0"
 edition = "2021"
 

@@ -1,4 +1,4 @@
-[package]
+﻿[package]
 name = "policy-service"
 version = "0.1.0"
 edition = "2021"
@@ -35,7 +35,7 @@ chrono.workspace = true
 # Logging
 tracing.workspace = true
 tracing-subscriber.workspace  = true
-nexus-telemetry               = { workspace = true }
+azile-telemetry               = { workspace = true }
 
 # Async traits
 async-trait.workspace = true
@@ -56,7 +56,7 @@ futures.workspace = true
 # Internal workspace crates
 contracts = { path = "../../shared/contracts" }
 database = { workspace = true }
-nexus-redis = { workspace = true }
+azile-redis = { workspace = true }
 
 [dev-dependencies]
 tokio    = { workspace = true, features = ["full"] }

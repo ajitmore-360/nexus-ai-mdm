@@ -1,4 +1,4 @@
-use std::time::Duration;
+﻿use std::time::Duration;
 
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -27,7 +27,7 @@ pub struct JwtConfig {
 
 /// Generic weak secrets that must never reach production.
 /// This list intentionally does NOT include the custom local-dev value
-/// (`nexus-local-dev-jwt-secret-min-32-chars!!`) so that the default
+/// (`azile-local-dev-jwt-secret-min-32-chars!!`) so that the default
 /// docker-compose / .env configuration works out of the box.
 /// In production, operators must set a strong random JWT_SECRET.
 const KNOWN_WEAK_SECRETS: &[&str] = &[
@@ -45,27 +45,27 @@ impl JwtConfig {
     /// Load JWT configuration from the `JWT_SECRET` environment variable.
     ///
     /// **Production requirements (enforced at startup):**
-    /// - `JWT_SECRET` must be set — the service refuses to start without it.
+    /// - `JWT_SECRET` must be set â€” the service refuses to start without it.
     /// - The secret must be at least 32 bytes long.
     /// - The secret must not match any known weak development values.
     ///
     /// These requirements are checked in both debug and release builds.
-    /// There is **no fallback** — a missing or weak secret is an immediate
+    /// There is **no fallback** â€” a missing or weak secret is an immediate
     /// startup failure, not a warning.
     pub fn from_env() -> Result<Self> {
         let secret = std::env::var("JWT_SECRET")
-            .context("JWT_SECRET environment variable is required — set a strong random secret (≥32 chars)")?;
+            .context("JWT_SECRET environment variable is required â€” set a strong random secret (â‰¥32 chars)")?;
 
         if secret.len() < 32 {
             anyhow::bail!(
-                "JWT_SECRET is too short ({} bytes) — must be at least 32 bytes",
+                "JWT_SECRET is too short ({} bytes) â€” must be at least 32 bytes",
                 secret.len()
             );
         }
 
         if KNOWN_WEAK_SECRETS.iter().any(|&weak| secret.eq_ignore_ascii_case(weak)) {
             anyhow::bail!(
-                "JWT_SECRET matches a known weak development secret — \
+                "JWT_SECRET matches a known weak development secret â€” \
                  generate a strong random secret with: \
                  openssl rand -base64 48"
             );

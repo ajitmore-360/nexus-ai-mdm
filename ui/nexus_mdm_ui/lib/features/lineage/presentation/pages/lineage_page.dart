@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -8,11 +8,11 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/app_animations.dart';
 import '../../data/lineage_repository.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LineagePage — Visual data-flow overview of the MDM lineage graph
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// LineagePage â€” Visual data-flow overview of the MDM lineage graph
 // When [entityId] is provided, the Recent Events section shows real lineage
 // data for that entity from the API.
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class LineagePage extends StatefulWidget {
   final String? entityId;
@@ -40,7 +40,7 @@ class _LineagePageState extends State<LineagePage>
   List<_LineageEvent> _globalEvents = [];
   bool _globalEventsLoading = false;
 
-  // Target nodes: distribution sinks — no dedicated API yet, use sensible defaults
+  // Target nodes: distribution sinks â€” no dedicated API yet, use sensible defaults
   static const _targetNodes = [
     _LineageNode('Data Warehouse', Icons.warehouse_outlined, Color(0xFF00C896),
         'Golden records', 'Mode: CDC'),
@@ -134,7 +134,7 @@ class _LineagePageState extends State<LineagePage>
           final tgt = (m['target_entity_id'] as String? ?? '').substring(0, 8);
           final ts = m['created_at'] as String? ?? '';
           final dt = DateTime.tryParse(ts) ?? DateTime.now();
-          return _LineageEvent(ltype, '$src… → $tgt…', _lineageTypeColor(ltype), _formatAgo(dt));
+          return _LineageEvent(ltype, '$srcâ€¦ â†’ $tgtâ€¦', _lineageTypeColor(ltype), _formatAgo(dt));
         }).toList();
         _globalEventsLoading = false;
       });
@@ -484,7 +484,7 @@ class _LineagePageState extends State<LineagePage>
                 children: [
                   const Icon(Icons.hub_rounded, color: Colors.white, size: 18),
                   const SizedBox(height: 4),
-                  Text('Nexus MDM',
+                  Text('Azile MDM',
                       style: AppTextStyles.labelSmall.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -524,7 +524,7 @@ class _LineagePageState extends State<LineagePage>
         final r = e.value;
         final color = _lineageTypeColor(r.lineageType);
         final ago = _formatAgo(r.createdAt);
-        final desc = '${r.sourceEntityId.substring(0, 8)}… → ${r.targetEntityId.substring(0, 8)}…';
+        final desc = '${r.sourceEntityId.substring(0, 8)}â€¦ â†’ ${r.targetEntityId.substring(0, 8)}â€¦';
         return _buildEventRow(_LineageEvent(r.lineageType, desc, color, ago), e.key);
       }).toList();
       bodyContent = Column(children: liveEvents);
@@ -675,7 +675,7 @@ class _LineagePageState extends State<LineagePage>
               Text('Entity Relationship Graph', style: AppTextStyles.titleSmall),
               const Spacer(),
               Text(
-                '${_graphData.nodes.length} nodes · ${_graphData.edges.length} edges',
+                '${_graphData.nodes.length} nodes Â· ${_graphData.edges.length} edges',
                 style: AppTextStyles.labelSmall.copyWith(color: AppColors.secondaryText),
               ),
             ],
@@ -697,9 +697,9 @@ class _LineagePageState extends State<LineagePage>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Models
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _LineageNode {
   final String name;
@@ -726,9 +726,9 @@ class _LineageEvent {
   const _LineageEvent(this.type, this.description, this.color, this.ago);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Custom painter for animated flow arrows
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _FlowLanePainter extends CustomPainter {
   final double progress;
@@ -801,9 +801,9 @@ class _FlowLanePainter extends CustomPainter {
   bool shouldRepaint(_FlowLanePainter old) => old.progress != progress;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BL-068 — Entity DAG widget + painters
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// BL-068 â€” Entity DAG widget + painters
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _EntityDagWidget extends StatelessWidget {
   final List<LineageGraphNode> nodes;

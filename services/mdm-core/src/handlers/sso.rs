@@ -1,10 +1,10 @@
-// ============================================================================
-// SSO Handlers — SAML 2.0 SP endpoints + SSO config CRUD + SCIM token mgmt
+﻿// ============================================================================
+// SSO Handlers â€” SAML 2.0 SP endpoints + SSO config CRUD + SCIM token mgmt
 //
 // Public SAML endpoints (no JWT auth, for browser redirect flow):
-//   GET  /saml/:tenant_id/metadata   → SP XML metadata
-//   GET  /saml/:tenant_id/init       → initiate SSO (redirect to IdP)
-//   POST /saml/:tenant_id/acs        → assertion consumer (issues JWT)
+//   GET  /saml/:tenant_id/metadata   â†’ SP XML metadata
+//   GET  /saml/:tenant_id/init       â†’ initiate SSO (redirect to IdP)
+//   POST /saml/:tenant_id/acs        â†’ assertion consumer (issues JWT)
 //
 // Protected admin endpoints (standard JWT auth + admin role):
 //   GET/PUT /sso-configurations
@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
-use nexus_auth::{issue_tokens, Claims, JwtConfig, Role};
+use azile_auth::{issue_tokens, Claims, JwtConfig, Role};
 
 use crate::{
     handlers::ApiResponse,
@@ -32,7 +32,7 @@ use crate::{
     AppState,
 };
 
-// ── SP Metadata ───────────────────────────────────────────────────────────────
+// â”€â”€ SP Metadata â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn saml_metadata(
     Path(tenant_id_str): Path<String>,
@@ -63,7 +63,7 @@ pub async fn saml_metadata(
         .unwrap()
 }
 
-// ── SAML Initiate ─────────────────────────────────────────────────────────────
+// â”€â”€ SAML Initiate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Deserialize)]
 pub struct SamlInitQuery {
@@ -112,7 +112,7 @@ pub async fn saml_init(
     }
 }
 
-// ── SAML ACS — assertion consumer service ────────────────────────────────────
+// â”€â”€ SAML ACS â€” assertion consumer service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Deserialize)]
 pub struct AcsForm {
@@ -214,7 +214,7 @@ pub async fn saml_acs(
         .into_response()
 }
 
-// ── JIT Provisioning ──────────────────────────────────────────────────────────
+// â”€â”€ JIT Provisioning â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async fn provision_user(
     state: &Arc<AppState>,
@@ -222,7 +222,7 @@ async fn provision_user(
     claims: &crate::services::sso_service::SamlClaims,
     cfg: &crate::services::sso_service::SsoConfig,
 ) -> anyhow::Result<(Uuid, String)> {
-    // Determine role from group → role mapping
+    // Determine role from group â†’ role mapping
     let group_role_map = cfg
         .group_role_mappings
         .as_object()
@@ -287,7 +287,7 @@ async fn provision_user(
     Ok((identity_id, assigned_role))
 }
 
-// ── SSO Config CRUD ───────────────────────────────────────────────────────────
+// â”€â”€ SSO Config CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub async fn get_sso_config(
     State(state): State<Arc<AppState>>,
@@ -329,7 +329,7 @@ pub async fn delete_sso_config(
     }
 }
 
-// ── SCIM Token Management ─────────────────────────────────────────────────────
+// â”€â”€ SCIM Token Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Deserialize)]
 pub struct CreateScimTokenPayload {

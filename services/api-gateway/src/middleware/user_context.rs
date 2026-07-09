@@ -1,4 +1,4 @@
-use axum::{extract::Request, http::header::{HeaderName, HeaderValue}, middleware::Next, response::Response};
+﻿use axum::{extract::Request, http::header::{HeaderName, HeaderValue}, middleware::Next, response::Response};
 
 /// Reads `Claims` from request extensions (injected by auth_middleware) and
 /// injects `x-user-id` + `x-user-role` headers so downstream services that
@@ -6,7 +6,7 @@ use axum::{extract::Request, http::header::{HeaderName, HeaderValue}, middleware
 ///
 /// No-op when AUTH_DISABLED=true (no Claims present).
 pub async fn inject_user_context(mut request: Request, next: Next) -> Response {
-    if let Some(claims) = request.extensions().get::<nexus_auth::Claims>().cloned() {
+    if let Some(claims) = request.extensions().get::<azile_auth::Claims>().cloned() {
         let headers = request.headers_mut();
 
         if let Ok(v) = HeaderValue::from_str(&claims.sub) {

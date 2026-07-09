@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/auth/auth_manager.dart';
@@ -8,13 +8,13 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/models/api_responses.dart';
 import '../../../../shared/models/entity.dart';
 import '../../data/entity_repository.dart';
-import '../../../../shared/widgets/nexus_dialog.dart';
+import '../../../../shared/widgets/azile_dialog.dart';
 import '../../../../features/admin/data/entity_type_repository.dart';
 import '../../../../features/admin/data/submaster_repository.dart';
 
-// ──────────────────────────────────────────────
-// Local enums – mirrors entity_create_page
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Local enums â€“ mirrors entity_create_page
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 enum _EditEntityType {
   customer,
@@ -99,9 +99,9 @@ extension _EditStatusExt on _EditStatus {
   }
 }
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Submaster dropdown option
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SubmasterOption {
   final String code;
@@ -109,16 +109,16 @@ class _SubmasterOption {
   const _SubmasterOption({required this.code, required this.label});
 }
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Attribute row
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _AttrRow {
   String key;
   String type;
   final TextEditingController keyCtrl;
   final TextEditingController valueCtrl;
-  // When non-null this attribute is backed by a submaster — render as dropdown.
+  // When non-null this attribute is backed by a submaster â€” render as dropdown.
   List<_SubmasterOption>? dropdownOptions;
 
   _AttrRow({
@@ -135,9 +135,9 @@ class _AttrRow {
   }
 }
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Page widget
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class EntityEditPage extends StatefulWidget {
   final String entityId;
@@ -223,7 +223,7 @@ class _EntityEditPageState extends State<EntityEditPage> {
 
       if (!mounted) return;
 
-      // Build attribute_key → options lookup
+      // Build attribute_key â†’ options lookup
       final Map<String, List<_SubmasterOption>> attrOptions = {};
       for (final schema in schemas) {
         if (schema.submasterCode != null &&
@@ -361,7 +361,7 @@ class _EntityEditPageState extends State<EntityEditPage> {
       ),
       title: Text(
         widget.entity != null
-            ? 'Edit — ${widget.entity!.displayName}'
+            ? 'Edit â€” ${widget.entity!.displayName}'
             : 'Edit Entity',
         style: AppTextStyles.titleMedium,
       ),
@@ -518,7 +518,7 @@ class _EntityEditPageState extends State<EntityEditPage> {
                             .any((o) => o.code == attr.valueCtrl.text)
                         ? attr.valueCtrl.text
                         : null,
-                    decoration: _inputDecoration(hintText: 'Select…'),
+                    decoration: _inputDecoration(hintText: 'Selectâ€¦'),
                     style: AppTextStyles.inputText,
                     isExpanded: true,
                     items: attr.dropdownOptions!
@@ -535,7 +535,7 @@ class _EntityEditPageState extends State<EntityEditPage> {
                   )
                 : TextFormField(
                     controller: attr.valueCtrl,
-                    decoration: _inputDecoration(hintText: 'Enter value…'),
+                    decoration: _inputDecoration(hintText: 'Enter valueâ€¦'),
                     style: AppTextStyles.inputText,
                   ),
           ),
@@ -619,10 +619,10 @@ class _EntityEditPageState extends State<EntityEditPage> {
     String selectedType = 'string';
     const types = ['string', 'email', 'phone', 'number', 'boolean', 'date'];
 
-    showNexusDialog<void>(
+    showAzileDialog<void>(
       context: context,
       child: StatefulBuilder(
-        builder: (ctx, setDs) => NexusDialog(
+        builder: (ctx, setDs) => AzileDialog(
           title: 'Add Attribute',
           titleIcon: Container(
             width: 28,
@@ -710,10 +710,10 @@ class _EntityEditPageState extends State<EntityEditPage> {
   }
 }
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Shared widgets (duplicated from create page
 // to keep files self-contained)
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SectionCard extends StatelessWidget {
   final String title;

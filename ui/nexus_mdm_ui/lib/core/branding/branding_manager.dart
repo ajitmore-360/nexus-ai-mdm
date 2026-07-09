@@ -1,23 +1,23 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../network/api_client.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'tenant_branding.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // BrandingManager
 //
 // Singleton that owns the in-memory tenant branding for the running session.
 // Mirrors the pattern used by LicenseManager.
 //
 // Startup sequence:
-//   1. BrandingManager.init(apiClient)       — once at app boot
-//   2. BrandingManager.loadFromServer()      — after login succeeds
+//   1. BrandingManager.init(apiClient)       â€” once at app boot
+//   2. BrandingManager.loadFromServer()      â€” after login succeeds
 //
-// The themeNotifier ValueNotifier triggers a full theme rebuild in NexusMdmApp
+// The themeNotifier ValueNotifier triggers a full theme rebuild in AzileMdmApp
 // whenever branding changes, so Enterprise tenants see their colour scheme
 // without an app restart.
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class BrandingManager {
   BrandingManager._();
@@ -25,7 +25,7 @@ class BrandingManager {
   static TenantBranding? _branding;
   static BrandingRepository? _repository;
 
-  /// Notifier for the current ThemeData — rebuilt whenever branding is loaded.
+  /// Notifier for the current ThemeData â€” rebuilt whenever branding is loaded.
   static final ValueNotifier<ThemeData> themeNotifier =
       ValueNotifier(AppTheme.darkTheme);
 
@@ -43,7 +43,7 @@ class BrandingManager {
 
   /// Fetches branding from the server and rebuilds the theme.
   /// Silently does nothing when no branding is configured or the server is
-  /// unreachable — the default Nexus theme is always the safe fallback.
+  /// unreachable â€” the default AZILE theme is always the safe fallback.
   static Future<void> loadFromServer() async {
     if (_repository == null) return;
     try {
@@ -59,7 +59,7 @@ class BrandingManager {
   // ---------------------------------------------------------------------------
 
   static TenantBranding? get branding     => _branding;
-  static String          get productName  => _branding?.productName ?? 'Nexus AI MDM';
+  static String          get productName  => _branding?.productName ?? 'Azile AI MDM';
   static String?         get logoUrl      => _branding?.logoUrl;
   static String?         get supportEmail => _branding?.supportEmail;
   static String?         get supportUrl   => _branding?.supportUrl;
@@ -107,7 +107,7 @@ class BrandingManager {
     );
   }
 
-  // ── Colour helpers ──────────────────────────────────────────────────────────
+  // â”€â”€ Colour helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static Color _contrastFor(Color c) {
     final luminance = c.computeLuminance();

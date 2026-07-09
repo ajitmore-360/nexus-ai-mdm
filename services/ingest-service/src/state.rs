@@ -1,9 +1,9 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use reqwest::Client;
 use sqlx::PgPool;
 
-use nexus_auth::jwt::JwtConfig;
+use azile_auth::jwt::JwtConfig;
 
 use crate::config::settings::IngestSettings;
 use crate::processor::IngestProcessor;

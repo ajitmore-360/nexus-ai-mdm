@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
@@ -6,9 +6,9 @@ use uuid::Uuid;
 /// that touches tenant-scoped tables.
 ///
 /// This activates the Row-Level Security policies defined on those tables
-/// (migration 002004 removes BYPASSRLS from nexus_app).  The setting is
+/// (migration 002004 removes BYPASSRLS from AZILE_app).  The setting is
 /// transaction-local (`is_local=true` inside the DB function), so it is
-/// automatically cleared on COMMIT or ROLLBACK — no connection-pool leakage.
+/// automatically cleared on COMMIT or ROLLBACK â€” no connection-pool leakage.
 ///
 /// # Usage
 ///

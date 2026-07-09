@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
@@ -10,9 +10,9 @@ import '../../../../shared/models/entity.dart';
 import '../../../entities/data/entity_repository.dart';
 import '../../data/match_repository.dart';
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Demo Data Models
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 enum _MatchType { exact, fuzzy, conflict }
 
@@ -46,9 +46,9 @@ class _ReviewRecord {
   });
 }
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Page
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class MatchReviewPage extends StatefulWidget {
   final String matchId;
@@ -69,22 +69,22 @@ class _MatchReviewPageState extends State<MatchReviewPage>
 
   // These defaults show until real data loads
   _ReviewRecord _source = const _ReviewRecord(
-    entityName: 'Loading…',
-    entityId: '—',
-    sourceSystem: '—',
-    type: '—',
+    entityName: 'Loadingâ€¦',
+    entityId: 'â€”',
+    sourceSystem: 'â€”',
+    type: 'â€”',
   );
 
   _ReviewRecord _candidate = const _ReviewRecord(
-    entityName: 'Loading…',
-    entityId: '—',
-    sourceSystem: '—',
-    type: '—',
+    entityName: 'Loadingâ€¦',
+    entityId: 'â€”',
+    sourceSystem: 'â€”',
+    type: 'â€”',
   );
 
   double _overallScore = 0.0;
   double _aiConfidence = 0.0;
-  String _aiExplanation = 'Loading AI analysis…';
+  String _aiExplanation = 'Loading AI analysisâ€¦';
   List<_FieldComparison> _fields = [];
   bool _fieldsLoading = true;
 
@@ -151,15 +151,15 @@ class _MatchReviewPageState extends State<MatchReviewPage>
     final comparisons = allKeys.map((key) {
       final s = srcAttrs[key];
       final c = candAttrs[key];
-      final sv = s?.value?.toString() ?? '—';
-      final cv = c?.value?.toString() ?? '—';
+      final sv = s?.value?.toString() ?? 'â€”';
+      final cv = c?.value?.toString() ?? 'â€”';
 
       _MatchType type;
       double score;
       if (sv == cv) {
         type = _MatchType.exact;
         score = 1.0;
-      } else if (sv == '—' || cv == '—') {
+      } else if (sv == 'â€”' || cv == 'â€”') {
         type = _MatchType.conflict;
         score = 0.0;
       } else {
@@ -188,7 +188,7 @@ class _MatchReviewPageState extends State<MatchReviewPage>
         _source = _ReviewRecord(
           entityName: src.displayName,
           entityId: src.id,
-          sourceSystem: src.sourceSystems.firstOrNull ?? '—',
+          sourceSystem: src.sourceSystems.firstOrNull ?? 'â€”',
           type: src.type.name,
         );
       }
@@ -196,7 +196,7 @@ class _MatchReviewPageState extends State<MatchReviewPage>
         _candidate = _ReviewRecord(
           entityName: cand.displayName,
           entityId: cand.id,
-          sourceSystem: cand.sourceSystems.firstOrNull ?? '—',
+          sourceSystem: cand.sourceSystems.firstOrNull ?? 'â€”',
           type: cand.type.name,
         );
       }
@@ -219,11 +219,11 @@ class _MatchReviewPageState extends State<MatchReviewPage>
   Widget _matchIcon(_MatchType type) {
     switch (type) {
       case _MatchType.exact:
-        return const Text('✅', style: TextStyle(fontSize: 14));
+        return const Text('âœ…', style: TextStyle(fontSize: 14));
       case _MatchType.fuzzy:
-        return const Text('≈', style: TextStyle(fontSize: 16, color: AppColors.warning));
+        return const Text('â‰ˆ', style: TextStyle(fontSize: 16, color: AppColors.warning));
       case _MatchType.conflict:
-        return const Text('🔴', style: TextStyle(fontSize: 13));
+        return const Text('ðŸ”´', style: TextStyle(fontSize: 13));
     }
   }
 
@@ -253,7 +253,7 @@ class _MatchReviewPageState extends State<MatchReviewPage>
     );
   }
 
-  // ── Top score header ─────────────────────────
+  // â”€â”€ Top score header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildTopScoreHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
@@ -304,7 +304,7 @@ class _MatchReviewPageState extends State<MatchReviewPage>
     ).animate().fadeIn(duration: 350.ms);
   }
 
-  // ── AI Banner ────────────────────────────────
+  // â”€â”€ AI Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildAiBanner() {
     return Container(
       margin: const EdgeInsets.fromLTRB(24, 16, 24, 0),
@@ -399,7 +399,7 @@ class _MatchReviewPageState extends State<MatchReviewPage>
     try {
       final client = ApiClient();
       final resp = await client.post<Map<String, dynamic>>(
-        '/v1/copilot',
+        '/v1/prism',
         data: {'message': prompt},
       );
       if (!mounted) return;
@@ -417,7 +417,7 @@ class _MatchReviewPageState extends State<MatchReviewPage>
     }
   }
 
-  // ── Main 2-Column Layout ─────────────────────
+  // â”€â”€ Main 2-Column Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildMainComparisonLayout() {
     return Column(
       children: [
@@ -602,7 +602,7 @@ class _MatchReviewPageState extends State<MatchReviewPage>
     );
   }
 
-  // ── Action Bar ───────────────────────────────
+  // â”€â”€ Action Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _buildActionBar() {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
@@ -758,9 +758,9 @@ class _MatchReviewPageState extends State<MatchReviewPage>
   }
 }
 
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Supporting Widgets
-// ──────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _OverallScoreIndicator extends StatelessWidget {
   final double score;

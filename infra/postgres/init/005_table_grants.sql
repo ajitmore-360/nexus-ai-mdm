@@ -1,31 +1,31 @@
---
+﻿--
 -- =========================================================
--- Nexus MDM Platform
+-- Azile MDM Platform
 -- Table-level Grants
 -- File: 004_table_grants.sql
 --
 -- Runs AFTER schema creation and role setup.
--- Grants explicit permissions on all tables to nexus_app
--- so that services connecting as nexus_app (or postgres in
+-- Grants explicit permissions on all tables to azile_app
+-- so that services connecting as azile_app (or postgres in
 -- dev mode) can perform DML without RLS issues.
 -- =========================================================
 --
 
 BEGIN;
 
--- ─────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- GRANT ALL FUTURE TABLES (via ALTER DEFAULT PRIVILEGES)
--- is already in 002_roles.sql for nexus_migration.
+-- is already in 002_roles.sql for azile_migration.
 --
 -- But since SQLx migrations run as the POSTGRES superuser,
--- not as nexus_migration, we also need explicit grants on
+-- not as azile_migration, we also need explicit grants on
 -- tables that already exist when this script runs.
 --
 -- In practice, for LOCAL DEV, services connect as postgres
 -- (superuser) so all permissions are bypassed. For STAGING/
 -- PRODUCTION, uncomment the explicit grants below once
 -- migrations have been run and tables exist.
--- ─────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 -- NOTE: This file intentionally runs last (004_) to allow
 -- migration tables to be created first by the services on
@@ -44,11 +44,11 @@ BEGIN
     ) THEN
         EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE
                  ON ALL TABLES IN SCHEMA core_mdm
-                 TO nexus_app';
+                 TO azile_app';
 
         EXECUTE 'GRANT USAGE, SELECT
                  ON ALL SEQUENCES IN SCHEMA core_mdm
-                 TO nexus_app';
+                 TO azile_app';
     END IF;
 
     IF EXISTS (
@@ -58,7 +58,7 @@ BEGIN
     ) THEN
         EXECUTE 'GRANT SELECT, INSERT, UPDATE
                  ON ALL TABLES IN SCHEMA event_store
-                 TO nexus_app';
+                 TO azile_app';
     END IF;
 
     IF EXISTS (
@@ -68,7 +68,7 @@ BEGIN
     ) THEN
         EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE
                  ON ALL TABLES IN SCHEMA ai
-                 TO nexus_app';
+                 TO azile_app';
     END IF;
 
     IF EXISTS (
@@ -78,7 +78,7 @@ BEGIN
     ) THEN
         EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE
                  ON ALL TABLES IN SCHEMA governance
-                 TO nexus_app';
+                 TO azile_app';
     END IF;
 
     IF EXISTS (
@@ -88,7 +88,7 @@ BEGIN
     ) THEN
         EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE
                  ON ALL TABLES IN SCHEMA platform
-                 TO nexus_app';
+                 TO azile_app';
     END IF;
 
     IF EXISTS (
@@ -98,7 +98,7 @@ BEGIN
     ) THEN
         EXECUTE 'GRANT SELECT, INSERT
                  ON ALL TABLES IN SCHEMA audit
-                 TO nexus_app';
+                 TO azile_app';
     END IF;
 
 END

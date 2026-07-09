@@ -1,4 +1,4 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 
 enum TenantPlan {
   starter,
@@ -12,7 +12,7 @@ class TenantLimits extends Equatable {
   final int maxUsers;
   final int maxSources;
   final int maxApiCallsPerDay;
-  final bool aiCopilotEnabled;
+  final bool aiPrismEnabled;
   final bool advancedAnalyticsEnabled;
   final bool customRulesEnabled;
 
@@ -21,7 +21,7 @@ class TenantLimits extends Equatable {
     required this.maxUsers,
     required this.maxSources,
     required this.maxApiCallsPerDay,
-    required this.aiCopilotEnabled,
+    required this.aiPrismEnabled,
     required this.advancedAnalyticsEnabled,
     required this.customRulesEnabled,
   });
@@ -31,7 +31,7 @@ class TenantLimits extends Equatable {
         maxUsers: json['max_users'] as int,
         maxSources: json['max_sources'] as int,
         maxApiCallsPerDay: json['max_api_calls_per_day'] as int,
-        aiCopilotEnabled: json['ai_copilot_enabled'] as bool? ?? false,
+        aiPrismEnabled: json['ai_copilot_enabled'] as bool? ?? false,
         advancedAnalyticsEnabled:
             json['advanced_analytics_enabled'] as bool? ?? false,
         customRulesEnabled:
@@ -43,7 +43,7 @@ class TenantLimits extends Equatable {
         'max_users': maxUsers,
         'max_sources': maxSources,
         'max_api_calls_per_day': maxApiCallsPerDay,
-        'ai_copilot_enabled': aiCopilotEnabled,
+        'ai_copilot_enabled': aiPrismEnabled,
         'advanced_analytics_enabled': advancedAnalyticsEnabled,
         'custom_rules_enabled': customRulesEnabled,
       };
@@ -130,15 +130,15 @@ class Tenant extends Equatable {
 
   static Tenant get demo => Tenant(
         id: 'tenant-001',
-        name: 'Nexus Demo Org',
-        slug: 'nexus-demo',
+        name: 'Azile Demo Org',
+        slug: 'azile-demo',
         plan: TenantPlan.enterprise,
         limits: const TenantLimits(
           maxEntities: 1000000,
           maxUsers: 50,
           maxSources: 20,
           maxApiCallsPerDay: 500000,
-          aiCopilotEnabled: true,
+          aiPrismEnabled: true,
           advancedAnalyticsEnabled: true,
           customRulesEnabled: true,
         ),

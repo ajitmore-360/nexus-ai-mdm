@@ -1,7 +1,7 @@
-/// Centralized form validation for Nexus MDM UI.
+﻿/// Centralized form validation for Azile MDM UI.
 ///
 /// All validators follow the Flutter FormField `validator` signature:
-///   `String? Function(String?)` — returns null on valid, error message on invalid.
+///   `String? Function(String?)` â€” returns null on valid, error message on invalid.
 ///
 /// Usage:
 ///   TextFormField(validator: Validators.email)
@@ -11,7 +11,7 @@ library validators;
 class Validators {
   Validators._();
 
-  // ── Required ─────────────────────────────────────────────────────────────
+  // â”€â”€ Required â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Returns a validator that rejects null / blank values.
   /// [label] is included in the error message ("Entity type is required").
@@ -24,7 +24,7 @@ class Validators {
     };
   }
 
-  // ── Email ─────────────────────────────────────────────────────────────────
+  // â”€â”€ Email â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static final _emailRe = RegExp(
     r'^[a-zA-Z0-9.!#$%&'
@@ -40,16 +40,16 @@ class Validators {
     return null;
   }
 
-  /// Optional email — passes blank values, rejects malformed non-blank ones.
+  /// Optional email â€” passes blank values, rejects malformed non-blank ones.
   static String? emailOptional(String? value) {
     if (value == null || value.trim().isEmpty) return null;
     if (!_emailRe.hasMatch(value.trim())) return 'Enter a valid email address';
     return null;
   }
 
-  // ── Password ──────────────────────────────────────────────────────────────
+  // â”€â”€ Password â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  /// Requires ≥8 chars, at least 1 digit, at least 1 letter.
+  /// Requires â‰¥8 chars, at least 1 digit, at least 1 letter.
   static String? password(String? value) {
     if (value == null || value.isEmpty) return 'Password is required';
     if (value.length < 8) return 'Password must be at least 8 characters';
@@ -71,7 +71,7 @@ class Validators {
     };
   }
 
-  // ── URL ───────────────────────────────────────────────────────────────────
+  // â”€â”€ URL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static final _urlRe = RegExp(
     r'^https?://'
@@ -88,14 +88,14 @@ class Validators {
     return null;
   }
 
-  /// Optional URL — passes blank, rejects malformed non-blank ones.
+  /// Optional URL â€” passes blank, rejects malformed non-blank ones.
   static String? urlOptional(String? value) {
     if (value == null || value.trim().isEmpty) return null;
     if (!_urlRe.hasMatch(value.trim())) return 'Enter a valid URL (http:// or https://)';
     return null;
   }
 
-  // ── UUID ──────────────────────────────────────────────────────────────────
+  // â”€â”€ UUID â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static final _uuidRe = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
@@ -108,7 +108,7 @@ class Validators {
     return null;
   }
 
-  // ── Length ────────────────────────────────────────────────────────────────
+  // â”€â”€ Length â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Enforces minimum character length (after trim).
   static String? Function(String?) minLength(int min, {String? label}) {
@@ -129,7 +129,7 @@ class Validators {
     };
   }
 
-  // ── Numeric ───────────────────────────────────────────────────────────────
+  // â”€â”€ Numeric â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Rejects non-numeric input; optionally enforces a [min] / [max] range.
   static String? Function(String?) number({
@@ -141,13 +141,13 @@ class Validators {
       if (value == null || value.trim().isEmpty) return '${label ?? 'Value'} is required';
       final n = double.tryParse(value.trim());
       if (n == null) return '${label ?? 'Value'} must be a number';
-      if (min != null && n < min) return '${label ?? 'Value'} must be ≥ $min';
-      if (max != null && n > max) return '${label ?? 'Value'} must be ≤ $max';
+      if (min != null && n < min) return '${label ?? 'Value'} must be â‰¥ $min';
+      if (max != null && n > max) return '${label ?? 'Value'} must be â‰¤ $max';
       return null;
     };
   }
 
-  // ── Composite ─────────────────────────────────────────────────────────────
+  // â”€â”€ Composite â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Runs [validators] in order; returns the first error, or null if all pass.
   static String? Function(String?) compose(
@@ -162,7 +162,7 @@ class Validators {
     };
   }
 
-  // ── Rego policy ───────────────────────────────────────────────────────────
+  // â”€â”€ Rego policy â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Basic structural check for a Rego policy string.
   static String? regoPolicy(String? value) {
@@ -175,7 +175,7 @@ class Validators {
     return null;
   }
 
-  // ── Subdomain ─────────────────────────────────────────────────────────────
+  // â”€â”€ Subdomain â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static final _subdomainRe = RegExp(r'^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$');
 
@@ -190,7 +190,7 @@ class Validators {
     return null;
   }
 
-  // ── Entity type ───────────────────────────────────────────────────────────
+  // â”€â”€ Entity type â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static final _entityTypeRe = RegExp(r'^[a-zA-Z][a-zA-Z0-9_]{1,63}$');
 
@@ -203,13 +203,13 @@ class Validators {
     return null;
   }
 
-  // ── JSON ──────────────────────────────────────────────────────────────────
+  // â”€â”€ JSON â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Validates that the value is non-empty and parseable as JSON.
   static String? json(String? value) {
     if (value == null || value.trim().isEmpty) return 'JSON is required';
     try {
-      // Minimal structural check — balanced braces/brackets
+      // Minimal structural check â€” balanced braces/brackets
       final t = value.trim();
       if ((t.startsWith('{') && t.endsWith('}')) ||
           (t.startsWith('[') && t.endsWith(']'))) {

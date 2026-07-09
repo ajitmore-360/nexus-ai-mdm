@@ -1,0 +1,68 @@
+﻿{
+  "title": "Azile AI MDM â€” Platform Overview",
+  "uid":   "nexus-overview",
+  "tags":  ["azile", "mdm", "overview"],
+  "time":  { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Total HTTP Requests",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(AZILE_http_requests_total)", "legendFormat": "Total" }],
+      "options": { "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "color": { "fixedColor": "#00C896", "mode": "fixed" } } }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Entity Operations / min",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(rate(AZILE_entity_operations_total[1m])) * 60", "legendFormat": "Ops/min" }],
+      "fieldConfig": { "defaults": { "color": { "fixedColor": "#00C896", "mode": "fixed" } } }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Match Executions / min",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(rate(AZILE_match_executions_total[1m])) * 60", "legendFormat": "Matches/min" }],
+      "fieldConfig": { "defaults": { "color": { "fixedColor": "#8B5CF6", "mode": "fixed" } } }
+    },
+    {
+      "id": 4, "type": "stat", "title": "Error Rate",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(rate(AZILE_http_requests_total{status=~\"5..\"}[5m])) / sum(rate(AZILE_http_requests_total[5m])) * 100", "legendFormat": "Error %" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{"color": "green","value": null},{"color": "yellow","value": 1},{"color": "red","value": 5}] }, "unit": "percent" } }
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "HTTP Request Rate by Service",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum by(service) (rate(AZILE_http_requests_total[1m]))", "legendFormat": "{{service}}" }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15, "lineWidth": 2 } } }
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "P99 HTTP Latency by Service (ms)",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [{ "expr": "histogram_quantile(0.99, sum by(service, le) (rate(AZILE_http_request_duration_seconds_bucket[5m]))) * 1000", "legendFormat": "{{service}} p99" }],
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "fillOpacity": 10 } } }
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "AI Service Requests",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum by(operation, status) (rate(AZILE_ai_requests_total[1m]))", "legendFormat": "{{operation}} ({{status}})" }],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Kafka Events Published",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum by(topic, status) (rate(AZILE_kafka_events_published_total[1m]))", "legendFormat": "{{topic}} ({{status}})" }],
+      "fieldConfig": { "defaults": { "unit": "eps" } }
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "Entity Create Latency P50/P95/P99 (ms)",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by(le) (rate(AZILE_entity_create_duration_ms_bucket[5m])))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(AZILE_entity_create_duration_ms_bucket[5m])))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(AZILE_entity_create_duration_ms_bucket[5m])))", "legendFormat": "p99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" } }
+    }
+  ]
+}

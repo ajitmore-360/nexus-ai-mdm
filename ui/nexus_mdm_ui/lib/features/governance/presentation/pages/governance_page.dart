@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -9,9 +9,9 @@ import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/empty_state.dart';
 import '../../../../core/validation/validators.dart';
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Models
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 enum RuleType { fieldMask, survivorshipOverride, accessControl, gdprConsent }
 
@@ -152,15 +152,15 @@ class GdprRequest {
   );
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Main Page
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// Sentinel to detect unreplaced demo data — not reachable in prod.
+// Sentinel to detect unreplaced demo data â€” not reachable in prod.
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Page widget
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class GovernancePage extends StatefulWidget {
   const GovernancePage({super.key});
@@ -402,12 +402,12 @@ class _GovernancePageState extends State<GovernancePage>
     final s = _suggestions[index];
     final rule = PolicyRule(
       id: '',
-      name: 'AI: ${s.fieldName} → ${s.suggestedStrategy}',
+      name: 'AI: ${s.fieldName} â†’ ${s.suggestedStrategy}',
       ruleType: RuleType.survivorshipOverride,
       entityType: 'Any',
       fieldName: s.fieldName,
       regoPolicy:
-          '# Auto-generated from AI suggestion\npackage nexus.survivorship\nstrategy = "${s.suggestedStrategy}" { input.field == "${s.fieldName}" }',
+          '# Auto-generated from AI suggestion\npackage azile.survivorship\nstrategy = "${s.suggestedStrategy}" { input.field == "${s.fieldName}" }',
       priority: 85,
     );
     setState(() => _dismissedSuggestions.add(index));
@@ -424,9 +424,9 @@ class _GovernancePageState extends State<GovernancePage>
   void _dismissSuggestion(int index) => setState(() => _dismissedSuggestions.add(index));
 }
 
-// ─────────────────────────────────────────────
-// Tab 1 – Rules
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Tab 1 â€“ Rules
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _RulesTab extends StatelessWidget {
   final List<PolicyRule> rules;
@@ -559,7 +559,7 @@ class _RuleCard extends StatelessWidget {
                     Text(rule.entityType,
                         style: AppTextStyles.bodySmall),
                     if (rule.fieldName != null) ...[
-                      Text(' · ',
+                      Text(' Â· ',
                           style: AppTextStyles.bodySmall),
                       const Icon(Icons.data_object,
                           size: 13, color: AppColors.secondaryText),
@@ -656,9 +656,9 @@ class _RuleTypeChip extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Create / Edit Rule Dialog
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _CreateRuleDialog extends StatefulWidget {
   final PolicyRule? existing;
@@ -688,7 +688,7 @@ class _CreateRuleDialogState extends State<_CreateRuleDialog> {
     _fieldNameCtrl = TextEditingController(text: e?.fieldName ?? '');
     _regoCtrl = TextEditingController(
         text: e?.regoPolicy ??
-            'package nexus.policy\n\ndefault allow = false\n\nallow {\n  # your rule here\n}');
+            'package azile.policy\n\ndefault allow = false\n\nallow {\n  # your rule here\n}');
     _ruleType = e?.ruleType ?? RuleType.fieldMask;
     _priority = (e?.priority ?? 80).toDouble();
   }
@@ -902,9 +902,9 @@ class _CreateRuleDialogState extends State<_CreateRuleDialog> {
   }
 }
 
-// ─────────────────────────────────────────────
-// Tab 2 – Survivorship
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Tab 2 â€“ Survivorship
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SurvivorshipTab extends StatelessWidget {
   final List<SurvivorsipSuggestion> suggestions;
@@ -970,7 +970,7 @@ class _SurvivorshipTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Based on 2,840 merge decisions · Llama 3.2 8B analysis',
+                      'Based on 2,840 merge decisions Â· Llama 3.2 8B analysis',
                       style: AppTextStyles.bodySmall
                           .copyWith(color: Colors.white.withValues(alpha:0.8)),
                     ),
@@ -1137,9 +1137,9 @@ class _SuggestionCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-// Tab 3 – OPA Policy Playground
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Tab 3 â€“ OPA Policy Playground
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _PoliciesTab extends StatefulWidget {
   const _PoliciesTab();
@@ -1203,7 +1203,7 @@ class _PoliciesTabState extends State<_PoliciesTab> {
           'allowed': data['allowed'] as bool? ?? false,
           'masked_fields': (data['masked_fields'] as List?)?.cast<String>() ?? <String>[],
           'warnings': (data['warnings'] as List?)?.cast<String>() ?? <String>[],
-          'policy_version': data['policy_version'] as String? ?? '—',
+          'policy_version': data['policy_version'] as String? ?? 'â€”',
           'evaluation_time_ms': data['evaluation_time_ms'] as int? ?? 0,
         };
       });
@@ -1215,8 +1215,8 @@ class _PoliciesTabState extends State<_PoliciesTab> {
         _result = {
           'allowed': false,
           'masked_fields': <String>[],
-          'warnings': <String>['Policy evaluation failed — check server connection'],
-          'policy_version': '—',
+          'warnings': <String>['Policy evaluation failed â€” check server connection'],
+          'policy_version': 'â€”',
           'evaluation_time_ms': 0,
         };
       });
@@ -1510,9 +1510,9 @@ class _PoliciesTabState extends State<_PoliciesTab> {
   }
 }
 
-// ─────────────────────────────────────────────
-// Tab 4 – GDPR
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Tab 4 â€“ GDPR
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _GdprTab extends StatefulWidget {
   final List<GdprRequest> requests;
@@ -2008,7 +2008,7 @@ class _GdprTabState extends State<_GdprTab> {
                             : AppColors.info,
                       ),
                       _tableCell(req.subjectId, mono: true),
-                      _tableCell(req.recordsAffected?.toString() ?? '—'),
+                      _tableCell(req.recordsAffected?.toString() ?? 'â€”'),
                       _tableCell(req.timestamp),
                       _tableBadge(
                         req.status,

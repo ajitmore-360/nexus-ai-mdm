@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+﻿use anyhow::{bail, Result};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::Value;
@@ -31,7 +31,7 @@ const BLOCKED_HOSTS: &[&str] = &[
     "169.254.169.254", // EC2 metadata endpoint
 ];
 
-/// HTTP webhook connector — POSTs entity JSON to an external URL.
+/// HTTP webhook connector â€” POSTs entity JSON to an external URL.
 ///
 /// Security controls:
 /// - URL scheme restricted to http/https
@@ -81,9 +81,9 @@ impl WebhookConnector {
         }
 
         // Reject bare IP addresses (require hostnames for external destinations)
-        // Allow if explicitly whitelisted — production should use FQDN
+        // Allow if explicitly whitelisted â€” production should use FQDN
         if host.parse::<std::net::IpAddr>().is_ok() {
-            warn!(host=%host, "webhook URL is a bare IP address — use FQDNs in production");
+            warn!(host=%host, "webhook URL is a bare IP address â€” use FQDNs in production");
             // Not blocking bare IPs outright to allow valid use-cases (e.g. staging)
             // but warn operators.
         }
@@ -98,7 +98,7 @@ impl Connector for WebhookConnector {
 
     #[instrument(skip(self, payload), fields(endpoint=%self.endpoint))]
     async fn send(&self, payload: &Value) -> Result<()> {
-        // ── SSRF prevention ──────────────────────────────────────────────────
+        // â”€â”€ SSRF prevention â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         Self::validate_endpoint(&self.endpoint)?;
 
         let body = serde_json::to_string(payload)?;
@@ -106,11 +106,11 @@ impl Connector for WebhookConnector {
         let mut req = self.http
             .post(&self.endpoint)
             .header("Content-Type", "application/json")
-            .header("X-Nexus-Source", "nexus-mdm")
+            .header("X-Nexus-Source", "azile-mdm")
             .header("X-Nexus-Version", env!("CARGO_PKG_VERSION"));
 
         for (k, v) in &self.headers {
-            // Prevent header injection — reject values containing CR or LF
+            // Prevent header injection â€” reject values containing CR or LF
             if v.contains('\r') || v.contains('\n') {
                 bail!("webhook header '{}' contains invalid characters (CRLF injection)", k);
             }
@@ -131,7 +131,7 @@ impl Connector for WebhookConnector {
         } else {
             let status = resp.status();
             let text   = resp.text().await.unwrap_or_default();
-            // Truncate response body in error — avoid leaking internal server details
+            // Truncate response body in error â€” avoid leaking internal server details
             let truncated = &text[..text.len().min(200)];
             anyhow::bail!("webhook returned {}: {}", status, truncated)
         }
@@ -192,7 +192,7 @@ mod tests {
             None,
             vec![("X-Custom".to_string(), "value\r\nX-Injected: evil".to_string())],
         );
-        // Payload doesn't matter — header validation fires first
+        // Payload doesn't matter â€” header validation fires first
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             assert!(conn.send(&serde_json::json!({})).await.is_err());

@@ -1,0 +1,21 @@
+﻿{{/*
+=============================================================================
+API Gateway â€” ClusterIP Service
+=============================================================================
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "azile-mdm.fullname" . }}-{{ .Values.apiGateway.name }}
+  namespace: {{ include "azile-mdm.namespace" . }}
+  labels:
+    {{- include "azile-mdm.serviceLabels" (dict "root" . "service" .Values.apiGateway.name) | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "azile-mdm.serviceSelectorLabels" (dict "root" . "service" .Values.apiGateway.name) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.apiGateway.port }}
+      targetPort: http
+      protocol: TCP

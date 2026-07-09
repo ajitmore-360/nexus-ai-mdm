@@ -1,4 +1,4 @@
-# cargo audit configuration for Nexus AI MDM
+﻿# cargo audit configuration for Azile AI MDM
 # https://docs.rs/cargo-audit/latest/cargo_audit/
 #
 # Add entries to `ignore` ONLY for advisories with no fix available yet.
@@ -10,7 +10,7 @@
 # Example (remove the leading # to activate):
 # [advisories]
 # ignore = [
-#     "RUSTSEC-2024-XXXX",  # crate foo@1.x — no fix upstream yet (tracked #123)
+#     "RUSTSEC-2024-XXXX",  # crate foo@1.x â€” no fix upstream yet (tracked #123)
 # ]
 
 [advisories]

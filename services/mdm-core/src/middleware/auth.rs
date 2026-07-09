@@ -1,4 +1,4 @@
-use std::env;
+﻿use std::env;
 
 use axum::{
     http::{Request, StatusCode},
@@ -6,16 +6,16 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use nexus_auth::{Claims, Role, TokenPurpose};
+use azile_auth::{Claims, Role, TokenPurpose};
 use serde_json::json;
 use uuid::Uuid;
 
 /// Validates `Authorization: Bearer <token>` unless `AUTH_DISABLED=true`.
 ///
-/// After validating the service token, synthesizes a `nexus_auth::Claims`
+/// After validating the service token, synthesizes a `azile_auth::Claims`
 /// extension from the `x-user-id` and `x-user-role` headers injected by the
 /// API gateway's `inject_user_context` middleware.  This lets mdm-core handlers
-/// use `Extension<nexus_auth::Claims>` without parsing JWTs directly.
+/// use `Extension<azile_auth::Claims>` without parsing JWTs directly.
 pub async fn auth_middleware(
     mut request: Request<axum::body::Body>,
     next: Next,

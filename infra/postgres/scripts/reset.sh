@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 
 set -e
 
@@ -12,9 +12,9 @@ psql \
   -d postgres \
 <<EOF
 
-DROP DATABASE IF EXISTS nexus_mdm;
+DROP DATABASE IF EXISTS azile_mdm;
 
-CREATE DATABASE nexus_mdm;
+CREATE DATABASE azile_mdm;
 
 EOF
 

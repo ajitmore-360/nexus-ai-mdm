@@ -1,4 +1,4 @@
-mod config;
+﻿mod config;
 mod delivery;
 mod hub;
 mod subscriber;
@@ -26,9 +26,9 @@ use config::NotificationSettings;
 use hub::{ConnectionHub, PushNotification};
 use subscriber::RedisListener;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // APP STATE
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Clone)]
 struct AppState {
@@ -37,9 +37,9 @@ struct AppState {
     http: Arc<Client>,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // HANDLERS
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// GET /health
 async fn health() -> Json<serde_json::Value> {
@@ -47,7 +47,7 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 async fn metrics_handler() -> String {
-    nexus_telemetry::metrics::render_metrics()
+    azile_telemetry::metrics::render_metrics()
         .unwrap_or_else(|e| format!("# metrics error: {}", e))
 }
 
@@ -75,7 +75,7 @@ async fn ws_handler(
     })
 }
 
-/// POST /notify  — internal endpoint for other services to push a notification.
+/// POST /notify  â€” internal endpoint for other services to push a notification.
 /// Broadcasts to in-app WebSocket subscribers and dispatches webhook delivery.
 async fn push(
     State(state): State<AppState>,
@@ -84,7 +84,7 @@ async fn push(
     // 1. In-app WebSocket delivery (fire-and-forget, always first)
     state.hub.broadcast(&notif).await;
 
-    // 2. Webhook delivery — spawned so it doesn't block the response
+    // 2. Webhook delivery â€” spawned so it doesn't block the response
     let pool = state.pool.clone();
     let http = Arc::clone(&state.http);
     let notif_clone = notif.clone();
@@ -97,7 +97,7 @@ async fn push(
     Json(serde_json::json!({ "success": true }))
 }
 
-// ── Webhook subscription management ──────────────────────────────────────────
+// â”€â”€ Webhook subscription management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Deserialize)]
 struct CreateWebhookRequest {
@@ -177,7 +177,7 @@ async fn create_webhook(
     }
 }
 
-// ── Transactional email ───────────────────────────────────────────────────────
+// â”€â”€ Transactional email â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Debug, Deserialize)]
 struct SendInviteEmailRequest {
@@ -188,7 +188,7 @@ struct SendInviteEmailRequest {
 }
 
 /// POST /internal/emails/invite
-/// Internal endpoint — called by mdm-core after creating an invite token.
+/// Internal endpoint â€” called by mdm-core after creating an invite token.
 async fn handle_send_invite_email(
     Json(req): Json<SendInviteEmailRequest>,
 ) -> impl IntoResponse {
@@ -225,7 +225,7 @@ struct SendResetEmailRequest {
 }
 
 /// POST /internal/emails/reset-password
-/// Internal endpoint — called by mdm-core after creating a password reset token.
+/// Internal endpoint â€” called by mdm-core after creating a password reset token.
 async fn handle_send_reset_email(
     Json(req): Json<SendResetEmailRequest>,
 ) -> impl IntoResponse {
@@ -271,16 +271,16 @@ async fn delete_webhook(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // MAIN
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
 
-    nexus_telemetry::tracing_init::init_tracing("notification-service");
-    nexus_telemetry::metrics::init_metrics("notification-service");
+    azile_telemetry::tracing_init::init_tracing("notification-service");
+    azile_telemetry::metrics::init_metrics("notification-service");
 
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     tracing::info!(app_env = %app_env, "Notification Service environment loaded");
@@ -294,12 +294,12 @@ async fn main() {
     // Emit a prominent warning so ops teams know email delivery is disabled.
     if settings.smtp_host.is_empty() {
         tracing::warn!(
-            "SMTP_HOST is not set — transactional emails (invites, password resets) \
+            "SMTP_HOST is not set â€” transactional emails (invites, password resets) \
              will be logged but NOT delivered. Set SMTP_HOST in the environment to \
              enable real email delivery."
         );
     } else {
-        tracing::info!(smtp_host = %settings.smtp_host, "SMTP configured — email delivery enabled");
+        tracing::info!(smtp_host = %settings.smtp_host, "SMTP configured â€” email delivery enabled");
     }
 
     let allowed_origins_raw = std::env::var("ALLOWED_ORIGINS")

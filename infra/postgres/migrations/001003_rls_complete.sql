@@ -1,4 +1,4 @@
--- ============================================================================
+﻿-- ============================================================================
 -- Migration 001003: Complete Row-Level Security across all tenant-scoped tables
 --
 -- Previous migrations (000031, 000999) only enabled RLS on 10 tables.
@@ -6,7 +6,7 @@
 -- ensuring no cross-tenant data leakage is possible at the database level.
 -- ============================================================================
 
--- ── core_mdm: matching tables ────────────────────────────────────────────────
+-- â”€â”€ core_mdm: matching tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 ALTER TABLE core_mdm.match_requests        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE core_mdm.match_candidates      ENABLE ROW LEVEL SECURITY;
@@ -34,7 +34,7 @@ CREATE POLICY match_review_queue_tenant_policy
     ON core_mdm.match_review_queue
     USING (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
--- ── core_mdm: schema/config tables ──────────────────────────────────────────
+-- â”€â”€ core_mdm: schema/config tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 ALTER TABLE core_mdm.entity_types          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE core_mdm.attribute_definitions ENABLE ROW LEVEL SECURITY;
@@ -47,7 +47,7 @@ CREATE POLICY attribute_definitions_tenant_policy
     ON core_mdm.attribute_definitions
     USING (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
--- ── event_store ──────────────────────────────────────────────────────────────
+-- â”€â”€ event_store â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 ALTER TABLE event_store.event_log          ENABLE ROW LEVEL SECURITY;
 
@@ -56,9 +56,9 @@ CREATE POLICY event_log_tenant_policy
     ON event_store.event_log
     USING (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
--- consumer_offsets is not tenant-scoped (per consumer group) — skip
+-- consumer_offsets is not tenant-scoped (per consumer group) â€” skip
 
--- ── ai schema ────────────────────────────────────────────────────────────────
+-- â”€â”€ ai schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 ALTER TABLE ai.entity_embeddings   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai.rag_chunks          ENABLE ROW LEVEL SECURITY;
@@ -81,7 +81,7 @@ CREATE POLICY anomalies_tenant_policy
     ON ai.anomalies
     USING (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
--- ── governance schema ────────────────────────────────────────────────────────
+-- â”€â”€ governance schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 ALTER TABLE governance.policy_rules ENABLE ROW LEVEL SECURITY;
 
@@ -89,7 +89,7 @@ CREATE POLICY policy_rules_tenant_policy
     ON governance.policy_rules
     USING (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
--- ── platform schema ──────────────────────────────────────────────────────────
+-- â”€â”€ platform schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 ALTER TABLE platform.notifications      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE platform.distribution_jobs  ENABLE ROW LEVEL SECURITY;
@@ -102,9 +102,9 @@ CREATE POLICY distribution_jobs_tenant_policy
     ON platform.distribution_jobs
     USING (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
--- platform.licenses is per-organisation (not per-tenant row), no tenant_id — skip
+-- platform.licenses is per-organisation (not per-tenant row), no tenant_id â€” skip
 
--- ── audit schema ─────────────────────────────────────────────────────────────
+-- â”€â”€ audit schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 ALTER TABLE audit.gdpr_requests ENABLE ROW LEVEL SECURITY;
 
@@ -112,13 +112,13 @@ CREATE POLICY gdpr_requests_tenant_policy
     ON audit.gdpr_requests
     USING (tenant_id = current_setting('app.current_tenant', true)::uuid);
 
--- ── nexus_app bypass for service account ─────────────────────────────────────
--- The nexus_app role runs all service queries. It needs BYPASSRLS so it can
+-- â”€â”€ azile_app bypass for service account â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- The azile_app role runs all service queries. It needs BYPASSRLS so it can
 -- SET app.current_tenant and have the policies applied. Application code is
 -- responsible for always calling begin_uow() before any tenant-scoped query.
 --
--- nexus_readonly (analytics/reporting) has no bypass — it must SET the
+-- azile_readonly (analytics/reporting) has no bypass â€” it must SET the
 -- session variable explicitly, and queries that don't will return zero rows
 -- rather than leaking cross-tenant data.
 
-ALTER ROLE nexus_app BYPASSRLS;
+ALTER ROLE azile_app BYPASSRLS;

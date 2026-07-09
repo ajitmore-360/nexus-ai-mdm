@@ -1,15 +1,15 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tracing::{info, instrument};
 use uuid::Uuid;
 
-use nexus_auth::hash_password;
+use azile_auth::hash_password;
 
 /// Complete request to onboard a new organisation.
 #[derive(Debug, Deserialize)]
 pub struct OnboardOrganizationRequest {
-    // ── Organisation identity ────────────────────────────────────────────────
+    // â”€â”€ Organisation identity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     pub tenant_code:    String,     // URL-safe slug: "acme-corp"
     pub display_name:   String,     // "Acme Corporation"
     pub legal_name:     Option<String>,
@@ -21,17 +21,17 @@ pub struct OnboardOrganizationRequest {
     pub logo_url:       Option<String>,
     pub primary_color:  Option<String>,
 
-    // ── Admin user ───────────────────────────────────────────────────────────
+    // â”€â”€ Admin user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     pub admin_email:       String,
     pub admin_password:    String,
     pub admin_name:        String,
 
-    // ── Entity types to activate ────────────────────────────────────────────
+    // â”€â”€ Entity types to activate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     /// Which entity types this tenant wants active.
     /// If empty, all standard types are activated.
     pub entity_types:      Option<Vec<String>>,
 
-    // ── License ─────────────────────────────────────────────────────────────
+    // â”€â”€ License â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     /// License JWT to bind to this tenant on creation.
     pub license_token:     Option<String>,
 }
@@ -75,7 +75,7 @@ pub async fn onboard_organization(
 
     let mut tx = pool.begin().await?;
 
-    // ── 1. Create tenant ─────────────────────────────────────────────────────
+    // â”€â”€ 1. Create tenant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     sqlx::query(
         r#"
         INSERT INTO core_mdm.tenants (
@@ -94,7 +94,7 @@ pub async fn onboard_organization(
     .execute(&mut *tx)
     .await?;
 
-    // ── 2. Create tenant profile ─────────────────────────────────────────────
+    // â”€â”€ 2. Create tenant profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     sqlx::query(
         r#"
         INSERT INTO core_mdm.tenant_profiles (
@@ -119,7 +119,7 @@ pub async fn onboard_organization(
     .execute(&mut *tx)
     .await?;
 
-    // ── 3. Create admin user ─────────────────────────────────────────────────
+    // â”€â”€ 3. Create admin user â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     sqlx::query(
         r#"
         INSERT INTO core_mdm.users (
@@ -138,7 +138,7 @@ pub async fn onboard_organization(
     .execute(&mut *tx)
     .await?;
 
-    // ── 4. Initialise number sequences ───────────────────────────────────────
+    // â”€â”€ 4. Initialise number sequences â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let entity_types_to_init: Vec<(&str, &str)> = vec![
         ("Customer",     "CUST"),
         ("Vendor",       "VEND"),
@@ -176,7 +176,7 @@ pub async fn onboard_organization(
         }
     }
 
-    // ── 5. Mark onboarding complete ──────────────────────────────────────────
+    // â”€â”€ 5. Mark onboarding complete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     sqlx::query(
         "UPDATE core_mdm.tenant_profiles \
          SET onboarding_status='completed', onboarding_step=5, onboarded_at=NOW() \
@@ -188,11 +188,11 @@ pub async fn onboard_organization(
 
     tx.commit().await?;
 
-    // ── 6. Import license if provided (outside transaction — idempotent) ─────
+    // â”€â”€ 6. Import license if provided (outside transaction â€” idempotent) â”€â”€â”€â”€â”€
     if let Some(license_token) = &req.license_token {
         match crate::license::import_license(pool, license_token, Some(admin_id)).await {
             Ok(lid) => info!(license_id=%lid, tenant_id=%tenant_id, "license bound to new tenant"),
-            Err(e)  => tracing::warn!(error=%e, "license import failed — tenant created without license"),
+            Err(e)  => tracing::warn!(error=%e, "license import failed â€” tenant created without license"),
         }
     }
 

@@ -1,4 +1,4 @@
-mod engine;
+﻿mod engine;
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -26,7 +26,7 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 async fn metrics_handler() -> String {
-    nexus_telemetry::metrics::render_metrics()
+    azile_telemetry::metrics::render_metrics()
         .unwrap_or_else(|e| format!("# metrics error: {}", e))
 }
 
@@ -62,8 +62,8 @@ async fn autocomplete(
 async fn main() {
     dotenvy::dotenv().ok();
 
-    nexus_telemetry::tracing_init::init_tracing("search-service");
-    nexus_telemetry::metrics::init_metrics("search-service");
+    azile_telemetry::tracing_init::init_tracing("search-service");
+    azile_telemetry::metrics::init_metrics("search-service");
 
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     tracing::info!(app_env = %app_env, "Search Service environment loaded");

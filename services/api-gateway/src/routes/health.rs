@@ -1,4 +1,4 @@
-use axum::{
+﻿use axum::{
     extract::State,
     http::{header, StatusCode},
     response::{IntoResponse, Response},
@@ -18,10 +18,10 @@ pub async fn health(State(state): State<AppState>) -> Json<Value> {
     }))
 }
 
-/// GET /metrics — Prometheus text exposition format.
+/// GET /metrics â€” Prometheus text exposition format.
 /// Scraped by Prometheus every 15s (configured in prometheus.yml).
 pub async fn prometheus_metrics() -> Response {
-    match nexus_telemetry::metrics::render_metrics() {
+    match azile_telemetry::metrics::render_metrics() {
         Ok(body) => (
             StatusCode::OK,
             [(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")],

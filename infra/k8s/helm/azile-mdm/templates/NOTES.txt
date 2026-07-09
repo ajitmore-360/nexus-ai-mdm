@@ -1,0 +1,105 @@
+﻿========================================================================
+  Azile AI MDM Platform {{ .Chart.AppVersion }} â€” Deployment Complete
+========================================================================
+
+Release:   {{ .Release.Name }}
+Namespace: {{ include "azile-mdm.namespace" . }}
+Chart:     {{ .Chart.Name }}-{{ .Chart.Version }}
+
+------------------------------------------------------------------------
+  SERVICE ENDPOINTS (cluster-internal)
+------------------------------------------------------------------------
+
+  API Gateway       http://{{ include "azile-mdm.fullname" . }}-api-gateway:{{ .Values.apiGateway.port }}
+  MDM Core          http://{{ include "azile-mdm.fullname" . }}-mdm-core:{{ .Values.mdmCore.port }}
+  AI Service        http://{{ include "azile-mdm.fullname" . }}-ai-service:{{ .Values.aiService.port }}
+  Ingest Service    http://{{ include "azile-mdm.fullname" . }}-ingest-service:{{ .Values.ingestService.port }}
+  Policy Service    http://{{ include "azile-mdm.fullname" . }}-policy-service:{{ .Values.policyService.port }}
+  Search Service    http://{{ include "azile-mdm.fullname" . }}-search-service:{{ .Values.searchService.port }}
+  Notifications     http://{{ include "azile-mdm.fullname" . }}-notification-service:{{ .Values.notificationService.port }}
+  Distribution      http://{{ include "azile-mdm.fullname" . }}-distribution-service:{{ .Values.distributionService.port }}
+  Kafka Worker      (no HTTP â€” background outbox processor)
+
+------------------------------------------------------------------------
+  EXTERNAL ACCESS
+------------------------------------------------------------------------
+
+{{- if .Values.ingress.enabled }}
+  {{- if .Values.ingress.tls.enabled }}
+  API Gateway:  https://{{ .Values.ingress.host }}/
+  WebSocket:    wss://{{ .Values.ingress.host }}/ws
+  {{- else }}
+  API Gateway:  http://{{ .Values.ingress.host }}/
+  WebSocket:    ws://{{ .Values.ingress.host }}/ws
+  {{- end }}
+{{- else }}
+  Ingress is disabled. Access the API Gateway by port-forwarding:
+
+    kubectl port-forward -n {{ include "azile-mdm.namespace" . }} \
+      svc/{{ include "azile-mdm.fullname" . }}-api-gateway {{ .Values.apiGateway.port }}:{{ .Values.apiGateway.port }}
+
+  Then visit: http://localhost:{{ .Values.apiGateway.port }}/health
+{{- end }}
+
+------------------------------------------------------------------------
+  HEALTH CHECKS
+------------------------------------------------------------------------
+
+  Verify all pods are running:
+
+    kubectl get pods -n {{ include "azile-mdm.namespace" . }}
+
+  Check API Gateway health:
+
+    kubectl exec -n {{ include "azile-mdm.namespace" . }} \
+      deploy/{{ include "azile-mdm.fullname" . }}-api-gateway -- \
+      wget -qO- http://localhost:{{ .Values.apiGateway.port }}/health
+
+  Check MDM Core health (includes DB connectivity):
+
+    kubectl exec -n {{ include "azile-mdm.namespace" . }} \
+      deploy/{{ include "azile-mdm.fullname" . }}-mdm-core -- \
+      wget -qO- http://localhost:{{ .Values.mdmCore.port }}/health/ready
+
+------------------------------------------------------------------------
+  SCALE A SERVICE
+------------------------------------------------------------------------
+
+  Manually override HPA bounds (temporary):
+
+    kubectl scale deploy/{{ include "azile-mdm.fullname" . }}-mdm-core \
+      --replicas=5 -n {{ include "azile-mdm.namespace" . }}
+
+  Permanent change â€” update values and upgrade:
+
+    helm upgrade {{ .Release.Name }} azile-mdm/ \
+      --set mdmCore.replicas=5 \
+      -n {{ include "azile-mdm.namespace" . }}
+
+------------------------------------------------------------------------
+  UPDATE SERVICE IMAGES
+------------------------------------------------------------------------
+
+    helm upgrade {{ .Release.Name }} azile-mdm/ \
+      --set apiGateway.image.tag=1.1.0 \
+      --set mdmCore.image.tag=1.1.0 \
+      --reuse-values \
+      -n {{ include "azile-mdm.namespace" . }}
+
+------------------------------------------------------------------------
+  VIEW LOGS
+------------------------------------------------------------------------
+
+    kubectl logs -n {{ include "azile-mdm.namespace" . }} \
+      -l app.kubernetes.io/component=api-gateway --tail=100 -f
+
+    kubectl logs -n {{ include "azile-mdm.namespace" . }} \
+      -l app.kubernetes.io/component=kafka-event-service --tail=100 -f
+
+------------------------------------------------------------------------
+  ROLLBACK
+------------------------------------------------------------------------
+
+    helm rollback {{ .Release.Name }} -n {{ include "azile-mdm.namespace" . }}
+
+========================================================================

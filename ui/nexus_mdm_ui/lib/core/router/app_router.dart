@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/auth/auth_manager.dart';
 import '../../features/auth/presentation/pages/splash_page.dart';
@@ -11,7 +11,7 @@ import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/entities/presentation/pages/entity_explorer_page.dart';
 import '../../features/entities/presentation/pages/entity_detail_page.dart';
 import '../../features/match_queue/presentation/pages/match_queue_page.dart';
-import '../../features/ai_copilot/presentation/pages/ai_copilot_page.dart';
+import '../../features/ai_prism/presentation/pages/ai_prism_page.dart';
 import '../../features/governance/presentation/pages/governance_page.dart';
 import '../../features/analytics/presentation/pages/analytics_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
@@ -289,11 +289,11 @@ class AppRouter {
             ),
           ),
           GoRoute(
-            path: '/dashboard/ai-copilot',
-            name: 'ai-copilot',
+            path: '/dashboard/ai-prism',
+            name: 'ai-prism',
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
-              child: const AiCopilotPage(),
+              child: const AiPrismPage(),
             ),
           ),
           GoRoute(
@@ -546,7 +546,7 @@ class AppRouter {
       if (!loggedIn) return '/login';
       return null;
     } catch (e) {
-      debugPrint('NEXUS GUARD ERROR: $e');
+      debugPrint('AZILE GUARD ERROR: $e');
       return '/login';
     }
   }

@@ -1,4 +1,4 @@
-use axum::{
+﻿use axum::{
     extract::{Extension, Json, Path, State},
     http::StatusCode,
     response::IntoResponse,
@@ -7,7 +7,7 @@ use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use nexus_auth::Claims;
+use azile_auth::Claims;
 
 use crate::AppState;
 use crate::services::workflow_service::UpsertWorkflow;

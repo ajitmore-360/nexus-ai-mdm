@@ -1,4 +1,4 @@
-import 'package:dio/dio.dart';
+﻿import 'package:dio/dio.dart';
 import 'match_candidate.dart';
 
 // ---------------------------------------------------------------------------
@@ -99,21 +99,21 @@ class MatchResponse {
 // Copilot Response
 // ---------------------------------------------------------------------------
 
-class CopilotResponse {
+class PrismResponse {
   final bool success;
   final String answer;
   final List<String> sourceDocs;
   final String? error;
 
-  const CopilotResponse({
+  const PrismResponse({
     required this.success,
     required this.answer,
     this.sourceDocs = const [],
     this.error,
   });
 
-  factory CopilotResponse.fromJson(Map<String, dynamic> json) {
-    return CopilotResponse(
+  factory PrismResponse.fromJson(Map<String, dynamic> json) {
+    return PrismResponse(
       success: json['success'] as bool? ?? true,
       answer: (json['answer'] ?? json['response'] ?? json['content'] ?? '') as String,
       sourceDocs: List<String>.from(json['source_docs'] as List? ?? []),
@@ -121,7 +121,7 @@ class CopilotResponse {
     );
   }
 
-  factory CopilotResponse.error(String message) => CopilotResponse(
+  factory PrismResponse.error(String message) => PrismResponse(
         success: false,
         answer: '',
         error: message,
@@ -188,7 +188,7 @@ class ApiException implements Exception {
 }
 
 // ---------------------------------------------------------------------------
-// ApiResult — sealed success/failure wrapper
+// ApiResult â€” sealed success/failure wrapper
 // ---------------------------------------------------------------------------
 
 sealed class ApiResult<T> {

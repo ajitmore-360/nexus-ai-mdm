@@ -1,4 +1,4 @@
-use axum::{
+﻿use axum::{
     extract::State,
     http::{
         HeaderName,
@@ -355,23 +355,23 @@ pub struct AppState {
     pub enrichment_service:
         Arc<EnrichmentService>,
 
-    /// Live matching policy — can be updated at runtime via PATCH /policy/weights
+    /// Live matching policy â€” can be updated at runtime via PATCH /policy/weights
     /// without restarting the service.
     pub matching_policy: Arc<std::sync::RwLock<matching::MatchingPolicy>>,
 
     /// Optional Redis-backed rate limiter for brute-force protection on /auth/login.
-    pub redis_rate_limiter: Option<Arc<nexus_redis::RedisRateLimiter>>,
+    pub redis_rate_limiter: Option<Arc<azile_redis::RedisRateLimiter>>,
 
-    /// Optional Redis task queue — used for re-embedding on PATCH and other async work.
-    pub task_queue: Option<Arc<nexus_redis::TaskQueue>>,
+    /// Optional Redis task queue â€” used for re-embedding on PATCH and other async work.
+    pub task_queue: Option<Arc<azile_redis::TaskQueue>>,
 
-    /// Optional Redis pub/sub publisher — broadcasts real-time events to the API gateway
+    /// Optional Redis pub/sub publisher â€” broadcasts real-time events to the API gateway
     /// which fans them out to connected WebSocket clients on the `nexus:tenant:<id>` channel.
-    pub pubsub: Option<Arc<nexus_redis::PubSubClient>>,
+    pub pubsub: Option<Arc<azile_redis::PubSubClient>>,
 
     /// AES-256-GCM field-level encryption for PII attributes (email, phone, tax_id, etc.).
-    /// None when FIELD_ENCRYPTION_KEY is not set — PII stored plaintext (dev mode only).
-    pub field_encryption: Option<Arc<nexus_security::encryption::field_encryption::FieldEncryptionService>>,
+    /// None when FIELD_ENCRYPTION_KEY is not set â€” PII stored plaintext (dev mode only).
+    pub field_encryption: Option<Arc<azile_security::encryption::field_encryption::FieldEncryptionService>>,
 }
 
 //
@@ -425,7 +425,7 @@ async fn health(
                 "UP".to_string(),
 
             service:
-                "nexus-ai-mdm-core"
+                "azile-ai-mdm-core"
                     .to_string(),
 
             version:
@@ -588,7 +588,7 @@ fn build_router(
 ) -> Router {
 
     //
-    // CORS — env-driven, no wildcard in production
+    // CORS â€” env-driven, no wildcard in production
     //
 
     let allowed_origins: Vec<HeaderValue> = std::env::var("ALLOWED_ORIGINS")
@@ -617,15 +617,15 @@ fn build_router(
             .allow_credentials(true);
 
     let protected = Router::new()
-        // Hierarchy — static routes BEFORE /:id
+        // Hierarchy â€” static routes BEFORE /:id
         .route("/entities/hierarchy/roots",   get(get_hierarchy_roots))
-        // Bulk operations — static routes BEFORE /:id to avoid route collision
+        // Bulk operations â€” static routes BEFORE /:id to avoid route collision
         .route("/entities/bulk/status",       post(bulk_update_entity_status))
         .route("/entities/bulk/export",       post(bulk_export_entities))
         .route("/entities/bulk/tag",          post(bulk_tag_entities))
-        // XRef lookup — static route BEFORE /:id
+        // XRef lookup â€” static route BEFORE /:id
         .route("/xrefs/lookup",               get(lookup_by_xref))
-        // Approval workflow — static routes BEFORE /:id to avoid Axum ambiguity
+        // Approval workflow â€” static routes BEFORE /:id to avoid Axum ambiguity
         .route("/entities/pending-approvals", get(list_pending_approvals))
         .route("/entities/bulk-approve",      post(bulk_approve_entities))
         .route("/entities/bulk-reject",       post(bulk_reject_entities))
@@ -649,7 +649,7 @@ fn build_router(
         .route("/match/:request_id/candidates/:candidate_id/defer", axum::routing::post(defer_match))
         .route("/match/review-queue/:review_id/assign", patch(assign_review))
         .route("/merge",                  post(execute_merge))
-        // Golden records — read + manual attribute override
+        // Golden records â€” read + manual attribute override
         .route("/golden-records",         get(list_golden_records))
         .route("/golden-records/:id",     get(get_golden_record))
         .route("/golden-records/:id/attributes", patch(patch_golden_record_attributes))
@@ -681,7 +681,7 @@ fn build_router(
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
 
-    // Public auth routes — no tenant/auth middleware
+    // Public auth routes â€” no tenant/auth middleware
     // NOTE: /auth/register intentionally omitted. Account creation requires an invite token
     // via /auth/accept-invite. Open self-registration is a security violation in a multi-tenant MDM.
     let auth_routes = Router::new()
@@ -706,7 +706,7 @@ fn build_router(
         .route("/dashboard/steward-performance",   axum::routing::get(get_steward_performance))
         .route("/dashboard/quality-dimensions",    axum::routing::get(get_quality_dimensions))
         .route("/audit/events",           axum::routing::get(list_audit_events))
-        // ── Entity type config admin routes ──────────────────────────────────
+        // â”€â”€ Entity type config admin routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/entity-types",
             get(list_entity_types).post(create_entity_type))
         .route("/entity-types/:id",
@@ -721,19 +721,19 @@ fn build_router(
             delete(delete_attribute))
         .route("/entity-types/:code/next-sequence",
             get(next_sequence))
-        // ── Domain-level policy overrides ─────────────────────────────────────
+        // â”€â”€ Domain-level policy overrides â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/domain-policies",
             get(list_domain_policies))
         .route("/domain-policies/:entity_type_code",
             get(get_domain_policy)
                 .put(upsert_domain_policy)
                 .delete(delete_domain_policy))
-        // ── Relationship type config admin routes ─────────────────────────────
+        // â”€â”€ Relationship type config admin routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/relationship-types",
             get(list_relationship_types).post(create_relationship_type))
         .route("/relationship-types/:type_id",
             delete(delete_relationship_type))
-        // ── License routes ────────────────────────────────────────────────────
+        // â”€â”€ License routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/license",
             get(get_my_license))
         .route("/license/activate",
@@ -742,10 +742,10 @@ fn build_router(
             post(admin_upsert_license))
         .route("/admin/embed-migration",
             axum::routing::post(embed_migration))
-        // ── Branding routes (Enterprise / white-label) ────────────────────────
+        // â”€â”€ Branding routes (Enterprise / white-label) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/tenant/branding",
             get(get_branding).put(upsert_branding))
-        // ── Notification inbox ────────────────────────────────────────────────
+        // â”€â”€ Notification inbox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/notifications",
             get(list_notifications))
         .route("/notifications/unread-count",
@@ -754,19 +754,19 @@ fn build_router(
             patch(mark_notification_read))
         .route("/notifications/read-all",
             post(mark_all_read))
-        // ── Notification subscriptions ────────────────────────────────────────
+        // â”€â”€ Notification subscriptions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/notification-subscriptions",
             get(list_subscriptions).post(create_subscription))
         .route("/notification-subscriptions/:id",
             delete(delete_subscription))
-        // ── Distribution jobs ─────────────────────────────────────────────────
+        // â”€â”€ Distribution jobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/distribution/jobs",
             get(list_distribution_jobs).post(create_distribution_job))
         .route("/distribution/jobs/:id",
             get(get_distribution_job).delete(cancel_distribution_job))
         .route("/distribution/jobs/:id/queue",
             post(queue_distribution_job))
-        // ── Submaster (reference data) management — Business Admin / Admin only ─
+        // â”€â”€ Submaster (reference data) management â€” Business Admin / Admin only â”€
         .route("/submasters",
             get(list_submaster_types).post(create_submaster_type))
         .route("/submasters/:code",
@@ -775,19 +775,19 @@ fn build_router(
             get(list_submaster_values).post(create_submaster_value))
         .route("/submasters/:code/values/:value_id",
             patch(update_submaster_value).delete(delete_submaster_value))
-        // ── Data Governance — assignment CRUD (BusinessAdmin/Admin only) ──────
+        // â”€â”€ Data Governance â€” assignment CRUD (BusinessAdmin/Admin only) â”€â”€â”€â”€â”€â”€
         .route("/governance/assignments",
             get(list_assignments).post(create_assignment))
         .route("/governance/assignments/my-types",
             get(my_assigned_types))
         .route("/governance/assignments/:id",
             delete(delete_assignment))
-        // ── Quality analytics & trend scorecards ─────────────────────────────
+        // â”€â”€ Quality analytics & trend scorecards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/analytics/quality-trends",       axum::routing::get(get_quality_trends))
         .route("/analytics/quality-dimensions",   axum::routing::get(get_dimension_breakdown))
         .route("/analytics/source-quality",       axum::routing::get(get_source_quality_ranking))
         .route("/analytics/quality-snapshot",     axum::routing::post(trigger_quality_snapshot))
-        // ── Quality rules & violations ────────────────────────────────────────
+        // â”€â”€ Quality rules & violations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/quality-rules",
             get(list_quality_rules).post(create_quality_rule))
         .route("/quality-rules/reorder",
@@ -802,7 +802,7 @@ fn build_router(
             post(bulk_resolve_violations))
         .route("/quality-violations/:id/resolve",
             patch(resolve_quality_violation))
-        // ── AI suggestions (approval-gated LLM proposals) ─────────────────────
+        // â”€â”€ AI suggestions (approval-gated LLM proposals) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/ai-suggestions",
             get(list_suggestions))
         .route("/ai-suggestions/:id/approve",
@@ -815,19 +815,19 @@ fn build_router(
             post(trigger_anomaly))
         .route("/entities/:entity_id/ai-suggestions/enrichment",
             post(trigger_enrichment))
-        // ── Data profiling (attribute-level statistics + outliers) ─────────────
+        // â”€â”€ Data profiling (attribute-level statistics + outliers) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/data-profiling/:entity_type",
             get(get_profile))
         .route("/data-profiling/:entity_type/run",
             post(run_profile))
-        // ── Task assignment & SLA ─────────────────────────────────────────────
+        // â”€â”€ Task assignment & SLA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/tasks",
             get(list_tasks).post(create_task))
         .route("/tasks/:id",
             patch(update_task))
         .route("/tasks/check-sla",
             post(check_sla_breaches))
-        // ── Reference data management (code lists) ────────────────────────────
+        // â”€â”€ Reference data management (code lists) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/reference-data",
             get(list_reference_lists).post(create_reference_list))
         .route("/reference-data/:list_id/values",
@@ -836,7 +836,7 @@ fn build_router(
             post(bulk_import_values))
         .route("/reference-data/:list_id/values/:value_id",
             delete(delete_reference_value))
-        // ── Transformation rules (Data Stewardship DSL) ───────────────────────
+        // â”€â”€ Transformation rules (Data Stewardship DSL) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/transformation-rules",
             get(list_transformation_rules).post(create_transformation_rule))
         .route("/transformation-rules/preview",
@@ -845,20 +845,20 @@ fn build_router(
             put(toggle_transformation_rule))
         .route("/transformation-rules/:id",
             delete(delete_transformation_rule))
-        // ── Party role management ─────────────────────────────────────────────
+        // â”€â”€ Party role management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/party-roles/by-role",
             get(entities_by_role))
-        // ── SSO Configuration (admin only) ────────────────────────────────────
+        // â”€â”€ SSO Configuration (admin only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/sso-configurations",
             get(get_sso_config).put(upsert_sso_config))
         .route("/sso-configurations/:provider_type",
             delete(delete_sso_config))
-        // ── SCIM token management (admin only) ────────────────────────────────
+        // â”€â”€ SCIM token management (admin only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/scim/tokens",
             get(list_scim_tokens).post(create_scim_token))
         .route("/scim/tokens/:id",
             delete(revoke_scim_token))
-        // ── Workflow Engine ───────────────────────────────────────────────────
+        // â”€â”€ Workflow Engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/workflow-step-types",
             get(list_step_types))
         .route("/workflows",
@@ -871,7 +871,7 @@ fn build_router(
             get(list_workflow_runs))
         .route("/workflows/:id/trigger",
             post(trigger_workflow))
-        // ── Certified Connectors ──────────────────────────────────────────────
+        // â”€â”€ Certified Connectors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/connector-catalog",
             get(list_catalog))
         .route("/connectors",
@@ -880,7 +880,7 @@ fn build_router(
             get(get_instance).put(update_instance).delete(delete_instance))
         .route("/connectors/:id/test",
             post(test_instance))
-        // ── Third-Party Enrichment ────────────────────────────────────────────
+        // â”€â”€ Third-Party Enrichment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         .route("/enrichment-providers",
             get(list_providers))
         .route("/enrichment-configs",
@@ -894,14 +894,14 @@ fn build_router(
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
 
-    // ── SAML 2.0 public endpoints (no auth — browser redirect binding) ──────────
+    // â”€â”€ SAML 2.0 public endpoints (no auth â€” browser redirect binding) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Note: ACS uses form encoding (application/x-www-form-urlencoded), not JSON.
     let saml_routes = Router::new()
         .route("/saml/:tenant_id/metadata", get(saml_metadata))
         .route("/saml/:tenant_id/init",     get(saml_init))
         .route("/saml/:tenant_id/acs",      post(saml_acs));
 
-    // ── SCIM 2.0 endpoints (SCIM bearer token auth, no standard JWT required) ──
+    // â”€â”€ SCIM 2.0 endpoints (SCIM bearer token auth, no standard JWT required) â”€â”€
     let scim_routes = Router::new()
         .route("/scim/:tenant_id/v2/ServiceProviderConfig", get(scim_service_provider_config))
         .route("/scim/:tenant_id/v2/Schemas",               get(scim_schemas))
@@ -918,7 +918,7 @@ fn build_router(
                 .patch(scim_patch_group)
                 .delete(scim_delete_group));
 
-    // Internal no-auth route group — gateway-to-service only, not exposed publicly.
+    // Internal no-auth route group â€” gateway-to-service only, not exposed publicly.
     let internal_routes = Router::new()
         .route("/internal/license/:tenant_id", get(internal_get_license));
 
@@ -927,7 +927,7 @@ fn build_router(
         .route("/health/live",  get(liveness))
         .route("/health/ready", get(readiness))
         .route("/metrics",      get(|| async {
-            nexus_telemetry::metrics::render_metrics()
+            azile_telemetry::metrics::render_metrics()
                 .unwrap_or_else(|e| format!("# metrics error: {}", e))
         }))
         .merge(auth_routes)
@@ -1002,8 +1002,8 @@ async fn main() {
     // ====================================
     //
 
-    nexus_telemetry::tracing_init::init_tracing("mdm-core");
-    nexus_telemetry::metrics::init_metrics("mdm-core");
+    azile_telemetry::tracing_init::init_tracing("mdm-core");
+    azile_telemetry::metrics::init_metrics("mdm-core");
 
     info!(
         "Starting Nexus AI MDM Core"
@@ -1019,7 +1019,7 @@ async fn main() {
     info!(app_env = %app_env, "MDM Core environment loaded");
 
     // Guard: reject known dev default JWT secret in non-dev environments.
-    const KNOWN_DEV_JWT_SECRET: &str = "nexus-local-dev-jwt-secret-min-32-chars!!";
+    const KNOWN_DEV_JWT_SECRET: &str = "azile-local-dev-jwt-secret-min-32-chars!!";
     let jwt_secret_val = env::var("JWT_SECRET").unwrap_or_default();
     if jwt_secret_val == KNOWN_DEV_JWT_SECRET
         && matches!(app_env.as_str(), "production" | "staging" | "prod" | "stage")
@@ -1085,7 +1085,7 @@ async fn main() {
     // ====================================
     // mdm-core is the schema owner: it runs all SQLx migrations
     // before any repositories or services are initialised.
-    // This is idempotent — already-applied migrations are skipped.
+    // This is idempotent â€” already-applied migrations are skipped.
     //
 
     info!("Running database migrations...");
@@ -1102,7 +1102,7 @@ async fn main() {
             {
                 tracing::error!(
                     error = %e,
-                    "Migration checksum mismatch — a migration file was modified after \
+                    "Migration checksum mismatch â€” a migration file was modified after \
                      it was applied to this database. Re-run migrations against a clean DB \
                      or update the checksum in _sqlx_migrations to resolve. Continuing \
                      because tables were pre-applied."
@@ -1163,12 +1163,12 @@ async fn main() {
     let matching_repository_arc =
         Arc::new(matching_repository.clone());
 
-    // Single live policy behind RwLock — shared by both Matcher (reads snapshots)
+    // Single live policy behind RwLock â€” shared by both Matcher (reads snapshots)
     // and AppState (PATCH /policy/weights updates it at runtime).
     // No frozen copy exists; every match execution reads the current weights.
     let live_policy = Arc::new(std::sync::RwLock::new(MatchingPolicy::default()));
 
-    // Optional SemanticClient — wired when AI_SERVICE_URL is set.
+    // Optional SemanticClient â€” wired when AI_SERVICE_URL is set.
     // Falls back gracefully when absent: grey-zone candidates stay in RequiresReview.
     let semantic_client = env::var("AI_SERVICE_URL").ok().map(|url| {
         let http = reqwest::Client::builder()
@@ -1184,11 +1184,11 @@ async fn main() {
     );
     let matcher = Arc::new(match semantic_client {
         Some(sc) => {
-            info!("SemanticClient enabled — LLM grey-zone resolution active");
+            info!("SemanticClient enabled â€” LLM grey-zone resolution active");
             matcher_base.with_semantic_client(sc)
         }
         None => {
-            warn!("AI_SERVICE_URL not set — semantic matching disabled");
+            warn!("AI_SERVICE_URL not set â€” semantic matching disabled");
             matcher_base
         }
     });
@@ -1202,9 +1202,9 @@ async fn main() {
     let relationship_service =
         Arc::new(RelationshipService::new(db.clone()));
 
-    // Redis — entity cache, task queue, login rate limiter, and pub/sub publisher (all optional)
+    // Redis â€” entity cache, task queue, login rate limiter, and pub/sub publisher (all optional)
     let (entity_cache, task_queue, login_rate_limiter, pubsub_client) = {
-        use nexus_redis::{create_pool, EntityCache, PubSubClient, RedisConfig, RedisRateLimiter, TaskQueue};
+        use azile_redis::{create_pool, EntityCache, PubSubClient, RedisConfig, RedisRateLimiter, TaskQueue};
         let cfg = RedisConfig::from_env();
         match create_pool(&cfg) {
             Ok(pool) => {
@@ -1213,11 +1213,11 @@ async fn main() {
                 let pubsub  = Arc::new(PubSubClient::new(pool.clone(), cfg.key_prefix.clone()));
                 // Login: max 10 attempts per 5-minute window per IP+email combo
                 let limiter = Arc::new(RedisRateLimiter::new(pool, cfg.key_prefix.clone(), 10, 300));
-                tracing::info!("Redis connected — entity cache, task queue, pub/sub, and login rate limiter enabled");
+                tracing::info!("Redis connected â€” entity cache, task queue, pub/sub, and login rate limiter enabled");
                 (Some(cache), Some(queue), Some(limiter), Some(pubsub))
             }
             Err(e) => {
-                tracing::warn!(error=%e, "Redis unavailable — login rate limiting disabled");
+                tracing::warn!(error=%e, "Redis unavailable â€” login rate limiting disabled");
                 (None, None, None, None)
             }
         }
@@ -1225,29 +1225,29 @@ async fn main() {
     let entity_cache = entity_cache;
     let task_queue   = task_queue;
 
-    // ── Field-level encryption ─────────────────────────────────────────────────
+    // â”€â”€ Field-level encryption â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // FIELD_ENCRYPTION_KEY must be exactly 32 bytes (256-bit), hex-encoded (64 chars).
-    // If absent, PII attributes are stored plaintext — acceptable only in development.
+    // If absent, PII attributes are stored plaintext â€” acceptable only in development.
     let field_encryption = match env::var("FIELD_ENCRYPTION_KEY") {
         Ok(hex_key) => {
             match hex::decode(&hex_key) {
                 Ok(key_bytes) if key_bytes.len() == 32 => {
                     let key: [u8; 32] = key_bytes.try_into().expect("key is 32 bytes");
                     info!("Field-level encryption enabled (AES-256-GCM)");
-                    Some(Arc::new(nexus_security::encryption::field_encryption::FieldEncryptionService::new(&key)))
+                    Some(Arc::new(azile_security::encryption::field_encryption::FieldEncryptionService::new(&key)))
                 }
                 Ok(_) => {
-                    warn!("FIELD_ENCRYPTION_KEY must be 64 hex chars (32 bytes) — encryption disabled");
+                    warn!("FIELD_ENCRYPTION_KEY must be 64 hex chars (32 bytes) â€” encryption disabled");
                     None
                 }
                 Err(e) => {
-                    warn!(error=%e, "FIELD_ENCRYPTION_KEY is not valid hex — encryption disabled");
+                    warn!(error=%e, "FIELD_ENCRYPTION_KEY is not valid hex â€” encryption disabled");
                     None
                 }
             }
         }
         Err(_) => {
-            warn!("FIELD_ENCRYPTION_KEY not set — PII attributes stored plaintext. Set in production.");
+            warn!("FIELD_ENCRYPTION_KEY not set â€” PII attributes stored plaintext. Set in production.");
             None
         }
     };
@@ -1382,7 +1382,7 @@ async fn main() {
         }
     );
 
-    // ── Background workers ─────────────────────────────────────────────────────
+    // â”€â”€ Background workers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // These run independently of the HTTP server; failures are logged but never
     // crash the process.
 

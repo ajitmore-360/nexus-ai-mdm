@@ -1,5 +1,5 @@
--- ============================================================================
--- Nexus MDM — Consent Management Tables
+﻿-- ============================================================================
+-- Azile MDM â€” Consent Management Tables
 -- Migration: 000037
 -- ============================================================================
 -- Tracks data-subject consent per entity, consent type, and legal basis.
@@ -10,7 +10,7 @@
 -- withdrawn_at timestamp so the audit trail is preserved.
 -- ============================================================================
 
--- ── Consent records ───────────────────────────────────────────────────────────
+-- â”€â”€ Consent records â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE TABLE IF NOT EXISTS core_mdm.consent_records (
     consent_id      UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id       UUID        NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS core_mdm.consent_records (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ── Indexes ───────────────────────────────────────────────────────────────────
+-- â”€â”€ Indexes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Look up all consent records for an entity (most common query)
 CREATE INDEX IF NOT EXISTS idx_consent_entity_tenant
     ON core_mdm.consent_records(entity_id, tenant_id);
@@ -61,16 +61,16 @@ CREATE INDEX IF NOT EXISTS idx_consent_active_by_type
 CREATE INDEX IF NOT EXISTS idx_consent_updated
     ON core_mdm.consent_records(tenant_id, updated_at DESC);
 
--- ── RLS ───────────────────────────────────────────────────────────────────────
+-- â”€â”€ RLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ALTER TABLE core_mdm.consent_records ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY consent_records_tenant_isolation
     ON core_mdm.consent_records
     USING (tenant_id = current_setting('nexus.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE ON core_mdm.consent_records TO nexus_app;
+GRANT SELECT, INSERT, UPDATE ON core_mdm.consent_records TO azile_app;
 
--- ── Audit trigger ─────────────────────────────────────────────────────────────
+-- â”€â”€ Audit trigger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- Auto-update updated_at on row change
 CREATE OR REPLACE FUNCTION core_mdm.touch_consent_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
@@ -84,7 +84,7 @@ CREATE TRIGGER trg_consent_updated_at
     BEFORE UPDATE ON core_mdm.consent_records
     FOR EACH ROW EXECUTE FUNCTION core_mdm.touch_consent_updated_at();
 
--- ── Helper view: active consents ──────────────────────────────────────────────
+-- â”€â”€ Helper view: active consents â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CREATE OR REPLACE VIEW core_mdm.active_consents AS
 SELECT *
 FROM core_mdm.consent_records
@@ -92,8 +92,8 @@ WHERE consent_given  = true
   AND withdrawn_at   IS NULL
   AND (expires_at    IS NULL OR expires_at > NOW());
 
-GRANT SELECT ON core_mdm.active_consents TO nexus_app;
+GRANT SELECT ON core_mdm.active_consents TO azile_app;
 
 COMMENT ON TABLE core_mdm.consent_records IS
 'GDPR consent records per data subject entity. '
-'Withdrawal is recorded via withdrawn_at — records are never deleted.';
+'Withdrawal is recorded via withdrawn_at â€” records are never deleted.';

@@ -1,4 +1,4 @@
-mod config;
+﻿mod config;
 mod consent;
 mod engine;
 mod handlers;
@@ -32,8 +32,8 @@ use state::AppState;
 async fn main() {
     dotenvy::dotenv().ok();
 
-    nexus_telemetry::tracing_init::init_tracing("policy-service");
-    nexus_telemetry::metrics::init_metrics("policy-service");
+    azile_telemetry::tracing_init::init_tracing("policy-service");
+    azile_telemetry::metrics::init_metrics("policy-service");
 
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     tracing::info!(app_env = %app_env, "Policy Service environment loaded");
@@ -41,20 +41,20 @@ async fn main() {
     let settings = PolicySettings::from_env();
     tracing::info!("Policy Service starting on port {}", settings.port);
 
-    // ── Database ─────────────────────────────────────────────────────────────
+    // â”€â”€ Database â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let db_config = DatabaseConfig { database_url: settings.database_url.clone() };
     let pool = create_pool(&db_config)
         .await
         .expect("failed to connect to PostgreSQL");
 
-    // ── OPA client ───────────────────────────────────────────────────────────
+    // â”€â”€ OPA client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let opa = Arc::new(OpaClient::new(&settings.opa_url, settings.opa_timeout_secs));
     match opa.health_check().await {
         true  => tracing::info!("OPA connected at {}", settings.opa_url),
-        false => tracing::warn!("OPA not available at {} — failing open", settings.opa_url),
+        false => tracing::warn!("OPA not available at {} â€” failing open", settings.opa_url),
     }
 
-    // ── Service layer ─────────────────────────────────────────────────────────
+    // â”€â”€ Service layer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let evaluator  = Arc::new(PolicyEvaluator::new(pool.clone(), Arc::clone(&opa)));
     let gdpr       = Arc::new(GdprEngine::new(pool.clone()));
     let rule_repo  = Arc::new(PolicyRepository::new(pool.clone()));
@@ -68,7 +68,7 @@ async fn main() {
         consent,
     });
 
-    // ── Router ────────────────────────────────────────────────────────────────
+    // â”€â”€ Router â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let allowed_origins_raw = std::env::var("ALLOWED_ORIGINS")
         .unwrap_or_else(|_| "http://localhost:3000,http://localhost:4000".to_string());
     if matches!(app_env.as_str(), "production" | "prod" | "staging" | "stage") {
@@ -127,6 +127,6 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 async fn metrics_handler() -> String {
-    nexus_telemetry::metrics::render_metrics()
+    azile_telemetry::metrics::render_metrics()
         .unwrap_or_else(|e| format!("# metrics error: {}", e))
 }

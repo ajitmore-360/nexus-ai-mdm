@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Context, Result};
+﻿use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// License tier — determines which features are unlocked.
+/// License tier â€” determines which features are unlocked.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum LicenseTier {
@@ -40,7 +40,7 @@ pub struct LicenseLimits {
 pub struct LicenseClaims {
     // Standard JWT claims
     pub jti: String,            // license_id
-    pub iss: String,            // "nexus-mdm-vendor"
+    pub iss: String,            // "azile-mdm-vendor"
     pub sub: String,            // organization name
     pub iat: i64,
     pub exp: Option<i64>,       // None = perpetual
@@ -59,7 +59,7 @@ pub struct LicenseClaims {
 /// IMPORTANT: In a real deployment, replace this with the actual vendor public key.
 /// The private key is held only by the Nexus MDM vendor for signing licenses.
 const VENDOR_LICENSE_SECRET: &str =
-    "nexus-mdm-vendor-license-signing-key-v1-do-not-share";
+    "azile-mdm-vendor-license-signing-key-v1-do-not-share";
 
 /// Validate and decode a license JWT token.
 ///
@@ -70,8 +70,8 @@ pub fn validate_license_token(token: &str) -> Result<LicenseClaims> {
 
     let key = DecodingKey::from_secret(VENDOR_LICENSE_SECRET.as_bytes());
     let mut validation = Validation::new(Algorithm::HS256);
-    validation.set_issuer(&["nexus-mdm-vendor"]);
-    // exp is optional — perpetual licenses have no expiry claim.
+    validation.set_issuer(&["azile-mdm-vendor"]);
+    // exp is optional â€” perpetual licenses have no expiry claim.
     // Disable both the automatic exp validation AND the required-claim check.
     validation.validate_exp = false;
     validation.required_spec_claims = {
@@ -114,7 +114,7 @@ pub fn generate_dev_license(
 
     let claims = LicenseClaims {
         jti:      Uuid::new_v4().to_string(),
-        iss:      "nexus-mdm-vendor".to_string(),
+        iss:      "azile-mdm-vendor".to_string(),
         sub:      organization.to_string(),
         iat:      now,
         exp,
@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn reject_expired_license() {
         let token = generate_dev_license("Expired Co", LicenseTier::Community, Some(0)).unwrap();
-        // 0 days → already expired
+        // 0 days â†’ already expired
         std::thread::sleep(std::time::Duration::from_secs(1));
         assert!(validate_license_token(&token).is_err());
     }

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -11,14 +11,14 @@ use contracts::mdm::entity::{CanonicalEntity, EntityStatus};
 use contracts::mdm::merge::{MergeExecutionResult, MergeRequest};
 use contracts::mdm::survivorship::SurvivorshipRule;
 use database::{DbPool, PendingOutboxEvent, RequestContext, RequestContextFactory};
-use nexus_redis::{TaskQueue, queue::task_types};
+use azile_redis::{TaskQueue, queue::task_types};
 
 use crate::db::repositories::entity_repository::EntityRepository;
 use crate::db::repositories::golden_record_repository::GoldenRecordRepository;
 use crate::survivorship::engine::apply_survivorship;
 
-/// Executes the merge pipeline: survivorship evaluation → golden record
-/// creation → entity status update → outbox events, all within a single
+/// Executes the merge pipeline: survivorship evaluation â†’ golden record
+/// creation â†’ entity status update â†’ outbox events, all within a single
 /// tenant-scoped PostgreSQL transaction with RLS context set.
 pub struct MergeService {
     pool:                     DbPool,
@@ -55,14 +55,14 @@ impl MergeService {
         let tenant_id  = ctx.tenant_id;
         let started_at = Utc::now();
 
-        // ── Load primary entity ─────────────────────────────────────────────
+        // â”€â”€ Load primary entity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         let primary = self
             .entity_repository
             .fetch_entity(tenant_id, request.primary_entity_id)
             .await?
             .ok_or_else(|| anyhow!("primary entity {} not found", request.primary_entity_id))?;
 
-        // ── Load candidate entities ─────────────────────────────────────────
+        // â”€â”€ Load candidate entities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         let mut entities: Vec<CanonicalEntity> = vec![primary.clone()];
         let mut merged_ids: Vec<Uuid> = Vec::new();
 
@@ -88,14 +88,14 @@ impl MergeService {
             ));
         }
 
-        // ── Survivorship ────────────────────────────────────────────────────
+        // â”€â”€ Survivorship â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Rules come from the proposed golden record's attributes if present,
         // otherwise a default empty rule set is used (latest-wins fallback in
         // the survivorship engine).
         let rules: Vec<SurvivorshipRule> = vec![];
         let golden = apply_survivorship(entities.clone(), rules);
 
-        // ── Atomic write with tenant RLS ────────────────────────────────────
+        // â”€â”€ Atomic write with tenant RLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         let factory = RequestContextFactory::new(self.pool.clone());
         let mut uow = factory
             .begin_uow(ctx.tenant_id, ctx.user_id, ctx.trace_id.clone())
@@ -113,7 +113,7 @@ impl MergeService {
                 .await?;
         }
 
-        // Link primary entity → golden record
+        // Link primary entity â†’ golden record
         self.entity_repository
             .set_golden_record_id(&mut uow.tx, tenant_id, primary.entity_id, golden.golden_record_id)
             .await?;
@@ -177,7 +177,7 @@ impl MergeService {
         // changed via survivorship. Re-queue an embedding task so the vector
         // index stays in sync.
         let embeddings_regenerated = if let Some(queue) = &self.task_queue {
-            let task = nexus_redis::queue::Task::new(
+            let task = azile_redis::queue::Task::new(
                 task_types::ENTITY_EMBED,
                 tenant_id.to_string(),
                 json!({

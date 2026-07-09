@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,16 +15,16 @@ void main() {
   // Use clean path-based URLs (no # hash) so deep links like /activate?token=xxx work.
   usePathUrlStrategy();
   runZonedGuarded(_main, (error, stack) {
-    debugPrint('NEXUS FATAL: $error\n$stack');
+    debugPrint('AZILE FATAL: $error\n$stack');
   });
 }
 
 Future<void> _main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  debugPrint('NEXUS: binding ready');
+  debugPrint('AZILE: binding ready');
 
   FlutterError.onError = (details) {
-    debugPrint('NEXUS FLUTTER ERROR: ${details.exceptionAsString()}');
+    debugPrint('AZILE FLUTTER ERROR: ${details.exceptionAsString()}');
     debugPrint(details.stack.toString());
   };
 
@@ -46,16 +46,16 @@ Future<void> _main() async {
   }
 
   // Initialize service locator
-  debugPrint('NEXUS: starting service locator');
+  debugPrint('AZILE: starting service locator');
   try {
     await setupServiceLocator()
         .timeout(const Duration(seconds: 10), onTimeout: () {
-      debugPrint('NEXUS WARNING: setupServiceLocator timed out after 10s');
+      debugPrint('AZILE WARNING: setupServiceLocator timed out after 10s');
     });
   } catch (e) {
-    debugPrint('NEXUS ERROR: setupServiceLocator failed: $e');
+    debugPrint('AZILE ERROR: setupServiceLocator failed: $e');
   }
-  debugPrint('NEXUS: service locator ready, calling runApp');
+  debugPrint('AZILE: service locator ready, calling runApp');
 
   // When a token refresh fails, clear auth and send the user back to login.
   AuthManager.onUnauthorized = () => AppRouter.router.go('/login');
@@ -74,18 +74,18 @@ Future<void> _main() async {
       client.setTenantId(tenantId);
     }
   } catch (e) {
-    debugPrint('NEXUS: could not pre-populate auth headers: $e');
+    debugPrint('AZILE: could not pre-populate auth headers: $e');
   }
 
   // Enable hot-reload restart of animations during development
   Animate.restartOnHotReload = true;
 
-  runApp(const NexusMdmApp());
-  debugPrint('NEXUS: runApp complete');
+  runApp(const AzileMdmApp());
+  debugPrint('AZILE: runApp complete');
 }
 
-class NexusMdmApp extends StatelessWidget {
-  const NexusMdmApp({super.key});
+class AzileMdmApp extends StatelessWidget {
+  const AzileMdmApp({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/auth/auth_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/constants/app_constants.dart';
-import '../../../../shared/widgets/nexus_logo.dart';
+import '../../../../shared/widgets/azile_logo.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -44,7 +44,7 @@ class _SplashPageState extends State<SplashPage>
     try {
       loggedIn = await AuthManager.isLoggedIn();
     } catch (e) {
-      debugPrint('NEXUS SPLASH ERROR: $e');
+      debugPrint('AZILE SPLASH ERROR: $e');
     }
 
     if (!mounted) return;
@@ -93,7 +93,7 @@ class _SplashPageState extends State<SplashPage>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Logo
-                const NexusLogo(
+                const AzileLogo(
                   size: 80,
                   shouldPulse: true,
                 )

@@ -1,11 +1,11 @@
-import 'package:equatable/equatable.dart';
+﻿import 'package:equatable/equatable.dart';
 
 enum UserRole {
-  productAdmin,  // Nexus platform staff — bypasses all license checks
-  admin,         // Tenant administrator — full access within tenant
-  businessAdmin, // Business administrator — org setup + data governance; no direct data entry
-  steward,       // Data steward — entity CRUD, merges, match approvals
-  analyst,       // Data analyst — match jobs and analytics
+  productAdmin,  // AZILE platform staff â€” bypasses all license checks
+  admin,         // Tenant administrator â€” full access within tenant
+  businessAdmin, // Business administrator â€” org setup + data governance; no direct data entry
+  steward,       // Data steward â€” entity CRUD, merges, match approvals
+  analyst,       // Data analyst â€” match jobs and analytics
   viewer,        // Read-only
 }
 
@@ -152,11 +152,11 @@ class User extends Equatable {
 
   static User get demo => User(
         id: 'demo-user-001',
-        email: 'admin@nexusmdm.io',
+        email: 'admin@azilemdm.io',
         name: 'Alex Chen',
         role: UserRole.admin,
         tenantId: 'tenant-001',
-        tenantName: 'Nexus Demo Org',
+        tenantName: 'Azile Demo Org',
         createdAt: DateTime(2024, 1, 15),
         lastLoginAt: DateTime.now().subtract(const Duration(hours: 2)),
       );

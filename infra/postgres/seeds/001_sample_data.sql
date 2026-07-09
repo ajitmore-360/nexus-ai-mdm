@@ -1,34 +1,34 @@
--- =============================================================================
--- Nexus AI MDM — Sample Data Seed  (v2)
+﻿-- =============================================================================
+-- Azile AI MDM â€” Sample Data Seed  (v2)
 --
 -- ALL demo data lives under the "Demo Org" tenant:
 --   tenant_id = 00000000-0000-0000-0000-000000000002
 --
 -- The System Tenant (00000000-0000-0000-0000-000000000001) is reserved for
--- platform infrastructure only — no business data belongs there.
+-- platform infrastructure only â€” no business data belongs there.
 --
 -- User accounts use core_mdm.identities + core_mdm.tenant_memberships
 -- (migration 002018).  core_mdm.users was dropped by that migration.
 --
 -- Run:
---   docker exec -i nexus-postgres psql -U postgres -d nexus_mdm < seed.sql
+--   docker exec -i azile-postgres psql -U postgres -d azile_mdm < seed.sql
 -- =============================================================================
 
 BEGIN;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- CONSTANTS
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 \set demo_tenant  '00000000-0000-0000-0000-000000000002'
 \set sys_tenant   '00000000-0000-0000-0000-000000000001'
 
--- ─────────────────────────────────────────────────────────────────────────────
--- CLEANUP — Remove any previous seed data that landed under the system tenant.
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- CLEANUP â€” Remove any previous seed data that landed under the system tenant.
 -- Entities, source systems, golden records, and match candidates that carry
 -- the system tenant UUID should not exist; they were erroneously seeded by v1.
 -- Cascade deletes handle child rows (attributes, embeddings, etc.).
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 DELETE FROM core_mdm.match_candidates  WHERE tenant_id = :'sys_tenant';
 DELETE FROM core_mdm.golden_records    WHERE tenant_id = :'sys_tenant';
@@ -45,9 +45,9 @@ DELETE FROM core_mdm.identities
         'analyst@nexus.ai','viewer@nexus.ai'
     );
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- DEMO TENANT
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.tenants
     (tenant_id, tenant_code, display_name, plan, status, created_at, updated_at)
@@ -57,13 +57,13 @@ ON CONFLICT (tenant_id) DO UPDATE
     SET display_name = EXCLUDED.display_name,
         updated_at   = NOW();
 
--- Enterprise license — unlocks all features for the demo tenant
+-- Enterprise license â€” unlocks all features for the demo tenant
 INSERT INTO core_mdm.tenant_licenses
     (tenant_id, tier, status, max_domains, max_records, max_stewards, features, notes)
 VALUES
     (:'demo_tenant', 'enterprise', 'active', -1, -1, -1,
      '{"analytics":true,"ai_copilot":true,"governance":true,"white_label":true,"data_quality":true,"distribution":true,"relationships":true,"domain_policies":true,"priority_support":true,"matching_semantic":true}',
-     'Demo tenant — enterprise tier, all features enabled')
+     'Demo tenant â€” enterprise tier, all features enabled')
 ON CONFLICT (tenant_id) DO UPDATE
     SET tier         = EXCLUDED.tier,
         max_domains  = EXCLUDED.max_domains,
@@ -72,8 +72,8 @@ ON CONFLICT (tenant_id) DO UPDATE
         features     = EXCLUDED.features,
         updated_at   = NOW();
 
--- ─────────────────────────────────────────────────────────────────────────────
--- IDENTITIES  (global — one row per person, no tenant_id)
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- IDENTITIES  (global â€” one row per person, no tenant_id)
 -- Passwords hashed with bcrypt cost 12 via pgcrypto.
 --
 --   admin@nexus.ai        /  Admin@123456   (admin)
@@ -81,7 +81,7 @@ ON CONFLICT (tenant_id) DO UPDATE
 --   steward@nexus.ai      /  Steward@123    (steward)
 --   analyst@nexus.ai      /  Analyst@123    (analyst)
 --   viewer@nexus.ai       /  Viewer@123     (viewer)
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.identities
     (identity_id, email, password_hash, display_name, is_verified, created_at)
@@ -109,9 +109,9 @@ ON CONFLICT (email) DO UPDATE
     SET display_name  = EXCLUDED.display_name,
         password_hash = EXCLUDED.password_hash;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- TENANT MEMBERSHIPS  (links identities to demo tenant with their roles)
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.tenant_memberships
     (identity_id, tenant_id, role, status, joined_at)
@@ -125,30 +125,30 @@ ON CONFLICT (identity_id, tenant_id) DO UPDATE
     SET role   = EXCLUDED.role,
         status = EXCLUDED.status;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- ENTITY TYPE CONFIGS  (codes must match entity_type field values used in UI)
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.entity_type_configs
     (tenant_id, code, name, seq_prefix, icon)
 VALUES
-    (:'demo_tenant', 'Customer',     'Customer',     'CUST', '👤'),
-    (:'demo_tenant', 'Vendor',       'Vendor',       'VND',  '🏭'),
-    (:'demo_tenant', 'Product',      'Product',      'PROD', '📦'),
-    (:'demo_tenant', 'Material',     'Material',     'MAT',  '🔩'),
-    (:'demo_tenant', 'Account',      'Account',      'ACC',  '🏢'),
-    (:'demo_tenant', 'Employee',     'Employee',     'EMP',  '👷'),
-    (:'demo_tenant', 'Location',     'Location',     'LOC',  '📍'),
-    (:'demo_tenant', 'Organization', 'Organization', 'ORG',  '🌐'),
-    (:'demo_tenant', 'Asset',        'Asset',        'AST',  '🏗️')
+    (:'demo_tenant', 'Customer',     'Customer',     'CUST', 'ðŸ‘¤'),
+    (:'demo_tenant', 'Vendor',       'Vendor',       'VND',  'ðŸ­'),
+    (:'demo_tenant', 'Product',      'Product',      'PROD', 'ðŸ“¦'),
+    (:'demo_tenant', 'Material',     'Material',     'MAT',  'ðŸ”©'),
+    (:'demo_tenant', 'Account',      'Account',      'ACC',  'ðŸ¢'),
+    (:'demo_tenant', 'Employee',     'Employee',     'EMP',  'ðŸ‘·'),
+    (:'demo_tenant', 'Location',     'Location',     'LOC',  'ðŸ“'),
+    (:'demo_tenant', 'Organization', 'Organization', 'ORG',  'ðŸŒ'),
+    (:'demo_tenant', 'Asset',        'Asset',        'AST',  'ðŸ—ï¸')
 ON CONFLICT (tenant_id, code) DO UPDATE
     SET name       = EXCLUDED.name,
         seq_prefix = EXCLUDED.seq_prefix,
         icon       = EXCLUDED.icon;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- SOURCE SYSTEMS
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.source_systems
     (source_id, tenant_id, name, system_type, trust_score, status)
@@ -160,9 +160,9 @@ VALUES
     ('20000000-0000-0000-0000-000000000005', :'demo_tenant', 'HubSpot',        'crm',  0.82, 'active')
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- CUSTOMERS (10 sample records)
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.entities
     (entity_id, tenant_id, entity_type, status, external_ids, metadata, trust_score, source_system, valid_from, valid_to, created_at, updated_at)
@@ -228,9 +228,9 @@ VALUES
      0.97, 'Salesforce CRM', NOW(), 'infinity', NOW(), NOW())
 ON CONFLICT (entity_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, status = EXCLUDED.status, metadata = EXCLUDED.metadata, updated_at = NOW();
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- ENTITY ATTRIBUTES
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.entity_attributes
     (attribute_id, tenant_id, entity_id, attribute_key, attribute_value, data_type, confidence, source_system)
@@ -269,9 +269,9 @@ FROM (
 ) AS t(entity_id, key, value, source_system)
 ON CONFLICT DO NOTHING;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- VENDORS (5 sample records)
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.entities
     (entity_id, tenant_id, entity_type, status, external_ids, metadata, trust_score, source_system, valid_from, valid_to, created_at, updated_at)
@@ -302,21 +302,21 @@ VALUES
      0.91, 'SAP ERP', NOW(), 'infinity', NOW(), NOW())
 ON CONFLICT (entity_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, status = EXCLUDED.status, metadata = EXCLUDED.metadata, updated_at = NOW();
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- PRODUCTS (5 sample records)
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.entities
     (entity_id, tenant_id, entity_type, status, external_ids, metadata, trust_score, source_system, valid_from, valid_to, created_at, updated_at)
 VALUES
     ('50000000-0000-0000-0000-000000000001', :'demo_tenant',
      'Product', 'Active', '{"sap_material":"MAT-10001"}',
-     '{"product_number":"PROD-000001","product_name":"Enterprise MDM Platform License","sku":"MDM-ENT-001","product_type":"Service","category":"Software","uom":"EA","unit_price":50000,"currency":"USD","description":"Annual enterprise license for Nexus AI MDM platform"}',
+     '{"product_number":"PROD-000001","product_name":"Enterprise MDM Platform License","sku":"MDM-ENT-001","product_type":"Service","category":"Software","uom":"EA","unit_price":50000,"currency":"USD","description":"Annual enterprise license for Azile AI MDM platform"}',
      0.98, 'SAP ERP', NOW(), 'infinity', NOW(), NOW()),
 
     ('50000000-0000-0000-0000-000000000002', :'demo_tenant',
      'Product', 'Active', '{"sap_material":"MAT-10002"}',
-     '{"product_number":"PROD-000002","product_name":"Professional Services — Implementation","sku":"PS-IMPL-001","product_type":"Service","category":"Consulting","uom":"HR","unit_price":250,"currency":"USD","description":"Data migration and implementation consulting hours"}',
+     '{"product_number":"PROD-000002","product_name":"Professional Services â€” Implementation","sku":"PS-IMPL-001","product_type":"Service","category":"Consulting","uom":"HR","unit_price":250,"currency":"USD","description":"Data migration and implementation consulting hours"}',
      0.95, 'SAP ERP', NOW(), 'infinity', NOW(), NOW()),
 
     ('50000000-0000-0000-0000-000000000003', :'demo_tenant',
@@ -335,9 +335,9 @@ VALUES
      0.96, 'SAP ERP', NOW(), 'infinity', NOW(), NOW())
 ON CONFLICT (entity_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, status = EXCLUDED.status, metadata = EXCLUDED.metadata, updated_at = NOW();
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- GOLDEN RECORDS (2 merged master records)
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.golden_records
     (golden_record_id, tenant_id, entity_type, status, lifecycle_stage, trust_score, quality_score, source_entities, metadata, valid_from, valid_to, created_at, updated_at)
@@ -361,9 +361,9 @@ WHERE entity_id = '30000000-0000-0000-0000-000000000001';
 UPDATE core_mdm.entities SET golden_record_id = '60000000-0000-0000-0000-000000000002'
 WHERE entity_id = '30000000-0000-0000-0000-000000000007';
 
--- ─────────────────────────────────────────────────────────────────────────────
--- MATCH CANDIDATES (review queue — 3 pairs for demo)
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+-- MATCH CANDIDATES (review queue â€” 3 pairs for demo)
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.match_candidates
     (match_candidate_id, tenant_id, request_id, source_entity_id, matched_entity_id,
@@ -375,7 +375,7 @@ VALUES
      '30000000-0000-0000-0000-000000000002',
      '30000000-0000-0000-0000-000000000004',
      'RequiresReview', 0.88, 0.85, FALSE, TRUE,
-     '["Phone area code matches (310/408 — both Bay Area)","Industry match: Technology","Similar company size","Email domain differs","Tax ID not available for candidate"]',
+     '["Phone area code matches (310/408 â€” both Bay Area)","Industry match: Technology","Similar company size","Email domain differs","Tax ID not available for candidate"]',
      NOW() - INTERVAL '2 hours', NOW()),
 
     (gen_random_uuid(), :'demo_tenant',
@@ -383,7 +383,7 @@ VALUES
      '30000000-0000-0000-0000-000000000001',
      '30000000-0000-0000-0000-000000000010',
      'RequiresReview', 0.94, 0.92, TRUE, TRUE,
-     '["Name similarity: Acme Corporation vs Nexus Demo Corporation (fuzzy 0.73)","Email domains differ","Both in Technology industry","Tax ID pattern similar","AI: likely different entities — Nexus Demo Corp is a test record"]',
+     '["Name similarity: Acme Corporation vs Nexus Demo Corporation (fuzzy 0.73)","Email domains differ","Both in Technology industry","Tax ID pattern similar","AI: likely different entities â€” Nexus Demo Corp is a test record"]',
      NOW() - INTERVAL '30 minutes', NOW()),
 
     (gen_random_uuid(), :'demo_tenant',
@@ -395,9 +395,9 @@ VALUES
      NOW() - INTERVAL '4 hours', NOW())
 ON CONFLICT DO NOTHING;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- ENTITY SEQUENCES (initialise counters for demo tenant)
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.entity_sequences
     (tenant_id, entity_type, current_value)
@@ -409,9 +409,9 @@ ON CONFLICT (tenant_id, entity_type)
 DO UPDATE SET current_value = GREATEST(core_mdm.entity_sequences.current_value, EXCLUDED.current_value),
               updated_at    = NOW();
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- RAG KNOWLEDGE BASE (AI Copilot)
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO ai.rag_documents
     (doc_id, tenant_id, doc_type, title, content, created_at, updated_at)
@@ -429,11 +429,11 @@ VALUES
      NOW(), NOW()),
 
     (gen_random_uuid(), :'demo_tenant', 'policy', 'Data Quality Thresholds',
-     'Nexus AI MDM enforces minimum quality standards: Customer entities require email OR phone to be present. Tax ID must follow format XX-XXXXXXX for US entities. Vendor records require at least one contact method and a valid payment terms value. Entities with a trust score below 0.60 are flagged for data steward review.',
+     'Azile AI MDM enforces minimum quality standards: Customer entities require email OR phone to be present. Tax ID must follow format XX-XXXXXXX for US entities. Vendor records require at least one contact method and a valid payment terms value. Entities with a trust score below 0.60 are flagged for data steward review.',
      NOW(), NOW()),
 
     (gen_random_uuid(), :'demo_tenant', 'policy', 'Customer Data Standards',
-     'Customer entities in Nexus MDM include these standard attributes: legal_name (required), email (required), phone, mobile, website, tax_id, country, billing_address, shipping_address, credit_limit, payment_terms (Net30/Net60/Net90), currency, industry, annual_revenue, employee_count, customer_type (Individual/Corporation/Government).',
+     'Customer entities in Azile MDM include these standard attributes: legal_name (required), email (required), phone, mobile, website, tax_id, country, billing_address, shipping_address, credit_limit, payment_terms (Net30/Net60/Net90), currency, industry, annual_revenue, employee_count, customer_type (Individual/Corporation/Government).',
      NOW(), NOW())
 ON CONFLICT DO NOTHING;
 

@@ -1,4 +1,4 @@
-mod anomaly;
+﻿mod anomaly;
 #[cfg(test)]
 mod tests;
 mod config;
@@ -29,7 +29,7 @@ use embeddings::{encoder::entity_to_text, Encoder};
 use feedback::FeedbackProcessor;
 use llm::OllamaClient;
 use matching::SemanticMatcher;
-use nexus_redis::{
+use azile_redis::{
     create_pool as create_redis_pool,
     queue::{task_types, TaskQueue},
     EntityCache, RedisConfig,
@@ -47,8 +47,8 @@ async fn main() {
     dotenvy::dotenv().ok();
 
     // ---- Tracing + Metrics -------------------------------------------------
-    nexus_telemetry::tracing_init::init_tracing("ai-service");
-    nexus_telemetry::metrics::init_metrics("ai-service");
+    azile_telemetry::tracing_init::init_tracing("ai-service");
+    azile_telemetry::metrics::init_metrics("ai-service");
 
     let settings = Settings::from_env().unwrap_or_else(|e| {
         eprintln!("[FATAL] Configuration error: {e}");
@@ -80,10 +80,10 @@ async fn main() {
         settings.llm_timeout(),
     ));
 
-    // Verify Ollama is reachable (warn but continue if not — service degrades gracefully)
+    // Verify Ollama is reachable (warn but continue if not â€” service degrades gracefully)
     match llm.health_check().await {
         Ok(true)  => tracing::info!("Ollama connected at {}", settings.ollama_url),
-        Ok(false) => tracing::warn!("Ollama not reachable at {} — AI features degraded", settings.ollama_url),
+        Ok(false) => tracing::warn!("Ollama not reachable at {} â€” AI features degraded", settings.ollama_url),
         Err(e)    => tracing::warn!(error=%e, "Ollama health check failed"),
     }
 
@@ -178,7 +178,7 @@ async fn main() {
                         }
                     }
                     Ok(None) => {
-                        // Queue empty — poll again after a short back-off.
+                        // Queue empty â€” poll again after a short back-off.
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
                     Err(e) => {
@@ -234,7 +234,7 @@ async fn main() {
         // Public
         .route("/health",          get(health))
         .route("/metrics",         get(|| async {
-            nexus_telemetry::metrics::render_metrics()
+            azile_telemetry::metrics::render_metrics()
                 .unwrap_or_else(|e| format!("# metrics error: {}", e))
         }))
         // MCP copilot
@@ -252,7 +252,7 @@ async fn main() {
         .route("/weights/recommend",     get(recommend_weights))
         // Anomaly detection
         .route("/anomalies",             get(scan_anomalies))
-        // Internal — mdm-core calls this on the Docker-internal network (no JWT required)
+        // Internal â€” mdm-core calls this on the Docker-internal network (no JWT required)
         .route("/internal/suggest",      post(internal_suggest))
         .layer(TraceLayer::new_for_http())
         .layer(cors)

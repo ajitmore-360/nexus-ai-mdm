@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -12,11 +12,11 @@ import '../../../../core/theme/app_animations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/license_gate.dart';
-import '../../../../shared/widgets/nexus_dialog.dart';
+import '../../../../shared/widgets/azile_dialog.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Domain models
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 enum _RuleSeverity { critical, high, medium, low }
 
@@ -134,9 +134,9 @@ class _Violation {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Visual builder domain models
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 enum _VisualBlockType { fieldCheck, formatCheck, rangeCheck, logicAnd, logicOr }
 
@@ -180,9 +180,9 @@ class _VisualBlock {
   _VisualBlock({required this.id, required this.type});
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Page
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class DataQualityPage extends StatefulWidget {
   const DataQualityPage({super.key});
@@ -211,7 +211,7 @@ class _DataQualityPageState extends State<DataQualityPage>
   // Violations
   List<_Violation> _violations = [];
 
-  // Quality dimensions — loaded from API, fall back to defaults
+  // Quality dimensions â€” loaded from API, fall back to defaults
   List<(String, double, Color)> _dimensions = [
     ('Completeness', 0.82, const Color(0xFF00C896)),
     ('Accuracy',     0.77, const Color(0xFF3B82F6)),
@@ -299,7 +299,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     } catch (_) { return 'recently'; }
   }
 
-  // ── Condition ↔ API string mapping ────────────────────────────────────────
+  // â”€â”€ Condition â†” API string mapping â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static String _opToString(_ConditionOperator op) {
     switch (op) {
@@ -402,7 +402,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     }
     return _Violation(
       id:         (m['id']          as String?) ?? '',
-      entityId:   (m['entity_id']   as String?) ?? '—',
+      entityId:   (m['entity_id']   as String?) ?? 'â€”',
       entityType: (m['entity_type'] as String?) ?? 'All',
       ruleName:   ruleName,
       severity:   sev,
@@ -413,7 +413,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     );
   }
 
-  // ── API actions ───────────────────────────────────────────────────────────
+  // â”€â”€ API actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<Options?> _authOpts() async {
     final tenantId = await AuthManager.getTenantId() ?? '';
@@ -528,12 +528,12 @@ class _DataQualityPageState extends State<DataQualityPage>
     super.dispose();
   }
 
-  // ── Scores ────────────────────────────────────────────────────────────────
+  // â”€â”€ Scores â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   double get _overallScore =>
       _dimensions.fold(0.0, (s, d) => s + d.$2) / _dimensions.length;
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  // â”€â”€ Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   @override
   Widget build(BuildContext context) {
@@ -543,7 +543,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     );
   }
 
-  // ── Main dashboard ─────────────────────────────────────────────────────────
+  // â”€â”€ Main dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildMain() {
     return Scaffold(
@@ -601,7 +601,7 @@ class _DataQualityPageState extends State<DataQualityPage>
             children: [
               Text('Data Quality Engine', style: AppTextStyles.titleMedium),
               Text(
-                '$activeRules active rules  ·  $openViolations open violations  ·  '
+                '$activeRules active rules  Â·  $openViolations open violations  Â·  '
                 'Overall ${(_overallScore * 100).round()}%',
                 style: AppTextStyles.bodySmall,
               ),
@@ -660,7 +660,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     );
   }
 
-  // ── Overview tab ──────────────────────────────────────────────────────────
+  // â”€â”€ Overview tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildOverviewTab() {
     return SingleChildScrollView(
@@ -833,7 +833,7 @@ class _DataQualityPageState extends State<DataQualityPage>
         const SizedBox(width: 12),
         _summaryCard(
           'Most Triggered Rule',
-          topRule?.name ?? '—',
+          topRule?.name ?? 'â€”',
           Icons.warning_amber_rounded,
           AppColors.warning,
           topRule != null ? '${topRule.violations} violations' : '',
@@ -903,7 +903,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     );
   }
 
-  // ── Rule builder tab ──────────────────────────────────────────────────────
+  // â”€â”€ Rule builder tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildRuleBuilderTab() {
     return Column(
@@ -1001,7 +1001,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     );
   }
 
-  // ── Visual drag-and-drop builder ─────────────────────────────────────────
+  // â”€â”€ Visual drag-and-drop builder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildVisualBuilder() {
     return Row(
@@ -1025,7 +1025,7 @@ class _DataQualityPageState extends State<DataQualityPage>
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text('Drag to canvas →',
+                child: Text('Drag to canvas â†’',
                     style: AppTextStyles.bodySmall
                         .copyWith(color: AppColors.mutedText)),
               ),
@@ -1264,7 +1264,7 @@ class _DataQualityPageState extends State<DataQualityPage>
           const Icon(Icons.check_circle_outline_rounded,
               color: AppColors.primary, size: 18),
           const SizedBox(width: 10),
-          Text('Rule created — edit it in Manual Builder to refine.',
+          Text('Rule created â€” edit it in Manual Builder to refine.',
               style: AppTextStyles.bodyMedium),
         ]),
         backgroundColor: AppColors.cardSurface,
@@ -1274,7 +1274,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     );
   }
 
-  // ── Manual drag-and-drop builder ──────────────────────────────────────────
+  // â”€â”€ Manual drag-and-drop builder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildManualBuilder() {
     return _rules.isEmpty
@@ -1460,7 +1460,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     );
   }
 
-  // ── AI rule builder ───────────────────────────────────────────────────────
+  // â”€â”€ AI rule builder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildAiBuilder() {
     return SingleChildScrollView(
@@ -1546,7 +1546,7 @@ class _DataQualityPageState extends State<DataQualityPage>
                                 strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.send_rounded, size: 16),
                     label:
-                        Text(_aiGenerating ? 'Generating…' : 'Generate Rule'),
+                        Text(_aiGenerating ? 'Generatingâ€¦' : 'Generate Rule'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.auroraPurple,
                       foregroundColor: Colors.white,
@@ -1642,12 +1642,12 @@ class _DataQualityPageState extends State<DataQualityPage>
       _aiGenerating = true;
       _aiPreview = null;
     });
-    // Parse structure locally — always succeeds
+    // Parse structure locally â€” always succeeds
     final generated = _parseAiRule(prompt);
     try {
       final client = ApiClient();
       final resp = await client.post<Map<String, dynamic>>(
-        '/v1/copilot',
+        '/v1/prism',
         data: {
           'message': 'Generate a concise data quality rule name (max 5 words) '
               'for this requirement: "$prompt". '
@@ -1735,7 +1735,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     }
 
     final id = 'ai_${DateTime.now().millisecondsSinceEpoch}';
-    final name = prompt.length > 48 ? '${prompt.substring(0, 45)}…' : prompt;
+    final name = prompt.length > 48 ? '${prompt.substring(0, 45)}â€¦' : prompt;
 
     return _QualityRule(
       id: id,
@@ -1750,7 +1750,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     );
   }
 
-  // ── Violations tab ────────────────────────────────────────────────────────
+  // â”€â”€ Violations tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildViolationsTab() {
     final open = _violations.where((v) => !v.resolved).toList();
@@ -1848,13 +1848,13 @@ class _DataQualityPageState extends State<DataQualityPage>
                           style: const TextStyle(
                               fontWeight: FontWeight.w600,
                               color: AppColors.secondaryText)),
-                      const TextSpan(text: '·  field: '),
+                      const TextSpan(text: 'Â·  field: '),
                       TextSpan(
                           text: v.field,
                           style: const TextStyle(
                               fontFamily: 'monospace',
                               color: AppColors.aiPurple)),
-                      TextSpan(text: '  —  ${v.message}'),
+                      TextSpan(text: '  â€”  ${v.message}'),
                     ],
                   ),
                 ),
@@ -1883,7 +1883,7 @@ class _DataQualityPageState extends State<DataQualityPage>
     ).animate(delay: AppAnimations.stagger(index)).fadeIn().slideX(begin: 0.02, end: 0);
   }
 
-  // ── Dialogs ───────────────────────────────────────────────────────────────
+  // â”€â”€ Dialogs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _showNewRuleDialog() => _showRuleDialog(null);
 
@@ -1902,10 +1902,10 @@ class _DataQualityPageState extends State<DataQualityPage>
           severity: _RuleSeverity.medium,
         );
 
-    showNexusDialog<void>(
+    showAzileDialog<void>(
       context: context,
       child: StatefulBuilder(
-        builder: (ctx, setDs) => NexusDialog(
+        builder: (ctx, setDs) => AzileDialog(
           title: isEdit ? 'Edit Rule' : 'New Quality Rule',
           titleIcon: Container(
             width: 28,
@@ -1959,7 +1959,7 @@ class _DataQualityPageState extends State<DataQualityPage>
           const Icon(Icons.play_arrow_rounded, color: AppColors.primary, size: 18),
           const SizedBox(width: 10),
           Text(
-              'Running ${_rules.where((r) => r.isActive).length} rules against all entities…',
+              'Running ${_rules.where((r) => r.isActive).length} rules against all entitiesâ€¦',
               style: AppTextStyles.bodyMedium),
         ]),
         backgroundColor: AppColors.cardSurface,
@@ -1978,9 +1978,9 @@ class _DataQualityPageState extends State<DataQualityPage>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Rule editor widget (used inside dialog)
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _RuleEditor extends StatefulWidget {
   final _QualityRule rule;
@@ -2228,8 +2228,8 @@ class _RuleEditorState extends State<_RuleEditor> {
                 ..selection = TextSelection.collapsed(offset: cond.value.length),
               onChanged: (v) => setState(() => cond.value = v),
               decoration: _deco(cond.operator == _ConditionOperator.postalFormatValid
-                  ? 'country code (GB, US…)'
-                  : 'value or regex…'),
+                  ? 'country code (GB, USâ€¦)'
+                  : 'value or regexâ€¦'),
               style: AppTextStyles.inputText
                   .copyWith(fontSize: 12, fontFamily: 'monospace'),
             ),
@@ -2265,9 +2265,9 @@ class _RuleEditorState extends State<_RuleEditor> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Canvas block tile (visual builder — manages its own TextEditingControllers)
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Canvas block tile (visual builder â€” manages its own TextEditingControllers)
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _CanvasBlockTile extends StatefulWidget {
   final _VisualBlock block;
@@ -2355,7 +2355,7 @@ class _CanvasBlockTileState extends State<_CanvasBlockTile> {
               tooltip: 'Remove block',
             ),
           ]),
-          // Logic blocks have no fields — just a label
+          // Logic blocks have no fields â€” just a label
           if (!type.isLogic) ...[
             const SizedBox(height: 10),
             Row(children: [
@@ -2400,9 +2400,9 @@ class _CanvasBlockTileState extends State<_CanvasBlockTile> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Gauge painter
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _GaugePainter extends CustomPainter {
   final double value;

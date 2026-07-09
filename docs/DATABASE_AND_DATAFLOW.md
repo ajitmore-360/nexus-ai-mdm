@@ -1,7 +1,7 @@
-# Nexus AI MDM — Database Architecture & Data Flow Reference
+﻿# Azile AI MDM â€” Database Architecture & Data Flow Reference
 
 **Version:** 1.0  
-**Platform:** Nexus AI MDM  
+**Platform:** Azile AI MDM  
 **Database:** PostgreSQL 16 with pgvector, pg_trgm, citext extensions  
 **Audience:** Architects, Backend Engineers, DBAs, Integration Teams
 
@@ -43,30 +43,30 @@
 ### Deployment Model
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                        APPLICATION TIER                              │
-│                                                                      │
-│  api-gateway → mdm-core → {ai, ingest, policy, search, ...}        │
-│                    │                                                 │
-│                    │  RequestContextFactory                          │
-│                    │  (sets app.current_tenant per transaction)     │
-└────────────────────┼─────────────────────────────────────────────────┘
-                     │
-┌────────────────────▼─────────────────────────────────────────────────┐
-│                        DATA TIER                                     │
-│                                                                      │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │                  PostgreSQL 16 (nexus_mdm)                     │ │
-│  │                                                                │ │
-│  │  core_mdm  │ event_store │ ai │ governance │ platform │ audit │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-│                          │                                           │
-│  ┌────────────┐  ┌───────▼───────┐  ┌──────────────────────────┐   │
-│  │ Redis 7    │  │ Outbox Poller │  │  Kafka (event streaming)  │   │
-│  │ (cache)    │  │ kafka-event-  │  │  mdm.entity.events        │   │
-│  │            │  │ service       │  │  mdm.golden.events        │   │
-│  └────────────┘  └───────────────┘  └──────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                        APPLICATION TIER                              â”‚
+â”‚                                                                      â”‚
+â”‚  api-gateway â†’ mdm-core â†’ {ai, ingest, policy, search, ...}        â”‚
+â”‚                    â”‚                                                 â”‚
+â”‚                    â”‚  RequestContextFactory                          â”‚
+â”‚                    â”‚  (sets app.current_tenant per transaction)     â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                     â”‚
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                        DATA TIER                                     â”‚
+â”‚                                                                      â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” â”‚
+â”‚  â”‚                  PostgreSQL 16 (azile_mdm)                     â”‚ â”‚
+â”‚  â”‚                                                                â”‚ â”‚
+â”‚  â”‚  core_mdm  â”‚ event_store â”‚ ai â”‚ governance â”‚ platform â”‚ audit â”‚ â”‚
+â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜ â”‚
+â”‚                          â”‚                                           â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
+â”‚  â”‚ Redis 7    â”‚  â”‚ Outbox Poller â”‚  â”‚  Kafka (event streaming)  â”‚   â”‚
+â”‚  â”‚ (cache)    â”‚  â”‚ kafka-event-  â”‚  â”‚  mdm.entity.events        â”‚   â”‚
+â”‚  â”‚            â”‚  â”‚ service       â”‚  â”‚  mdm.golden.events        â”‚   â”‚
+â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### Design Principles
@@ -76,9 +76,9 @@
 | **Multi-tenancy by design** | Every table has `tenant_id UUID NOT NULL`; Row-Level Security enforced via PostgreSQL session variables |
 | **Event sourcing** | All entity mutations emit events to `event_store.outbox_events` in the same ACID transaction |
 | **Bitemporal data** | `valid_from / valid_to` (business time) + `recorded_at` (system time) on entities |
-| **Soft deletes** | Status = `SoftDeleted` + `valid_to = now()` — records never destroyed (audit compliance) |
+| **Soft deletes** | Status = `SoftDeleted` + `valid_to = now()` â€” records never destroyed (audit compliance) |
 | **Immutable audit** | `audit` schema receives INSERT-only records; no UPDATE or DELETE permitted |
-| **Schema isolation** | 7 schemas by concern — each with independent RBAC grants |
+| **Schema isolation** | 7 schemas by concern â€” each with independent RBAC grants |
 
 ---
 
@@ -87,40 +87,40 @@
 PostgreSQL uses **schema namespacing** to isolate concerns. Each schema has a dedicated security role with minimum required privileges.
 
 ```
-nexus_mdm (database)
-│
-├── core_mdm          ← Primary MDM data (entities, golden records, matching)
-├── event_store       ← Transactional outbox + dead-letter queue
-├── ai                ← Embeddings, RAG knowledge base, steward feedback
-├── governance        ← OPA policy rules, compliance tracking
-├── platform          ← Licenses, notifications, distribution, sequences
-├── audit             ← Immutable audit trail, GDPR request log
-└── lineage           ← Entity data lineage tracking (future)
+azile_mdm (database)
+â”‚
+â”œâ”€â”€ core_mdm          â† Primary MDM data (entities, golden records, matching)
+â”œâ”€â”€ event_store       â† Transactional outbox + dead-letter queue
+â”œâ”€â”€ ai                â† Embeddings, RAG knowledge base, steward feedback
+â”œâ”€â”€ governance        â† OPA policy rules, compliance tracking
+â”œâ”€â”€ platform          â† Licenses, notifications, distribution, sequences
+â”œâ”€â”€ audit             â† Immutable audit trail, GDPR request log
+â””â”€â”€ lineage           â† Entity data lineage tracking (future)
 ```
 
 ### Schema Access Matrix
 
-| Schema | `nexus_app` (runtime) | `nexus_readonly` (BI) | `nexus_migration` (DDL) |
+| Schema | `azile_app` (runtime) | `azile_readonly` (BI) | `azile_migration` (DDL) |
 |--------|----------------------|----------------------|------------------------|
 | core_mdm | SELECT, INSERT, UPDATE, DELETE | SELECT | ALL |
-| event_store | SELECT, INSERT, UPDATE | — | ALL |
-| ai | SELECT, INSERT, UPDATE, DELETE | — | ALL |
-| governance | SELECT, INSERT, UPDATE, DELETE | — | ALL |
+| event_store | SELECT, INSERT, UPDATE | â€” | ALL |
+| ai | SELECT, INSERT, UPDATE, DELETE | â€” | ALL |
+| governance | SELECT, INSERT, UPDATE, DELETE | â€” | ALL |
 | platform | SELECT, INSERT, UPDATE, DELETE | SELECT | ALL |
 | audit | SELECT, INSERT | SELECT | ALL |
 
 ### Role Security Settings
 
 ```sql
--- nexus_app: runtime application role
+-- azile_app: runtime application role
 SET row_security = on;                           -- RLS enforced on every query
 SET default_transaction_isolation = 'read committed';
 SET idle_in_transaction_session_timeout = '5min';
 
--- nexus_readonly: analytics/BI role  
+-- azile_readonly: analytics/BI role  
 SET default_transaction_read_only = on;          -- Cannot accidentally write
 
--- nexus_migration: DDL management
+-- azile_migration: DDL management
 SET lock_timeout = '30s';
 SET statement_timeout = '30min';
 ```
@@ -133,80 +133,80 @@ SET statement_timeout = '30min';
 
 ```
 core_mdm.tenants (1)
-    │
-    ├── core_mdm.users (N)           ← Users belonging to the tenant
-    ├── core_mdm.source_systems (N)  ← Connected source systems
-    ├── core_mdm.entity_sequences    ← Number generators (CUST-000001)
-    ├── core_mdm.attribute_schemas   ← Field definitions per entity type
-    │
-    └── core_mdm.entities (N)        ← THE CORE RECORD
-            │
-            ├── core_mdm.entity_attributes (N)   ← Key-value attribute store
-            │
-            ├── core_mdm.match_candidates (N)    ← Duplicate candidates found
-            │       └── core_mdm.field_match_results (N)
-            │
-            └── core_mdm.golden_records (1:N)    ← Master/golden record
-                    └── core_mdm.golden_attributes (N)
+    â”‚
+    â”œâ”€â”€ core_mdm.users (N)           â† Users belonging to the tenant
+    â”œâ”€â”€ core_mdm.source_systems (N)  â† Connected source systems
+    â”œâ”€â”€ core_mdm.entity_sequences    â† Number generators (CUST-000001)
+    â”œâ”€â”€ core_mdm.attribute_schemas   â† Field definitions per entity type
+    â”‚
+    â””â”€â”€ core_mdm.entities (N)        â† THE CORE RECORD
+            â”‚
+            â”œâ”€â”€ core_mdm.entity_attributes (N)   â† Key-value attribute store
+            â”‚
+            â”œâ”€â”€ core_mdm.match_candidates (N)    â† Duplicate candidates found
+            â”‚       â””â”€â”€ core_mdm.field_match_results (N)
+            â”‚
+            â””â”€â”€ core_mdm.golden_records (1:N)    â† Master/golden record
+                    â””â”€â”€ core_mdm.golden_attributes (N)
 
-event_store.outbox_events  ← Every mutation emits here (same transaction)
-event_store.outbox_dlq     ← Failed events after 3 retries
+event_store.outbox_events  â† Every mutation emits here (same transaction)
+event_store.outbox_dlq     â† Failed events after 3 retries
 
-ai.entity_embeddings       ← pgvector semantic vectors
-ai.rag_documents           ← RAG knowledge base
-ai.steward_feedback        ← Human review decisions (training data)
+ai.entity_embeddings       â† pgvector semantic vectors
+ai.rag_documents           â† RAG knowledge base
+ai.steward_feedback        â† Human review decisions (training data)
 
-governance.policy_rules    ← OPA Rego policies per tenant
-platform.licenses          ← JWT-signed license tokens
-platform.distribution_*    ← Downstream push connectors
+governance.policy_rules    â† OPA Rego policies per tenant
+platform.licenses          â† JWT-signed license tokens
+platform.distribution_*    â† Downstream push connectors
 ```
 
 ### Entity Lifecycle State Machine
 
 ```
-                    ┌─────────────────────────────────────────┐
-                    │                                         │
-          ┌─────────▼──────────┐                             │
-          │      DRAFT         │  ← Created but not active   │
-          └─────────┬──────────┘                             │
-                    │ activate                               │
-          ┌─────────▼──────────┐                             │
-          │      ACTIVE        │ ◄─────────────────────────── ┤
-          └──┬──────┬────┬─────┘                             │
-             │      │    │ flag issue                        │
-             │      │    ▼                                   │
-             │      │  UNDER_INVESTIGATION ──────────────────┤
-             │      │                                        │
-             │      │ merge trigger                          │
-             │      ▼                                        │
-             │   PENDING_REVIEW ──► MERGED ─────────────────┤
-             │                         (source entity)      │
-             │                                              │
-             │ deactivate                                    │
-             ▼                                              │
-          INACTIVE ──────────────────────────────────────────┤
-             │                                              │
-             │ retire                                        │
-             ▼                                              │
-          ARCHIVED ──────────────────────────────────────────┤
-             │                                              │
-             │ GDPR erasure                                  │
-             ▼                                              │
-          SOFT_DELETED ◄────────────────────────────────────┘
+                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                    â”‚                                         â”‚
+          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                             â”‚
+          â”‚      DRAFT         â”‚  â† Created but not active   â”‚
+          â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜                             â”‚
+                    â”‚ activate                               â”‚
+          â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                             â”‚
+          â”‚      ACTIVE        â”‚ â—„â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ â”¤
+          â””â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”˜                             â”‚
+             â”‚      â”‚    â”‚ flag issue                        â”‚
+             â”‚      â”‚    â–¼                                   â”‚
+             â”‚      â”‚  UNDER_INVESTIGATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+             â”‚      â”‚                                        â”‚
+             â”‚      â”‚ merge trigger                          â”‚
+             â”‚      â–¼                                        â”‚
+             â”‚   PENDING_REVIEW â”€â”€â–º MERGED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+             â”‚                         (source entity)      â”‚
+             â”‚                                              â”‚
+             â”‚ deactivate                                    â”‚
+             â–¼                                              â”‚
+          INACTIVE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+             â”‚                                              â”‚
+             â”‚ retire                                        â”‚
+             â–¼                                              â”‚
+          ARCHIVED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+             â”‚                                              â”‚
+             â”‚ GDPR erasure                                  â”‚
+             â–¼                                              â”‚
+          SOFT_DELETED â—„â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### Golden Record Lifecycle
 
 ```
 Entities merged
-    │
-    ▼
-  CREATED ──► MATCHED ──► SURVIVORSHIP_APPLIED ──► AI_VALIDATED
-                                                          │
-                              ◄──────────────────────────┤
-                              │
-                         HUMAN_REVIEWED ──► APPROVED ──► PUBLISHED
-                                                               │
+    â”‚
+    â–¼
+  CREATED â”€â”€â–º MATCHED â”€â”€â–º SURVIVORSHIP_APPLIED â”€â”€â–º AI_VALIDATED
+                                                          â”‚
+                              â—„â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+                              â”‚
+                         HUMAN_REVIEWED â”€â”€â–º APPROVED â”€â”€â–º PUBLISHED
+                                                               â”‚
                                                           ARCHIVED
 ```
 
@@ -232,7 +232,7 @@ The root of the multi-tenant hierarchy. Every other table references `tenant_id`
 
 ### 4.2 core_mdm.entities
 
-The central record store. Every master data object (Customer, Vendor, Product, etc.) lives here. The schema is intentionally flat — **attributes are stored in a separate table** for flexibility.
+The central record store. Every master data object (Customer, Vendor, Product, etc.) lives here. The schema is intentionally flat â€” **attributes are stored in a separate table** for flexibility.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -243,7 +243,7 @@ The central record store. Every master data object (Customer, Vendor, Product, e
 | external_ids | JSONB | `{"salesforce": "SF-001", "sap": "K-9021"}` |
 | tags | TEXT[] | Free-form classification tags |
 | metadata | JSONB | Flexible catch-all for source-system data |
-| trust_score | FLOAT4 | 0.0–1.0 data quality confidence |
+| trust_score | FLOAT4 | 0.0â€“1.0 data quality confidence |
 | source_system | TEXT | Which system originally created this |
 | golden_record_id | UUID | FK to golden record (if merged) |
 | semantic_identity | TEXT | Human-readable summary for RAG |
@@ -276,7 +276,7 @@ Stores all attribute values in a normalised EAV (Entity-Attribute-Value) table. 
 |--------|------|-------------|
 | attribute_id | UUID PK | |
 | tenant_id | UUID | |
-| entity_id | UUID FK | → entities |
+| entity_id | UUID FK | â†’ entities |
 | attribute_key | TEXT | Machine name: `legal_name`, `email` |
 | attribute_value | JSONB | Value (supports string, number, array, object) |
 | data_type | TEXT | `string\|number\|date\|boolean\|address` |
@@ -303,7 +303,7 @@ The output of the merge + survivorship process. One golden record represents the
 | tenant_id | UUID | |
 | entity_type | TEXT | Inherited from merged entities |
 | status | TEXT | `Active\|Pending\|Archived` |
-| lifecycle_stage | TEXT | `Created→Matched→SurvivorshipApplied→AIValidated→HumanReviewed→Approved→Published→Archived` |
+| lifecycle_stage | TEXT | `Createdâ†’Matchedâ†’SurvivorshipAppliedâ†’AIValidatedâ†’HumanReviewedâ†’Approvedâ†’Publishedâ†’Archived` |
 | trust_score | FLOAT4 | Aggregate quality score |
 | quality_score | FLOAT4 | Data completeness metric |
 | source_entities | UUID[] | Array of contributing entity IDs |
@@ -322,12 +322,12 @@ Records the output of the matching pipeline. Stores which entity pairs were iden
 | source_entity_id | UUID | The entity being evaluated |
 | matched_entity_id | UUID | The potential duplicate found |
 | match_status | TEXT | `Pending\|Matched\|RequiresReview\|Rejected\|AutoMerged` |
-| match_score | FLOAT4 | Overall similarity score (0.0–1.0) |
+| match_score | FLOAT4 | Overall similarity score (0.0â€“1.0) |
 | confidence_score | FLOAT4 | Confidence in the score |
 | vector_similarity | FLOAT4 | pgvector cosine similarity |
 | ai_score | FLOAT4 | LLM semantic similarity (when used) |
-| recommended_for_merge | BOOLEAN | True if score ≥ auto_merge_threshold (0.95) |
-| requires_human_review | BOOLEAN | True if 0.75 ≤ score < 0.95 |
+| recommended_for_merge | BOOLEAN | True if score â‰¥ auto_merge_threshold (0.95) |
+| requires_human_review | BOOLEAN | True if 0.75 â‰¤ score < 0.95 |
 | explanations | JSONB | Human-readable match reasons |
 | policy_decisions | JSONB | OPA policy evaluation results |
 
@@ -345,15 +345,15 @@ Defines the standard and custom attribute templates per entity type. Drives the 
 | group_name | TEXT | UI group: `Identity\|Contact\|Financial` |
 | data_type | TEXT | `string\|number\|date\|boolean\|enum\|address\|phone\|email\|url` |
 | is_required | BOOLEAN | Form validation |
-| is_pii | BOOLEAN | GDPR flag — triggers masking/erasure |
+| is_pii | BOOLEAN | GDPR flag â€” triggers masking/erasure |
 | is_system | BOOLEAN | Cannot be deleted (business number field) |
 | enum_values | JSONB | `["Active","Inactive","Prospect"]` |
 | validation | JSONB | `{"maxLength":200,"regex":"^[A-Z]"}` |
 | display_order | INT | Ordering within group |
 
 **Standard attributes seeded for Customer (20 fields across 5 groups):**
-- `Identity`: customer_number (auto), legal_name✦, trade_name, customer_type, status
-- `Contact`: email✦, phone, mobile, website, fax
+- `Identity`: customer_number (auto), legal_nameâœ¦, trade_name, customer_type, status
+- `Contact`: emailâœ¦, phone, mobile, website, fax
 - `Address`: billing_address, shipping_address, country
 - `Financial`: tax_id, vat_number, credit_limit, payment_terms, currency
 - `Business`: industry, annual_revenue, employee_count, account_manager
@@ -368,7 +368,7 @@ Powers the auto-numbering system (CUST-000001, VEND-000001, etc.).
 | entity_type | TEXT PK (composite) | `Customer\|Vendor\|...` |
 | prefix | TEXT | `CUST` (configurable) |
 | separator | TEXT | `-` (configurable: `-_` or empty) |
-| min_digits | INT | `6` → `000001` (configurable 4–12) |
+| min_digits | INT | `6` â†’ `000001` (configurable 4â€“12) |
 | current_value | BIGINT | Atomically incremented |
 | step | INT | Usually 1 (configurable for gap-compatibility) |
 | reset_yearly | BOOLEAN | Reset to 1 each January 1 |
@@ -404,7 +404,7 @@ Stores pgvector embeddings (768-dimension from `nomic-embed-text`) for each enti
 |--------|------|-------------|
 | embedding_id | UUID PK | |
 | tenant_id | UUID | |
-| entity_id | UUID | FK → entities |
+| entity_id | UUID | FK â†’ entities |
 | embedding_model | TEXT | `nomic-embed-text` |
 | embedding | VECTOR(768) | pgvector column |
 | generated_at | TIMESTAMPTZ | |
@@ -435,7 +435,7 @@ Records human steward decisions (approve/reject match) as labelled training data
 
 ### 4.12 platform.licenses
 
-JWT-signed license tokens issued by the Nexus MDM vendor.
+JWT-signed license tokens issued by the Azile MDM vendor.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -456,97 +456,97 @@ JWT-signed license tokens issued by the Nexus MDM vendor.
 
 ```
 External Source System
-        │
-        │  CSV / REST / Kafka / CDC
-        ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    ingest-service (:8083)                       │
-│                                                                 │
-│  1. VALIDATION                                                  │
-│     • Request body size limit (10 MB max)                       │
-│     • Strip INTERNAL_FIELDS (trust_score, entity_id, etc.)     │
-│     • Validate tenant_id from JWT                               │
-│                                                                 │
-│  2. SCHEMA MAPPING                                              │
-│     • SchemaMapper applies tenant field mappings:               │
-│       "company" → "legal_name"                                 │
-│       "email_address" → "email" + EmailNormalize transform     │
-│       "phone_number" → "phone" + PhoneE164 transform           │
-│                                                                 │
-│  3. NORMALISATION                                               │
-│     • Lowercase + trim: email                                   │
-│     • E.164 format: +14085550100                               │
-│     • Title case: company names                                 │
-│     • ISO 8601 dates: YYYY-MM-DD                               │
-│                                                                 │
-│  4. ENTITY BUILD                                                │
-│     • Assign entity_id (UUID v4)                               │
-│     • Set entity_type from batch                               │
-│     • Set record_origin = "Ingested"                           │
-└────────────────────────────┬────────────────────────────────────┘
-                             │  POST /entities (HTTP)
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    mdm-core (:8081)                             │
-│                                                                 │
-│  EntityService.create_entity(ctx, request)                     │
-│                                                                 │
-│  5. IDEMPOTENCY CHECK                                           │
-│     • If entity_id provided AND exists → return existing       │
-│     • Safe to retry on network failure                          │
-│                                                                 │
-│  6. AUTO-NUMBERING                                              │
-│     • SELECT core_mdm.next_entity_number(tenant, type)         │
-│     • Atomically increments sequence                           │
-│     • Adds attribute: "customer_number" = "CUST-000042"       │
-│                                                                 │
-│  7. TRANSACTIONAL WRITE  (single ACID transaction)             │
-│     ┌─────────────────────────────────────────────────────┐   │
-│     │ BEGIN                                                │   │
-│     │                                                      │   │
-│     │ SET app.current_tenant = '<tenant_id>'  ← RLS key   │   │
-│     │ SET app.request_id     = '<request_id>'             │   │
-│     │ SET app.trace_id       = '<trace_id>'               │   │
-│     │                                                      │   │
-│     │ INSERT INTO core_mdm.entities (...)                  │   │
-│     │ INSERT INTO core_mdm.entity_attributes (×N attrs)   │   │
-│     │                                                      │   │
-│     │ INSERT INTO event_store.outbox_events               │   │
-│     │   (EntityCreated payload)                            │   │
-│     │                                                      │   │
-│     │ [If distribute=true]                                 │   │
-│     │ INSERT INTO event_store.outbox_events               │   │
-│     │   (EntityDistributionRequested payload)              │   │
-│     │                                                      │   │
-│     │ COMMIT                                               │   │
-│     └─────────────────────────────────────────────────────┘   │
-│                                                                 │
-│  8. POST-COMMIT (async, fire-and-forget)                        │
-│     • Redis TaskQueue.enqueue("entity.embed", entity_data)     │
-│     • Redis EntityCache.set(tenant, entity_id, entity)         │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-              ┌──────────────┴─────────────────┐
-              │                                │
-              ▼                                ▼
+        â”‚
+        â”‚  CSV / REST / Kafka / CDC
+        â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    ingest-service (:8083)                       â”‚
+â”‚                                                                 â”‚
+â”‚  1. VALIDATION                                                  â”‚
+â”‚     â€¢ Request body size limit (10 MB max)                       â”‚
+â”‚     â€¢ Strip INTERNAL_FIELDS (trust_score, entity_id, etc.)     â”‚
+â”‚     â€¢ Validate tenant_id from JWT                               â”‚
+â”‚                                                                 â”‚
+â”‚  2. SCHEMA MAPPING                                              â”‚
+â”‚     â€¢ SchemaMapper applies tenant field mappings:               â”‚
+â”‚       "company" â†’ "legal_name"                                 â”‚
+â”‚       "email_address" â†’ "email" + EmailNormalize transform     â”‚
+â”‚       "phone_number" â†’ "phone" + PhoneE164 transform           â”‚
+â”‚                                                                 â”‚
+â”‚  3. NORMALISATION                                               â”‚
+â”‚     â€¢ Lowercase + trim: email                                   â”‚
+â”‚     â€¢ E.164 format: +14085550100                               â”‚
+â”‚     â€¢ Title case: company names                                 â”‚
+â”‚     â€¢ ISO 8601 dates: YYYY-MM-DD                               â”‚
+â”‚                                                                 â”‚
+â”‚  4. ENTITY BUILD                                                â”‚
+â”‚     â€¢ Assign entity_id (UUID v4)                               â”‚
+â”‚     â€¢ Set entity_type from batch                               â”‚
+â”‚     â€¢ Set record_origin = "Ingested"                           â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                             â”‚  POST /entities (HTTP)
+                             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    mdm-core (:8081)                             â”‚
+â”‚                                                                 â”‚
+â”‚  EntityService.create_entity(ctx, request)                     â”‚
+â”‚                                                                 â”‚
+â”‚  5. IDEMPOTENCY CHECK                                           â”‚
+â”‚     â€¢ If entity_id provided AND exists â†’ return existing       â”‚
+â”‚     â€¢ Safe to retry on network failure                          â”‚
+â”‚                                                                 â”‚
+â”‚  6. AUTO-NUMBERING                                              â”‚
+â”‚     â€¢ SELECT core_mdm.next_entity_number(tenant, type)         â”‚
+â”‚     â€¢ Atomically increments sequence                           â”‚
+â”‚     â€¢ Adds attribute: "customer_number" = "CUST-000042"       â”‚
+â”‚                                                                 â”‚
+â”‚  7. TRANSACTIONAL WRITE  (single ACID transaction)             â”‚
+â”‚     â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
+â”‚     â”‚ BEGIN                                                â”‚   â”‚
+â”‚     â”‚                                                      â”‚   â”‚
+â”‚     â”‚ SET app.current_tenant = '<tenant_id>'  â† RLS key   â”‚   â”‚
+â”‚     â”‚ SET app.request_id     = '<request_id>'             â”‚   â”‚
+â”‚     â”‚ SET app.trace_id       = '<trace_id>'               â”‚   â”‚
+â”‚     â”‚                                                      â”‚   â”‚
+â”‚     â”‚ INSERT INTO core_mdm.entities (...)                  â”‚   â”‚
+â”‚     â”‚ INSERT INTO core_mdm.entity_attributes (Ã—N attrs)   â”‚   â”‚
+â”‚     â”‚                                                      â”‚   â”‚
+â”‚     â”‚ INSERT INTO event_store.outbox_events               â”‚   â”‚
+â”‚     â”‚   (EntityCreated payload)                            â”‚   â”‚
+â”‚     â”‚                                                      â”‚   â”‚
+â”‚     â”‚ [If distribute=true]                                 â”‚   â”‚
+â”‚     â”‚ INSERT INTO event_store.outbox_events               â”‚   â”‚
+â”‚     â”‚   (EntityDistributionRequested payload)              â”‚   â”‚
+â”‚     â”‚                                                      â”‚   â”‚
+â”‚     â”‚ COMMIT                                               â”‚   â”‚
+â”‚     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â”‚
+â”‚                                                                 â”‚
+â”‚  8. POST-COMMIT (async, fire-and-forget)                        â”‚
+â”‚     â€¢ Redis TaskQueue.enqueue("entity.embed", entity_data)     â”‚
+â”‚     â€¢ Redis EntityCache.set(tenant, entity_id, entity)         â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                             â”‚
+              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+              â”‚                                â”‚
+              â–¼                                â–¼
      Redis Cache                      event_store.outbox_events
      (5-min TTL)                      status='pending'
-              │                                │
-              │  Fast read path                │ Polled every 5s
-              │                                ▼
-              │                     kafka-event-service
-              │                     Publishes → Kafka topic:
-              │                     "mdm.entity.events"
-              │                                │
-              │                    ┌───────────▼────────────┐
-              │                    │ Downstream consumers:   │
-              │                    │ • enrichment-service   │
-              │                    │ • search indexer       │
-              │                    │ • distribution-service │
-              │                    └────────────────────────┘
-              ▼
+              â”‚                                â”‚
+              â”‚  Fast read path                â”‚ Polled every 5s
+              â”‚                                â–¼
+              â”‚                     kafka-event-service
+              â”‚                     Publishes â†’ Kafka topic:
+              â”‚                     "mdm.entity.events"
+              â”‚                                â”‚
+              â”‚                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+              â”‚                    â”‚ Downstream consumers:   â”‚
+              â”‚                    â”‚ â€¢ enrichment-service   â”‚
+              â”‚                    â”‚ â€¢ search indexer       â”‚
+              â”‚                    â”‚ â€¢ distribution-service â”‚
+              â”‚                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+              â–¼
      Subsequent reads: cache hit (no DB)
-     After TTL: cache miss → DB query → re-cache
+     After TTL: cache miss â†’ DB query â†’ re-cache
 ```
 
 ### SQL: Entity Creation Transaction
@@ -560,7 +560,7 @@ SELECT set_config('app.request_id',     'abc123...',                            
 
 -- 2. Auto-assign business number
 SELECT core_mdm.next_entity_number('550e8400...', 'Customer');
--- → 'CUST-000042'
+-- â†’ 'CUST-000042'
 
 -- 3. Insert entity
 INSERT INTO core_mdm.entities (entity_id, tenant_id, entity_type, status, ...)
@@ -588,99 +588,99 @@ The matching pipeline identifies duplicate entities using a multi-stage approach
 
 ```
 EntityCreated event (or manual match trigger)
-        │
-        ▼
-┌───────────────────────────────────────────────────────────────────┐
-│              STAGE 1: BLOCKING (O(n) → O(k))                     │
-│  Reduces search space from millions to hundreds using cheap keys  │
-│                                                                   │
-│  ┌──────────────────────────────────────────────────────────┐    │
-│  │ PhoneticBlocker          → PHONETIC:{name_value}         │    │
-│  │   "acme corporation"    → lookup name attribute         │    │
-│  │                                                          │    │
-│  │ CanopyBlocker (token)   → tokens from name/address      │    │
-│  │   "acme" "corporation" → find entities sharing tokens  │    │
-│  │                                                          │    │
-│  │ ExactBlocker            → EMAIL:{email}                 │    │
-│  │                           PHONE:{phone_e164}            │    │
-│  │                           TAX:{tax_id}                  │    │
-│  │                                                          │    │
-│  │ VectorBlocker (pgvector)→ SELECT entity_id              │    │
-│  │   (when semantic=true)    FROM ai.entity_embeddings      │    │
-│  │                           ORDER BY embedding <=> $1 LIMIT 200│    │
-│  └──────────────────────────────────────────────────────────┘    │
-│                                                                   │
-│  SQL for phonetic blocking:                                       │
-│  SELECT DISTINCT entity_id                                        │
-│  FROM core_mdm.entity_attributes                                  │
-│  WHERE tenant_id = $1                                             │
-│    AND attribute_key = 'name'                                     │
-│    AND lower(attribute_value::text) = $2                          │
-└───────────────────────┬───────────────────────────────────────────┘
-                        │  candidate_ids: HashSet<Uuid> (deduplicated)
-                        ▼
-┌───────────────────────────────────────────────────────────────────┐
-│              STAGE 2: SCORING (per candidate pair)               │
-│  Computes weighted similarity score for each source→candidate pair│
-│                                                                   │
-│  For each candidate entity:                                       │
-│                                                                   │
-│  field_score = Σ(field_i) / N                                    │
-│    where field_i = (exact × 0.35) + (fuzzy × 0.30) + (phonetic × 0.10)│
-│                                                                   │
-│  Algorithm per field:                                             │
-│  • exact_similarity:    case-insensitive string equality (1.0/0.0)│
-│  • fuzzy_similarity:    (jaro_winkler + levenshtein) / 2         │
-│  • phonetic_similarity: soundex comparison (1.0/0.0)             │
-│                                                                   │
-│  final_score = (field_score × 0.90) + (vector_score × 0.10)     │
-│                                                                   │
-│  confidence = (score × 0.80) + (coverage × 0.20)                │
-│    where coverage = matched_fields / total_fields                 │
-│                                                                   │
-│  [If score in grey zone 0.75–0.95 AND ai_assisted=true]:         │
-│    → POST /match/semantic to ai-service                          │
-│    → Llama 3.2 makes final match/no_match decision               │
-│    → Returns: decision, confidence (0-1), reasoning text         │
-└───────────────────────┬───────────────────────────────────────────┘
-                        │  Vec<MatchCandidate> sorted by score DESC
-                        ▼
-┌───────────────────────────────────────────────────────────────────┐
-│              STAGE 3: CLUSTERING (graph-based)                   │
-│  Groups related entities into clusters, selects master record    │
-│                                                                   │
-│  Build undirected graph:                                          │
-│    entity_A ──── entity_B  (score ≥ review_threshold 0.75)      │
-│    entity_B ──── entity_C                                        │
-│    entity_A ──── entity_C                                        │
-│                                                                   │
-│  DFS connected components:                                        │
-│    cluster_1 = {entity_A, entity_B, entity_C}                   │
-│                                                                   │
-│  Master selection (weighted):                                     │
-│    master_score = (avg_match × 0.50)                             │
-│                 + (avg_confidence × 0.30)                        │
-│                 + (node_centrality × 0.20)                        │
-│    → entity with highest master_score = suggested master         │
-└───────────────────────┬───────────────────────────────────────────┘
-                        │  Vec<MatchCluster>
-                        ▼
-┌───────────────────────────────────────────────────────────────────┐
-│              STAGE 4: REVIEW DECISION                            │
-│                                                                   │
-│  score ≥ 0.95  →  AUTO-MERGE (no human needed)                   │
-│  0.75 ≤ score < 0.95  →  HUMAN REVIEW (stewardship queue)       │
-│  score < 0.75  →  REJECTED (not a duplicate)                     │
-│                                                                   │
-│  Priority assigned:                                              │
-│    score ≥ 0.95  → Critical                                      │
-│    score ≥ 0.90  → High                                          │
-│    score ≥ 0.85  → Medium                                        │
-│    else          → Low                                           │
-└───────────────────────┬───────────────────────────────────────────┘
-                        │  Persisted to:
-                        ├─► core_mdm.match_candidates (one row per pair)
-                        └─► core_mdm.field_match_results (one row per field)
+        â”‚
+        â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚              STAGE 1: BLOCKING (O(n) â†’ O(k))                     â”‚
+â”‚  Reduces search space from millions to hundreds using cheap keys  â”‚
+â”‚                                                                   â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚
+â”‚  â”‚ PhoneticBlocker          â†’ PHONETIC:{name_value}         â”‚    â”‚
+â”‚  â”‚   "acme corporation"    â†’ lookup name attribute         â”‚    â”‚
+â”‚  â”‚                                                          â”‚    â”‚
+â”‚  â”‚ CanopyBlocker (token)   â†’ tokens from name/address      â”‚    â”‚
+â”‚  â”‚   "acme" "corporation" â†’ find entities sharing tokens  â”‚    â”‚
+â”‚  â”‚                                                          â”‚    â”‚
+â”‚  â”‚ ExactBlocker            â†’ EMAIL:{email}                 â”‚    â”‚
+â”‚  â”‚                           PHONE:{phone_e164}            â”‚    â”‚
+â”‚  â”‚                           TAX:{tax_id}                  â”‚    â”‚
+â”‚  â”‚                                                          â”‚    â”‚
+â”‚  â”‚ VectorBlocker (pgvector)â†’ SELECT entity_id              â”‚    â”‚
+â”‚  â”‚   (when semantic=true)    FROM ai.entity_embeddings      â”‚    â”‚
+â”‚  â”‚                           ORDER BY embedding <=> $1 LIMIT 200â”‚    â”‚
+â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚
+â”‚                                                                   â”‚
+â”‚  SQL for phonetic blocking:                                       â”‚
+â”‚  SELECT DISTINCT entity_id                                        â”‚
+â”‚  FROM core_mdm.entity_attributes                                  â”‚
+â”‚  WHERE tenant_id = $1                                             â”‚
+â”‚    AND attribute_key = 'name'                                     â”‚
+â”‚    AND lower(attribute_value::text) = $2                          â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                        â”‚  candidate_ids: HashSet<Uuid> (deduplicated)
+                        â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚              STAGE 2: SCORING (per candidate pair)               â”‚
+â”‚  Computes weighted similarity score for each sourceâ†’candidate pairâ”‚
+â”‚                                                                   â”‚
+â”‚  For each candidate entity:                                       â”‚
+â”‚                                                                   â”‚
+â”‚  field_score = Î£(field_i) / N                                    â”‚
+â”‚    where field_i = (exact Ã— 0.35) + (fuzzy Ã— 0.30) + (phonetic Ã— 0.10)â”‚
+â”‚                                                                   â”‚
+â”‚  Algorithm per field:                                             â”‚
+â”‚  â€¢ exact_similarity:    case-insensitive string equality (1.0/0.0)â”‚
+â”‚  â€¢ fuzzy_similarity:    (jaro_winkler + levenshtein) / 2         â”‚
+â”‚  â€¢ phonetic_similarity: soundex comparison (1.0/0.0)             â”‚
+â”‚                                                                   â”‚
+â”‚  final_score = (field_score Ã— 0.90) + (vector_score Ã— 0.10)     â”‚
+â”‚                                                                   â”‚
+â”‚  confidence = (score Ã— 0.80) + (coverage Ã— 0.20)                â”‚
+â”‚    where coverage = matched_fields / total_fields                 â”‚
+â”‚                                                                   â”‚
+â”‚  [If score in grey zone 0.75â€“0.95 AND ai_assisted=true]:         â”‚
+â”‚    â†’ POST /match/semantic to ai-service                          â”‚
+â”‚    â†’ Llama 3.2 makes final match/no_match decision               â”‚
+â”‚    â†’ Returns: decision, confidence (0-1), reasoning text         â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                        â”‚  Vec<MatchCandidate> sorted by score DESC
+                        â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚              STAGE 3: CLUSTERING (graph-based)                   â”‚
+â”‚  Groups related entities into clusters, selects master record    â”‚
+â”‚                                                                   â”‚
+â”‚  Build undirected graph:                                          â”‚
+â”‚    entity_A â”€â”€â”€â”€ entity_B  (score â‰¥ review_threshold 0.75)      â”‚
+â”‚    entity_B â”€â”€â”€â”€ entity_C                                        â”‚
+â”‚    entity_A â”€â”€â”€â”€ entity_C                                        â”‚
+â”‚                                                                   â”‚
+â”‚  DFS connected components:                                        â”‚
+â”‚    cluster_1 = {entity_A, entity_B, entity_C}                   â”‚
+â”‚                                                                   â”‚
+â”‚  Master selection (weighted):                                     â”‚
+â”‚    master_score = (avg_match Ã— 0.50)                             â”‚
+â”‚                 + (avg_confidence Ã— 0.30)                        â”‚
+â”‚                 + (node_centrality Ã— 0.20)                        â”‚
+â”‚    â†’ entity with highest master_score = suggested master         â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                        â”‚  Vec<MatchCluster>
+                        â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚              STAGE 4: REVIEW DECISION                            â”‚
+â”‚                                                                   â”‚
+â”‚  score â‰¥ 0.95  â†’  AUTO-MERGE (no human needed)                   â”‚
+â”‚  0.75 â‰¤ score < 0.95  â†’  HUMAN REVIEW (stewardship queue)       â”‚
+â”‚  score < 0.75  â†’  REJECTED (not a duplicate)                     â”‚
+â”‚                                                                   â”‚
+â”‚  Priority assigned:                                              â”‚
+â”‚    score â‰¥ 0.95  â†’ Critical                                      â”‚
+â”‚    score â‰¥ 0.90  â†’ High                                          â”‚
+â”‚    score â‰¥ 0.85  â†’ Medium                                        â”‚
+â”‚    else          â†’ Low                                           â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                        â”‚  Persisted to:
+                        â”œâ”€â–º core_mdm.match_candidates (one row per pair)
+                        â””â”€â–º core_mdm.field_match_results (one row per field)
 ```
 
 ### Database Writes During Matching
@@ -702,7 +702,7 @@ INSERT INTO core_mdm.field_match_results (
     score, strategy, semantic_similarity, explanation
 ) VALUES (...);
 
--- FETCH (single JOIN — no N+1 query):
+-- FETCH (single JOIN â€” no N+1 query):
 SELECT mc.*, fm.*
 FROM core_mdm.match_candidates mc
 LEFT JOIN core_mdm.field_match_results fm
@@ -722,53 +722,53 @@ When a steward approves a merge (or auto-merge threshold is reached), the merge 
 
 ```
 Steward clicks "Approve Merge" (or auto-merge triggered)
-        │
-        ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                  MergeService.execute_merge()                   │
-│                                                                 │
-│  1. LOAD ENTITIES                                               │
-│     • Fetch primary entity from DB (or Redis cache)            │
-│     • Fetch all candidate entities                              │
-│                                                                 │
-│  2. SURVIVORSHIP EVALUATION                                     │
-│     For each attribute, apply winning rule:                     │
-│     • TrustedSource: Salesforce wins over SAP for 'email'      │
-│     • MostRecent:    Use attribute updated most recently       │
-│     • LongestValue:  Use longest non-null value                │
-│     • HighestConfidence: Use value with highest score          │
-│     • AI-Recommended: Ask Llama to choose (with reasoning)     │
-│                                                                 │
-│  3. ATOMIC TRANSACTION                                          │
-│     ┌────────────────────────────────────────────────────┐    │
-│     │ BEGIN (with RLS context set)                        │    │
-│     │                                                     │    │
-│     │ INSERT INTO core_mdm.golden_records (...)           │    │
-│     │   (merged attributes, lifecycle_stage='Created')   │    │
-│     │                                                     │    │
-│     │ UPDATE core_mdm.entities                            │    │
-│     │   SET status = 'Merged'                             │    │
-│     │   WHERE entity_id IN (merged_ids)                   │    │
-│     │                                                     │    │
-│     │ UPDATE core_mdm.entities                            │    │
-│     │   SET golden_record_id = <new_golden_record_id>    │    │
-│     │   WHERE entity_id = <primary_entity_id>            │    │
-│     │                                                     │    │
-│     │ INSERT INTO event_store.outbox_events              │    │
-│     │   (GoldenRecordCreated)                            │    │
-│     │ INSERT INTO event_store.outbox_events              │    │
-│     │   (EntityMerged)                                   │    │
-│     │                                                     │    │
-│     │ COMMIT                                              │    │
-│     └────────────────────────────────────────────────────┘    │
-│                                                                 │
-│  4. POST-COMMIT                                                 │
-│     • Invalidate Redis cache for merged entity IDs             │
-│     • Kafka events published by kafka-event-service           │
-│     • enrichment-service receives EntityMerged → re-enriches  │
-│     • search-service reindexes the golden record               │
-│     • distribution-service pushes to downstream systems        │
-└─────────────────────────────────────────────────────────────────┘
+        â”‚
+        â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                  MergeService.execute_merge()                   â”‚
+â”‚                                                                 â”‚
+â”‚  1. LOAD ENTITIES                                               â”‚
+â”‚     â€¢ Fetch primary entity from DB (or Redis cache)            â”‚
+â”‚     â€¢ Fetch all candidate entities                              â”‚
+â”‚                                                                 â”‚
+â”‚  2. SURVIVORSHIP EVALUATION                                     â”‚
+â”‚     For each attribute, apply winning rule:                     â”‚
+â”‚     â€¢ TrustedSource: Salesforce wins over SAP for 'email'      â”‚
+â”‚     â€¢ MostRecent:    Use attribute updated most recently       â”‚
+â”‚     â€¢ LongestValue:  Use longest non-null value                â”‚
+â”‚     â€¢ HighestConfidence: Use value with highest score          â”‚
+â”‚     â€¢ AI-Recommended: Ask Llama to choose (with reasoning)     â”‚
+â”‚                                                                 â”‚
+â”‚  3. ATOMIC TRANSACTION                                          â”‚
+â”‚     â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”‚
+â”‚     â”‚ BEGIN (with RLS context set)                        â”‚    â”‚
+â”‚     â”‚                                                     â”‚    â”‚
+â”‚     â”‚ INSERT INTO core_mdm.golden_records (...)           â”‚    â”‚
+â”‚     â”‚   (merged attributes, lifecycle_stage='Created')   â”‚    â”‚
+â”‚     â”‚                                                     â”‚    â”‚
+â”‚     â”‚ UPDATE core_mdm.entities                            â”‚    â”‚
+â”‚     â”‚   SET status = 'Merged'                             â”‚    â”‚
+â”‚     â”‚   WHERE entity_id IN (merged_ids)                   â”‚    â”‚
+â”‚     â”‚                                                     â”‚    â”‚
+â”‚     â”‚ UPDATE core_mdm.entities                            â”‚    â”‚
+â”‚     â”‚   SET golden_record_id = <new_golden_record_id>    â”‚    â”‚
+â”‚     â”‚   WHERE entity_id = <primary_entity_id>            â”‚    â”‚
+â”‚     â”‚                                                     â”‚    â”‚
+â”‚     â”‚ INSERT INTO event_store.outbox_events              â”‚    â”‚
+â”‚     â”‚   (GoldenRecordCreated)                            â”‚    â”‚
+â”‚     â”‚ INSERT INTO event_store.outbox_events              â”‚    â”‚
+â”‚     â”‚   (EntityMerged)                                   â”‚    â”‚
+â”‚     â”‚                                                     â”‚    â”‚
+â”‚     â”‚ COMMIT                                              â”‚    â”‚
+â”‚     â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â”‚
+â”‚                                                                 â”‚
+â”‚  4. POST-COMMIT                                                 â”‚
+â”‚     â€¢ Invalidate Redis cache for merged entity IDs             â”‚
+â”‚     â€¢ Kafka events published by kafka-event-service           â”‚
+â”‚     â€¢ enrichment-service receives EntityMerged â†’ re-enriches  â”‚
+â”‚     â€¢ search-service reindexes the golden record               â”‚
+â”‚     â€¢ distribution-service pushes to downstream systems        â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### Golden Record Attribute Structure
@@ -812,65 +812,65 @@ Steward clicks "Approve Merge" (or auto-merge triggered)
 
 ### Why Outbox?
 
-Without the outbox pattern, there is a **dual-write problem**: if we write to the database AND publish to Kafka in separate operations, a crash between them causes one to succeed and the other to fail — data becomes inconsistent.
+Without the outbox pattern, there is a **dual-write problem**: if we write to the database AND publish to Kafka in separate operations, a crash between them causes one to succeed and the other to fail â€” data becomes inconsistent.
 
 The outbox pattern solves this by writing the event to the database **inside the same transaction as the entity change**. The event is guaranteed to be published eventually because Kafka publication is separate from the entity mutation.
 
 ```
 SERVICE (mdm-core, policy-service, etc.)
-     │
-     │  RequestContextFactory.begin_uow()
-     │  ┌─────────────────────────────────────────────────────────┐
-     │  │  PostgreSQL Transaction                                 │
-     │  │                                                         │
-     │  │  SET app.current_tenant = '<tenant_id>'                │
-     │  │                                                         │
-     │  │  INSERT/UPDATE core_mdm.entities    ← business data    │
-     │  │                                                         │
-     │  │  INSERT event_store.outbox_events   ← event record     │
-     │  │    status = 'pending'                                   │
-     │  │    published = false                                    │
-     │  │                                                         │
-     │  │  COMMIT  ←── Both succeed or both fail (ACID)          │
-     │  └─────────────────────────────────────────────────────────┘
-     │
-     │  uow.commit() ← Rust UnitOfWork pattern
-     │
-     ▼
+     â”‚
+     â”‚  RequestContextFactory.begin_uow()
+     â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+     â”‚  â”‚  PostgreSQL Transaction                                 â”‚
+     â”‚  â”‚                                                         â”‚
+     â”‚  â”‚  SET app.current_tenant = '<tenant_id>'                â”‚
+     â”‚  â”‚                                                         â”‚
+     â”‚  â”‚  INSERT/UPDATE core_mdm.entities    â† business data    â”‚
+     â”‚  â”‚                                                         â”‚
+     â”‚  â”‚  INSERT event_store.outbox_events   â† event record     â”‚
+     â”‚  â”‚    status = 'pending'                                   â”‚
+     â”‚  â”‚    published = false                                    â”‚
+     â”‚  â”‚                                                         â”‚
+     â”‚  â”‚  COMMIT  â†â”€â”€ Both succeed or both fail (ACID)          â”‚
+     â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+     â”‚
+     â”‚  uow.commit() â† Rust UnitOfWork pattern
+     â”‚
+     â–¼
 
 kafka-event-service (background loop, every 5 seconds)
-     │
-     │  SELECT ... FROM event_store.outbox_events
-     │  WHERE published = false
-     │  ORDER BY created_at ASC
-     │  LIMIT 100
-     │  FOR UPDATE SKIP LOCKED    ← prevents duplicate processing
-     │
-     ▼
+     â”‚
+     â”‚  SELECT ... FROM event_store.outbox_events
+     â”‚  WHERE published = false
+     â”‚  ORDER BY created_at ASC
+     â”‚  LIMIT 100
+     â”‚  FOR UPDATE SKIP LOCKED    â† prevents duplicate processing
+     â”‚
+     â–¼
      
      For each pending event:
-     │
-     │  Try: rdkafka producer → Kafka topic
-     │  │
-     │  ├── Success:
-     │  │     UPDATE outbox_events SET published=true, published_at=NOW()
-     │  │     → Event consumed by downstream services
-     │  │
-     │  └── Failure (attempt 1/2):
-     │        UPDATE outbox_events SET retry_count = retry_count + 1
-     │        Wait: 5s → 25s → 125s (exponential backoff)
-     │
-     └── Failure (attempt 3 = MAX_RETRIES):
+     â”‚
+     â”‚  Try: rdkafka producer â†’ Kafka topic
+     â”‚  â”‚
+     â”‚  â”œâ”€â”€ Success:
+     â”‚  â”‚     UPDATE outbox_events SET published=true, published_at=NOW()
+     â”‚  â”‚     â†’ Event consumed by downstream services
+     â”‚  â”‚
+     â”‚  â””â”€â”€ Failure (attempt 1/2):
+     â”‚        UPDATE outbox_events SET retry_count = retry_count + 1
+     â”‚        Wait: 5s â†’ 25s â†’ 125s (exponential backoff)
+     â”‚
+     â””â”€â”€ Failure (attempt 3 = MAX_RETRIES):
            INSERT INTO event_store.outbox_dlq (event_id, failure_reason, ...)
-           UPDATE outbox_events SET published=true  ← removed from polling
-           → Operator inspects DLQ, fixes issue, replays manually
+           UPDATE outbox_events SET published=true  â† removed from polling
+           â†’ Operator inspects DLQ, fixes issue, replays manually
 
 DOWNSTREAM CONSUMERS (subscribed to Kafka topics):
-     • enrichment-service:     triggers D&B/Experian enrichment
-     • notification-service:   pushes real-time WebSocket alerts
-     • distribution-service:   pushes to Salesforce, SAP, webhooks
-     • search reindexer:        updates search index
-     • audit service:           records immutable audit trail
+     â€¢ enrichment-service:     triggers D&B/Experian enrichment
+     â€¢ notification-service:   pushes real-time WebSocket alerts
+     â€¢ distribution-service:   pushes to Salesforce, SAP, webhooks
+     â€¢ search reindexer:        updates search index
+     â€¢ audit service:           records immutable audit trail
 ```
 
 ### Kafka Topic Design
@@ -890,23 +890,23 @@ DOWNSTREAM CONSUMERS (subscribed to Kafka topics):
 
 ```
 EntityCreated event
-        │
-        ▼  (via Redis task queue)
+        â”‚
+        â–¼  (via Redis task queue)
 ai-service
   EnrichmentOrchestrator.enrich(entity_id)
-        │
-        ├── 1. Build entity text
-        │     "legal_name: Acme Corp. email: info@acme.com. country: US"
-        │
-        ├── 2. Call Ollama API
-        │     POST http://ollama:11434/api/embeddings
-        │     { "model": "nomic-embed-text", "prompt": "..." }
-        │     → 768-dimension float vector
-        │
-        ├── 3. Store embedding
-        │     INSERT INTO ai.entity_embeddings (entity_id, embedding, model)
-        │
-        └── 4. Update entity's semantic_identity
+        â”‚
+        â”œâ”€â”€ 1. Build entity text
+        â”‚     "legal_name: Acme Corp. email: info@acme.com. country: US"
+        â”‚
+        â”œâ”€â”€ 2. Call Ollama API
+        â”‚     POST http://ollama:11434/api/embeddings
+        â”‚     { "model": "nomic-embed-text", "prompt": "..." }
+        â”‚     â†’ 768-dimension float vector
+        â”‚
+        â”œâ”€â”€ 3. Store embedding
+        â”‚     INSERT INTO ai.entity_embeddings (entity_id, embedding, model)
+        â”‚
+        â””â”€â”€ 4. Update entity's semantic_identity
               UPDATE core_mdm.entities SET semantic_identity = "brief summary"
 ```
 
@@ -933,27 +933,27 @@ LIMIT $4 OFFSET $5;
 
 ```
 User types: "Find customers with duplicate tax IDs"
-        │
-        ▼
+        â”‚
+        â–¼
 ai-service MCP Router
-        │
-        ├── 1. Sanitize prompt (injection detection)
-        │     → 20+ patterns blocked, 2048 char limit
-        │
-        ├── 2. Embed query
-        │     POST /api/embeddings → 768-dim vector
-        │
-        ├── 3. Retrieve context (pgvector ANN)
-        │     SELECT * FROM ai.rag_documents
-        │     ORDER BY embedding <=> $1::vector LIMIT 5
-        │
-        ├── 4. Build augmented prompt
-        │     "You are Nexus AI... CONTEXT: [retrieved docs]... QUESTION: ..."
-        │
-        ├── 5. Generate response
-        │     POST /api/generate → llama3.2:8b
-        │
-        └── 6. Return to Flutter UI
+        â”‚
+        â”œâ”€â”€ 1. Sanitize prompt (injection detection)
+        â”‚     â†’ 20+ patterns blocked, 2048 char limit
+        â”‚
+        â”œâ”€â”€ 2. Embed query
+        â”‚     POST /api/embeddings â†’ 768-dim vector
+        â”‚
+        â”œâ”€â”€ 3. Retrieve context (pgvector ANN)
+        â”‚     SELECT * FROM ai.rag_documents
+        â”‚     ORDER BY embedding <=> $1::vector LIMIT 5
+        â”‚
+        â”œâ”€â”€ 4. Build augmented prompt
+        â”‚     "You are Azile AI... CONTEXT: [retrieved docs]... QUESTION: ..."
+        â”‚
+        â”œâ”€â”€ 5. Generate response
+        â”‚     POST /api/generate â†’ llama3.2:8b
+        â”‚
+        â””â”€â”€ 6. Return to Flutter UI
               { answer: "I found 3 customers sharing tax_id 55-1234567...",
                 source_docs: [...] }
 ```
@@ -964,26 +964,26 @@ ai-service MCP Router
 
 ### Tenant Isolation Architecture
 
-Every service request carries a `tenant_id` from the validated JWT. The `RequestContextFactory` sets this as a PostgreSQL session variable **before any DML executes** — ensuring RLS policies can filter data.
+Every service request carries a `tenant_id` from the validated JWT. The `RequestContextFactory` sets this as a PostgreSQL session variable **before any DML executes** â€” ensuring RLS policies can filter data.
 
 ```
 HTTP Request arrives
-    │
-    ├── api-gateway: validate JWT → extract nxs_tenant_id
-    ├── tenant_middleware: compare JWT tenant_id === x-tenant-id header
-    │   (mismatch → 403 FORBIDDEN — prevents cross-tenant access)
-    │
-    └── mdm-core handler:
-            │
-            ▼
+    â”‚
+    â”œâ”€â”€ api-gateway: validate JWT â†’ extract nxs_tenant_id
+    â”œâ”€â”€ tenant_middleware: compare JWT tenant_id === x-tenant-id header
+    â”‚   (mismatch â†’ 403 FORBIDDEN â€” prevents cross-tenant access)
+    â”‚
+    â””â”€â”€ mdm-core handler:
+            â”‚
+            â–¼
         RequestContextFactory.begin_uow(tenant_id, user_id, trace_id)
-            │
-            ├── BEGIN transaction
-            ├── SELECT set_config('app.current_tenant', tenant_id, true)
-            ├── SELECT set_config('app.request_id',     request_id, true)
-            ├── SELECT set_config('app.trace_id',       trace_id,   true)
-            │
-            └── All queries in this transaction see only tenant's data
+            â”‚
+            â”œâ”€â”€ BEGIN transaction
+            â”œâ”€â”€ SELECT set_config('app.current_tenant', tenant_id, true)
+            â”œâ”€â”€ SELECT set_config('app.request_id',     request_id, true)
+            â”œâ”€â”€ SELECT set_config('app.trace_id',       trace_id,   true)
+            â”‚
+            â””â”€â”€ All queries in this transaction see only tenant's data
                 (RLS policies read current_setting('app.current_tenant'))
 ```
 
@@ -994,8 +994,8 @@ HTTP Request arrives
 CREATE POLICY entities_tenant_isolation ON core_mdm.entities
     USING (tenant_id::text = current_setting('app.current_tenant', true));
 
--- The nexus_app role has row_security=ON — all queries filtered automatically
--- The nexus_migration role bypasses RLS (needed for schema migrations)
+-- The azile_app role has row_security=ON â€” all queries filtered automatically
+-- The azile_migration role bypasses RLS (needed for schema migrations)
 ```
 
 ### Session Variables Set Per Transaction
@@ -1061,30 +1061,30 @@ Legacy:   10001        (prefix=empty, separator=empty, digits=5, start=10000)
 
 ```
 Customer receives nexus-license.json from vendor
-        │
-        ▼
+        â”‚
+        â–¼
 POST http://localhost:8090/license/import
 { "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
-        │
-        ▼
+        â”‚
+        â–¼
 tenant-service:
-  1. JWT.decode(token, VENDOR_PUBLIC_KEY)     ← signature verification
+  1. JWT.decode(token, VENDOR_PUBLIC_KEY)     â† signature verification
   2. Check exp (not expired)
-  3. Check iss == "nexus-mdm-vendor"
+  3. Check iss == "azile-mdm-vendor"
   4. Check for duplicate (idempotent re-import)
   5. INSERT INTO platform.licenses (tier, features, limits, token, checksum)
-        │
-        ▼
+        â”‚
+        â–¼
 Feature check at runtime:
   SELECT features @> '["ai_matching"]'::jsonb
   FROM platform.active_license
-  → true/false
+  â†’ true/false
 ```
 
 ### Feature Gate Example (Rust)
 
 ```rust
-// In any service handler — check before expensive operation
+// In any service handler â€” check before expensive operation
 if !license::is_feature_enabled(&pool, "ai_matching").await {
     return (StatusCode::PAYMENT_REQUIRED,
             Json(json!({"error": "ai_matching requires Professional tier"}))).into_response();
@@ -1103,12 +1103,12 @@ Run **once** when the Docker volume is first created. Create infrastructure befo
 | File | Creates |
 |------|---------|
 | `001_extensions.sql` | pgvector, pg_trgm, citext, uuid-ossp, pg_stat_statements |
-| `002_roles.sql` | nexus_app, nexus_readonly, nexus_migration roles + security settings |
+| `002_roles.sql` | azile_app, azile_readonly, azile_migration roles + security settings |
 | `003_schemas.sql` | core_mdm, event_store, ai, governance, platform, audit schemas + grants |
-| `004_table_grants.sql` | Explicit grants on tables created by postgres (not nexus_migration) |
+| `004_table_grants.sql` | Explicit grants on tables created by postgres (not azile_migration) |
 
 ### Phase 2: SQLx Migrations (mdm-core startup)
-Run **every startup** — idempotent, only applies pending migrations. These create all tables.
+Run **every startup** â€” idempotent, only applies pending migrations. These create all tables.
 
 | Migration | Creates |
 |-----------|---------|
@@ -1125,15 +1125,15 @@ Run **every startup** — idempotent, only applies pending migrations. These cre
 
 ```
 docker compose up
-    │
-    ├── postgres starts → init scripts run (Phase 1)
-    │
-    ├── mdm-core starts:
-    │     database::migration::run_migrations(&pool)  ← Phase 2
-    │     Applies 0001 → 0002 → 0003 → 0004 → 0005 → 0006
-    │     /health/ready → 200 OK
-    │
-    └── All other services start (depend on mdm-core:healthy)
+    â”‚
+    â”œâ”€â”€ postgres starts â†’ init scripts run (Phase 1)
+    â”‚
+    â”œâ”€â”€ mdm-core starts:
+    â”‚     database::migration::run_migrations(&pool)  â† Phase 2
+    â”‚     Applies 0001 â†’ 0002 â†’ 0003 â†’ 0004 â†’ 0005 â†’ 0006
+    â”‚     /health/ready â†’ 200 OK
+    â”‚
+    â””â”€â”€ All other services start (depend on mdm-core:healthy)
 ```
 
 ---
@@ -1158,17 +1158,17 @@ docker compose up
 ```
 Read Entity:
   1. Check Redis: key = "nexus:{tenant_id}:entity:{entity_id}"  TTL=5min
-  2. Cache hit  → return immediately (sub-millisecond)
-  3. Cache miss → query PostgreSQL → write to Redis → return
+  2. Cache hit  â†’ return immediately (sub-millisecond)
+  3. Cache miss â†’ query PostgreSQL â†’ write to Redis â†’ return
 
 Write Entity:
   1. Write to PostgreSQL (transactional)
   2. Write to Redis cache (write-through, post-commit)
-  3. On merge/update → invalidate_entity(tenant_id, entity_id)
+  3. On merge/update â†’ invalidate_entity(tenant_id, entity_id)
 
 Invalidation:
-  • Entity update/merge → delete specific key
-  • Tenant bulk import → delete "nexus:{tenant_id}:*" (SCAN + DEL batch)
+  â€¢ Entity update/merge â†’ delete specific key
+  â€¢ Tenant bulk import â†’ delete "nexus:{tenant_id}:*" (SCAN + DEL batch)
 ```
 
 ### Connection Pool Sizing
@@ -1187,7 +1187,7 @@ Redis pool (deadpool-redis):
 
 Rationale:
   PostgreSQL max_connections defaults to 100.
-  With 10 services × 50 max = 500 (exceeds limit).
+  With 10 services Ã— 50 max = 500 (exceeds limit).
   In production: use PgBouncer connection pooler in front of PostgreSQL,
   or configure POSTGRES_MAX_CONNECTIONS=500 in docker-compose.
 ```
@@ -1200,9 +1200,9 @@ Rationale:
 
 | GDPR Article | Right | Implementation |
 |-------------|-------|---------------|
-| Art. 15 | Access | `GET /policy/gdpr/access` → returns all data held |
-| Art. 17 | Erasure | `POST /policy/gdpr/erasure` → 7-step erasure process |
-| Art. 20 | Portability | `GET /policy/gdpr/access` → JSON export |
+| Art. 15 | Access | `GET /policy/gdpr/access` â†’ returns all data held |
+| Art. 17 | Erasure | `POST /policy/gdpr/erasure` â†’ 7-step erasure process |
+| Art. 20 | Portability | `GET /policy/gdpr/access` â†’ JSON export |
 
 ### Erasure Process (7 Steps)
 
@@ -1211,8 +1211,8 @@ When `POST /policy/gdpr/erasure` is called for `subject_id`:
 ```
 1. Find all entities where external_ids->>'subject_id' = subject_id
 2. For each entity:
-   a. Erase PII attribute values → '"ERASED"'::jsonb
-   b. Clear entity metadata → '{}'::jsonb
+   a. Erase PII attribute values â†’ '"ERASED"'::jsonb
+   b. Clear entity metadata â†’ '{}'::jsonb
    c. DELETE from ai.entity_embeddings  (derived from PII text)
    d. DELETE from ai.rag_documents      (may contain entity text)
    e. DELETE from ai.steward_feedback   (contains entity references)
@@ -1238,40 +1238,40 @@ SELECT platform.purge_old_notifications(30);        -- Remove read notifications
 
 ---
 
-## Appendix A: Entity Type → Standard Attributes Mapping
+## Appendix A: Entity Type â†’ Standard Attributes Mapping
 
 | Entity Type | Key Attributes | Auto-Number Format |
 |------------|---------------|-------------------|
-| **Customer** | legal_name✦, email✦, customer_type, status, tax_id, credit_limit, payment_terms | `CUST-000001` |
-| **Vendor** | vendor_name✦, vendor_type, email✦, category, payment_terms, tax_id, certifications | `VEND-000001` |
-| **Product** | product_name✦, sku, barcode, uom✦, unit_price, manufacturer, category | `PROD-000001` |
-| **Material** | material_name✦, material_type✦, uom✦, min_stock, max_stock, hazardous | `MATL-000001` |
-| **Account** | account_name✦, account_type✦, account_number, currency, parent_account | `ACCT-000001` |
-| **Employee** | first_name✦, last_name✦, work_email✦, department, job_title, hire_date | `EMP-000001` |
-| **Location** | location_name✦, location_type✦, street, city, state, country, timezone | `LOC-000001` |
-| **Organization** | legal_name✦, org_type, tax_id, parent_org, country | `ORG-000001` |
-| **Asset** | asset_name✦, asset_type, serial_number, purchase_date, location | `ASST-000001` |
+| **Customer** | legal_nameâœ¦, emailâœ¦, customer_type, status, tax_id, credit_limit, payment_terms | `CUST-000001` |
+| **Vendor** | vendor_nameâœ¦, vendor_type, emailâœ¦, category, payment_terms, tax_id, certifications | `VEND-000001` |
+| **Product** | product_nameâœ¦, sku, barcode, uomâœ¦, unit_price, manufacturer, category | `PROD-000001` |
+| **Material** | material_nameâœ¦, material_typeâœ¦, uomâœ¦, min_stock, max_stock, hazardous | `MATL-000001` |
+| **Account** | account_nameâœ¦, account_typeâœ¦, account_number, currency, parent_account | `ACCT-000001` |
+| **Employee** | first_nameâœ¦, last_nameâœ¦, work_emailâœ¦, department, job_title, hire_date | `EMP-000001` |
+| **Location** | location_nameâœ¦, location_typeâœ¦, street, city, state, country, timezone | `LOC-000001` |
+| **Organization** | legal_nameâœ¦, org_type, tax_id, parent_org, country | `ORG-000001` |
+| **Asset** | asset_nameâœ¦, asset_type, serial_number, purchase_date, location | `ASST-000001` |
 
-✦ = Required field
+âœ¦ = Required field
 
 ---
 
-## Appendix B: Service → Database Access Map
+## Appendix B: Service â†’ Database Access Map
 
 | Service | Reads From | Writes To | Via |
 |---------|-----------|----------|-----|
 | mdm-core | core_mdm.*, event_store | core_mdm.*, event_store.outbox_events | Direct (owns migrations) |
 | ai-service | core_mdm.entities, ai.* | ai.*, event_store.outbox_events (indirect) | Direct |
-| ingest-service | — | core_mdm.entities (via mdm-core REST) | HTTP proxy |
+| ingest-service | â€” | core_mdm.entities (via mdm-core REST) | HTTP proxy |
 | policy-service | governance.policy_rules, core_mdm.entities | audit.gdpr_requests, governance.* | Direct |
-| search-service | core_mdm.entities, ai.entity_embeddings | — | Read-only |
+| search-service | core_mdm.entities, ai.entity_embeddings | â€” | Read-only |
 | tenant-service | core_mdm.*, platform.licenses | core_mdm.tenants, platform.licenses, core_mdm.entity_sequences | Direct |
 | enrichment-service | core_mdm.entities (via Kafka events) | ai.entity_enrichments, core_mdm.entities (via mdm-core PATCH) | HTTP proxy |
 | distribution-service | platform.distribution_* | platform.distribution_jobs | Direct |
-| notification-service | — | platform.notifications | Via Redis pub/sub |
+| notification-service | â€” | platform.notifications | Via Redis pub/sub |
 | kafka-event-service | event_store.outbox_events | event_store.outbox_events (status update), event_store.outbox_dlq | Direct |
 
 ---
 
-*Document generated from Nexus AI MDM codebase — reflects implementation as of Sprint 6.*  
+*Document generated from Azile AI MDM codebase â€” reflects implementation as of Sprint 6.*  
 *For API documentation, see `docs/openapi.yaml`. For deployment, see `infra/README.md`.*

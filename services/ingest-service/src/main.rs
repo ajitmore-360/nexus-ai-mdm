@@ -1,4 +1,4 @@
-mod config;
+﻿mod config;
 mod crypto;
 mod jobs;
 mod models;
@@ -24,7 +24,7 @@ use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
-use nexus_auth::{Claims, jwt::JwtConfig};
+use azile_auth::{Claims, jwt::JwtConfig};
 
 use config::settings::IngestSettings;
 use database::{config::DatabaseConfig, connection::create_pool};
@@ -39,8 +39,8 @@ use state::AppState;
 async fn main() {
     dotenvy::dotenv().ok();
 
-    nexus_telemetry::tracing_init::init_tracing("ingest-service");
-    nexus_telemetry::metrics::init_metrics("ingest-service");
+    azile_telemetry::tracing_init::init_tracing("ingest-service");
+    azile_telemetry::metrics::init_metrics("ingest-service");
 
     let app_env = std::env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
     tracing::info!(app_env = %app_env, "Ingest Service environment loaded");
@@ -80,7 +80,7 @@ async fn main() {
     let port = settings.port;
 
     let jwt_config = JwtConfig::from_env()
-        .expect("JWT_SECRET must be set — ingest-service requires JWT authentication");
+        .expect("JWT_SECRET must be set â€” ingest-service requires JWT authentication");
 
     let db_config = DatabaseConfig { database_url: settings.database_url.clone() };
     let pool = create_pool(&db_config)
@@ -89,7 +89,7 @@ async fn main() {
 
     let state = Arc::new(AppState::new(settings, pool, jwt_config));
 
-    // ── Scheduled REST pull loops ──────────────────────────────────────────────
+    // â”€â”€ Scheduled REST pull loops â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Spawns one background task per REST connector configured with
     // sync_mode='scheduled'. No-op if none are registered.
     {
@@ -140,7 +140,7 @@ async fn main() {
         .expect("ingest service crashed");
 }
 
-// ── Job status handlers ──────────────────────────────────────────────────────
+// â”€â”€ Job status handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[derive(Deserialize)]
 struct JobListParams {
@@ -232,6 +232,6 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 async fn metrics_handler() -> String {
-    nexus_telemetry::metrics::render_metrics()
+    azile_telemetry::metrics::render_metrics()
         .unwrap_or_else(|e| format!("# metrics error: {}", e))
 }

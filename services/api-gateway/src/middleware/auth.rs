@@ -1,4 +1,4 @@
-use std::env;
+﻿use std::env;
 
 use axum::{
     extract::State,
@@ -9,7 +9,7 @@ use axum::{
 };
 use serde_json::json;
 
-use nexus_auth::{validate_token, JwtConfig, TokenPurpose};
+use azile_auth::{validate_token, JwtConfig, TokenPurpose};
 use uuid::Uuid;
 
 use crate::state::AppState;
@@ -17,9 +17,9 @@ use crate::state::AppState;
 /// JWT-aware authentication middleware.
 ///
 /// Accepts requests in two modes:
-/// 1. **Auth disabled** (`AUTH_DISABLED=true`) — passes all requests.
+/// 1. **Auth disabled** (`AUTH_DISABLED=true`) â€” passes all requests.
 ///    For local dev only; never deploy with this flag set.
-/// 2. **JWT mode** (production) — validates `Authorization: Bearer <jwt>`
+/// 2. **JWT mode** (production) â€” validates `Authorization: Bearer <jwt>`
 ///    using HS256 and the `JWT_SECRET` env var.  On success, the validated
 ///    `Claims` are injected as a request extension so downstream handlers
 ///    can access user_id, tenant_id, and role without re-parsing the token.
@@ -32,7 +32,7 @@ pub async fn auth_middleware(
     next:         Next,
 ) -> Response {
 
-    // ── 1. Dev bypass ────────────────────────────────────────────────────
+    // â”€â”€ 1. Dev bypass â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let auth_disabled = env::var("AUTH_DISABLED")
         .map(|v| v == "true" || v == "1")
         .unwrap_or(false);
@@ -41,7 +41,7 @@ pub async fn auth_middleware(
         return next.run(request).await;
     }
 
-    // ── 2. Extract bearer token from Authorization header ────────────────
+    // â”€â”€ 2. Extract bearer token from Authorization header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let raw_token = request
         .headers()
         .get("authorization")
@@ -63,7 +63,7 @@ pub async fn auth_middleware(
             .into_response();
     }
 
-    // ── 3a. Try JWT validation ────────────────────────────────────────────
+    // â”€â”€ 3a. Try JWT validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if let Ok(jwt_cfg) = JwtConfig::from_env() {
         match validate_token(&jwt_cfg, raw_token) {
             Ok(claims) => {
@@ -108,27 +108,27 @@ pub async fn auth_middleware(
         }
     }
 
-    // ── 3b. Legacy API bearer token fallback ─────────────────────────────
+    // â”€â”€ 3b. Legacy API bearer token fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Used for service-to-service calls from trusted internal services only.
     // The client-supplied x-tenant-id header is still validated against JWT
     // in tenant_middleware when JWT claims are present.  On this path there
     // are no JWT claims, so tenant isolation relies on network-level trust
-    // (K8s NetworkPolicy / VPC) — document this in your threat model.
+    // (K8s NetworkPolicy / VPC) â€” document this in your threat model.
     let expected_bearer = env::var("API_BEARER_TOKEN").unwrap_or_default();
     if !expected_bearer.is_empty() && raw_token == expected_bearer {
         // Inject a synthetic service identity so downstream middleware and
         // RBAC guards can distinguish service-to-service calls from real users.
-        // This grants Steward-level access — enough for internal service calls
+        // This grants Steward-level access â€” enough for internal service calls
         // but not SuperAdmin or platform-admin operations.
-        let service_claims = nexus_auth::Claims {
+        let service_claims = azile_auth::Claims {
             sub:           "service-account".to_string(),
             iss:           "nexus-ai-mdm".to_string(),
             exp:           i64::MAX,
             iat:           0,
             nxs_purpose:   TokenPurpose::Access,
             nxs_tenant_id: Uuid::nil(), // overridden by tenant_middleware from x-tenant-id header
-            nxs_email:     "service@internal.nexus".to_string(),
-            nxs_role:      nexus_auth::Role::Steward,
+            nxs_email:     "service@internal.azile".to_string(),
+            nxs_role:      azile_auth::Role::Steward,
             nxs_jti:       Uuid::nil(),
         };
         request.extensions_mut().insert(service_claims);
@@ -139,12 +139,12 @@ pub async fn auth_middleware(
         return next.run(request).await;
     }
 
-    // ── 4. Reject ─────────────────────────────────────────────────────────
+    // â”€â”€ 4. Reject â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     (
         StatusCode::UNAUTHORIZED,
         Json(json!({
             "success": false,
-            "error":   "invalid credentials — provide a valid JWT or API bearer token"
+            "error":   "invalid credentials â€” provide a valid JWT or API bearer token"
         })),
     )
         .into_response()

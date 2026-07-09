@@ -1,14 +1,14 @@
--- =============================================================================
+﻿-- =============================================================================
 -- Migration: 0006_entity_schemas_and_licensing
 -- Entity type attribute schemas, auto-numbering sequences, tenant onboarding,
 -- and license management tables.
 -- =============================================================================
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- ATTRIBUTE SCHEMA REGISTRY
 -- Defines standard and custom attributes per entity type per tenant.
 -- NULL tenant_id = global default (applies to all tenants unless overridden).
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 CREATE TABLE IF NOT EXISTS core_mdm.attribute_schemas (
     schema_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -36,18 +36,18 @@ CREATE TABLE IF NOT EXISTS core_mdm.attribute_schemas (
 CREATE INDEX IF NOT EXISTS idx_attr_schemas_entity
     ON core_mdm.attribute_schemas (tenant_id, entity_type, display_order);
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- AUTO-NUMBERING SEQUENCES
 -- Provides CUST-000001, VEND-000001, PROD-000001 style business numbers.
 -- Each tenant can override the prefix, separator, and digit width.
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 CREATE TABLE IF NOT EXISTS core_mdm.entity_sequences (
     tenant_id       UUID        NOT NULL,
     entity_type     TEXT        NOT NULL,
     prefix          TEXT        NOT NULL DEFAULT '',     -- 'CUST'
     separator       TEXT        NOT NULL DEFAULT '-',    -- '-' or '_' or ''
-    min_digits      INT         NOT NULL DEFAULT 6,      -- 6 → 000001
+    min_digits      INT         NOT NULL DEFAULT 6,      -- 6 â†’ 000001
     current_value   BIGINT      NOT NULL DEFAULT 0,
     step            INT         NOT NULL DEFAULT 1,
     reset_yearly    BOOLEAN     NOT NULL DEFAULT FALSE,
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS core_mdm.entity_sequences (
     PRIMARY KEY (tenant_id, entity_type)
 );
 
--- Atomic sequence increment — safe under concurrent entity creation
+-- Atomic sequence increment â€” safe under concurrent entity creation
 CREATE OR REPLACE FUNCTION core_mdm.next_entity_number(
     p_tenant_id   UUID,
     p_entity_type TEXT
@@ -95,12 +95,12 @@ $$;
 
 COMMENT ON FUNCTION core_mdm.next_entity_number IS
     'Atomically increment and return the next business number for an entity type. '
-    'Example: SELECT core_mdm.next_entity_number(tenant_id, ''Customer'') → CUST-000042';
+    'Example: SELECT core_mdm.next_entity_number(tenant_id, ''Customer'') â†’ CUST-000042';
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- TENANT ONBOARDING PROFILE
 -- Extended tenant configuration beyond the core tenants table.
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 CREATE TABLE IF NOT EXISTS core_mdm.tenant_profiles (
     tenant_id           UUID PRIMARY KEY REFERENCES core_mdm.tenants(tenant_id),
@@ -133,10 +133,10 @@ CREATE TABLE IF NOT EXISTS core_mdm.tenant_profiles (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- LICENSE MANAGEMENT
--- JWT-signed license files issued by the Nexus MDM vendor.
--- ─────────────────────────────────────────────────────────────────────────────
+-- JWT-signed license files issued by the Azile MDM vendor.
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 CREATE TABLE IF NOT EXISTS platform.licenses (
     license_id      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -178,10 +178,10 @@ WHERE status = 'active'
   AND (expires_at IS NULL OR expires_at > NOW())
 LIMIT 1;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- LICENSE-FEATURE ENFORCEMENT
 -- Maps license features to platform capabilities.
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 CREATE TABLE IF NOT EXISTS platform.license_feature_registry (
     feature_key     TEXT PRIMARY KEY,
@@ -214,15 +214,15 @@ VALUES
     ('white_label',         'White Label',             'Custom branding and domain',                     'OEM')
 ON CONFLICT (feature_key) DO NOTHING;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- SEED: Global default attribute schemas for all standard entity types
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 -- Helper: insert with no conflict on global defaults (tenant_id IS NULL)
 DO $$
 BEGIN
 
--- ── CUSTOMER ─────────────────────────────────────────────────────────────────
+-- â”€â”€ CUSTOMER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 INSERT INTO core_mdm.attribute_schemas
     (tenant_id, entity_type, attribute_key, display_name, group_name, data_type,
      is_required, is_searchable, is_pii, is_system, enum_values, validation, display_order, help_text)
@@ -260,7 +260,7 @@ VALUES
 (NULL,'Customer','parent_customer',  'Parent Customer',  'Business',  'string', FALSE,TRUE, FALSE,FALSE, NULL, NULL,                 44, 'Parent company entity ID for hierarchy')
 ON CONFLICT (tenant_id, entity_type, attribute_key) DO NOTHING;
 
--- ── VENDOR ───────────────────────────────────────────────────────────────────
+-- â”€â”€ VENDOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 INSERT INTO core_mdm.attribute_schemas
     (tenant_id, entity_type, attribute_key, display_name, group_name, data_type,
      is_required, is_searchable, is_pii, is_system, enum_values, validation, display_order, help_text)
@@ -289,7 +289,7 @@ VALUES
 (NULL,'Vendor','lead_time_days',  'Lead Time (Days)', 'Business',  'number', FALSE,FALSE,FALSE,FALSE,NULL,'{"min":0}',        42, NULL)
 ON CONFLICT (tenant_id, entity_type, attribute_key) DO NOTHING;
 
--- ── PRODUCT ──────────────────────────────────────────────────────────────────
+-- â”€â”€ PRODUCT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 INSERT INTO core_mdm.attribute_schemas
     (tenant_id, entity_type, attribute_key, display_name, group_name, data_type,
      is_required, is_searchable, is_pii, is_system, enum_values, validation, display_order, help_text)
@@ -317,7 +317,7 @@ VALUES
 (NULL,'Product','hazardous',      'Hazardous Material','Compliance','boolean',FALSE,TRUE,FALSE,FALSE,NULL,NULL,                50, NULL)
 ON CONFLICT (tenant_id, entity_type, attribute_key) DO NOTHING;
 
--- ── MATERIAL (extends Product defaults) ─────────────────────────────────────
+-- â”€â”€ MATERIAL (extends Product defaults) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 INSERT INTO core_mdm.attribute_schemas
     (tenant_id, entity_type, attribute_key, display_name, group_name, data_type,
      is_required, is_searchable, is_pii, is_system, enum_values, validation, display_order, help_text)
@@ -335,7 +335,7 @@ VALUES
 (NULL,'Material','hazardous',       'Hazardous',        'Compliance','boolean',FALSE,TRUE, FALSE,FALSE,NULL,NULL,               30, NULL)
 ON CONFLICT (tenant_id, entity_type, attribute_key) DO NOTHING;
 
--- ── EMPLOYEE ─────────────────────────────────────────────────────────────────
+-- â”€â”€ EMPLOYEE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 INSERT INTO core_mdm.attribute_schemas
     (tenant_id, entity_type, attribute_key, display_name, group_name, data_type,
      is_required, is_searchable, is_pii, is_system, enum_values, validation, display_order, help_text)
@@ -356,7 +356,7 @@ VALUES
     '["Full-Time","Part-Time","Contractor","Intern","Consultant"]', NULL, 24, NULL)
 ON CONFLICT (tenant_id, entity_type, attribute_key) DO NOTHING;
 
--- ── LOCATION ─────────────────────────────────────────────────────────────────
+-- â”€â”€ LOCATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 INSERT INTO core_mdm.attribute_schemas
     (tenant_id, entity_type, attribute_key, display_name, group_name, data_type,
      is_required, is_searchable, is_pii, is_system, enum_values, validation, display_order, help_text)
@@ -380,9 +380,9 @@ ON CONFLICT (tenant_id, entity_type, attribute_key) DO NOTHING;
 END;
 $$;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- SEED: Default number sequences for the default tenant
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 INSERT INTO core_mdm.entity_sequences (tenant_id, entity_type, prefix, separator, min_digits)
 SELECT '00000000-0000-0000-0000-000000000001'::UUID, entity_type, prefix, '-', 6
@@ -400,11 +400,11 @@ FROM (VALUES
 ) AS t(entity_type, prefix)
 ON CONFLICT (tenant_id, entity_type) DO NOTHING;
 
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 -- COMMENTS
--- ─────────────────────────────────────────────────────────────────────────────
+-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 COMMENT ON TABLE core_mdm.attribute_schemas   IS 'Standard and custom attribute definitions per entity type';
 COMMENT ON TABLE core_mdm.entity_sequences    IS 'Auto-increment sequences for business numbers (CUST-000001 etc.)';
 COMMENT ON TABLE core_mdm.tenant_profiles     IS 'Extended tenant configuration for onboarding';
-COMMENT ON TABLE platform.licenses            IS 'JWT-signed license tokens imported from Nexus MDM vendor';
+COMMENT ON TABLE platform.licenses            IS 'JWT-signed license tokens imported from Azile MDM vendor';
 COMMENT ON TABLE platform.license_feature_registry IS 'Master list of licensable feature keys';
