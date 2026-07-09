@@ -49,6 +49,8 @@ import '../../features/entities/presentation/pages/entity_unmerge_page.dart';
 import '../../features/entities/presentation/pages/bulk_operations_page.dart';
 import '../../features/analytics/presentation/pages/quality_analytics_page.dart';
 import '../../features/data_quality/presentation/pages/data_profiling_page.dart';
+import '../../features/admin/presentation/pages/sso_config_page.dart';
+import '../../features/admin/presentation/pages/scim_tokens_page.dart';
 
 class AppRouter {
   AppRouter._();
@@ -467,6 +469,22 @@ class AppRouter {
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
               child: const DataProfilingPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/org/sso',
+            name: 'org-sso',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const SsoConfigPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/org/scim-tokens',
+            name: 'org-scim-tokens',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const ScimTokensPage(),
             ),
           ),
         ],

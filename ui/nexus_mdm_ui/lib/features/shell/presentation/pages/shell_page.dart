@@ -144,6 +144,10 @@ class _ShellPageState extends State<ShellPage> {
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
         _NavItem(icon: Icons.policy_outlined,               label: 'Domain Policies', route: '/dashboard/org/domain-policies',
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+        _NavItem(icon: Icons.security_outlined,             label: 'Enterprise SSO',  route: '/dashboard/org/sso',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+        _NavItem(icon: Icons.token_outlined,                label: 'SCIM Tokens',     route: '/dashboard/org/scim-tokens',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
       ],
     ),
 
@@ -987,6 +991,8 @@ class _ShellPageState extends State<ShellPage> {
     if (location.startsWith('/dashboard/distribution')) return 'Distribution Monitor';
     if (location.startsWith('/dashboard/notifications')) return 'Notifications';
     if (location.startsWith('/dashboard/settings')) return 'Settings';
+    if (location.startsWith('/dashboard/org/sso')) return 'Enterprise SSO';
+    if (location.startsWith('/dashboard/org/scim-tokens')) return 'SCIM 2.0 Provisioning';
     return BrandingManager.productName;
   }
 

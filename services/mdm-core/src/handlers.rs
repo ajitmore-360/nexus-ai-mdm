@@ -34,6 +34,8 @@ pub mod transformations;
 pub mod unmerge;
 pub mod users;
 pub mod xref;
+pub mod sso;
+pub mod scim;
 
 /// Standard API response wrapper used by all handlers.
 #[derive(Debug, Serialize)]

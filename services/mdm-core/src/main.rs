@@ -154,6 +154,18 @@ use handlers::{
         toggle_transformation_rule, delete_transformation_rule, preview_transformation,
     },
     party_roles::{list_party_roles, upsert_party_role, delete_party_role, entities_by_role},
+    sso::{
+        saml_metadata, saml_init, saml_acs,
+        get_sso_config, upsert_sso_config, delete_sso_config,
+        list_scim_tokens, create_scim_token, revoke_scim_token,
+    },
+    scim::{
+        scim_service_provider_config, scim_schemas, scim_resource_types,
+        scim_list_users, scim_get_user, scim_create_user,
+        scim_update_user, scim_patch_user, scim_delete_user,
+        scim_list_groups, scim_get_group, scim_create_group,
+        scim_patch_group, scim_delete_group,
+    },
 };
 use middleware::{
     auth::auth_middleware,
@@ -161,6 +173,8 @@ use middleware::{
 };
 use services::{
     ai_suggestion_service::AiSuggestionService,
+    sso_service::SsoService,
+    scim_service::ScimService,
     audit_service::AuditService,
     branding_service::BrandingService,
     bulk_service::BulkService,
@@ -309,6 +323,12 @@ pub struct AppState {
 
     pub xref_service:
         Arc<XrefService>,
+
+    pub sso_service:
+        Arc<SsoService>,
+
+    pub scim_service:
+        Arc<ScimService>,
 
     /// Live matching policy — can be updated at runtime via PATCH /policy/weights
     /// without restarting the service.
@@ -803,8 +823,42 @@ fn build_router(
         // ── Party role management ─────────────────────────────────────────────
         .route("/party-roles/by-role",
             get(entities_by_role))
+        // ── SSO Configuration (admin only) ────────────────────────────────────
+        .route("/sso-configurations",
+            get(get_sso_config).put(upsert_sso_config))
+        .route("/sso-configurations/:provider_type",
+            delete(delete_sso_config))
+        // ── SCIM token management (admin only) ────────────────────────────────
+        .route("/scim/tokens",
+            get(list_scim_tokens).post(create_scim_token))
+        .route("/scim/tokens/:id",
+            delete(revoke_scim_token))
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
+
+    // ── SAML 2.0 public endpoints (no auth — browser redirect binding) ──────────
+    // Note: ACS uses form encoding (application/x-www-form-urlencoded), not JSON.
+    let saml_routes = Router::new()
+        .route("/saml/:tenant_id/metadata", get(saml_metadata))
+        .route("/saml/:tenant_id/init",     get(saml_init))
+        .route("/saml/:tenant_id/acs",      post(saml_acs));
+
+    // ── SCIM 2.0 endpoints (SCIM bearer token auth, no standard JWT required) ──
+    let scim_routes = Router::new()
+        .route("/scim/:tenant_id/v2/ServiceProviderConfig", get(scim_service_provider_config))
+        .route("/scim/:tenant_id/v2/Schemas",               get(scim_schemas))
+        .route("/scim/:tenant_id/v2/ResourceTypes",         get(scim_resource_types))
+        .route("/scim/:tenant_id/v2/Users",                 get(scim_list_users).post(scim_create_user))
+        .route("/scim/:tenant_id/v2/Users/:id",
+            get(scim_get_user)
+                .put(scim_update_user)
+                .patch(scim_patch_user)
+                .delete(scim_delete_user))
+        .route("/scim/:tenant_id/v2/Groups",                get(scim_list_groups).post(scim_create_group))
+        .route("/scim/:tenant_id/v2/Groups/:id",
+            get(scim_get_group)
+                .patch(scim_patch_group)
+                .delete(scim_delete_group));
 
     // Internal no-auth route group — gateway-to-service only, not exposed publicly.
     let internal_routes = Router::new()
@@ -822,6 +876,8 @@ fn build_router(
         .merge(management_routes)
         .merge(internal_routes)
         .merge(protected)
+        .merge(saml_routes)
+        .merge(scim_routes)
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state)
@@ -1197,6 +1253,11 @@ async fn main() {
         .unwrap_or_else(|_| "http://ai-service:8082".to_string());
     let ai_suggestion_service = Arc::new(AiSuggestionService::new(db.clone(), ai_service_url));
 
+    let base_url = std::env::var("BASE_URL")
+        .unwrap_or_else(|_| "http://localhost:8081".to_string());
+    let sso_service  = Arc::new(SsoService::new(db.clone()));
+    let scim_service = Arc::new(ScimService::new(db.clone(), base_url));
+
     //
     // ====================================
     // BUILD APPLICATION STATE
@@ -1247,6 +1308,8 @@ async fn main() {
             party_role_service,
             unmerge_service,
             xref_service,
+            sso_service,
+            scim_service,
             matching_policy:    live_policy,
             redis_rate_limiter: login_rate_limiter,
             task_queue:         task_queue_for_state,

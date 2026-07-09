@@ -25,3 +25,5 @@ pub mod transformation_service;
 pub mod party_role_service;
 pub mod unmerge_service;
 pub mod xref_service;
+pub mod sso_service;
+pub mod scim_service;
