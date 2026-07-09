@@ -111,7 +111,7 @@ class BrandingManager {
 
   static Color _contrastFor(Color c) {
     final luminance = c.computeLuminance();
-    return luminance > 0.4 ? const Color(0xFF0A1628) : Colors.white;
+    return luminance > 0.4 ? const Color(0xFF070E0B) : Colors.white;
   }
 
   static Color _darken(Color c, double amount) {

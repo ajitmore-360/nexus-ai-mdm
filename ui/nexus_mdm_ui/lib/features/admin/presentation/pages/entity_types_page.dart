@@ -31,7 +31,7 @@ class _EntityTypesPageState extends State<EntityTypesPage> {
   final _prefixCtrl = TextEditingController();
   String _icon = '📄';
   // ignore: prefer_final_fields — mutated in setState when user picks a color
-  String _color = '#7C3AED';
+  String _color = '#599B81';
   bool _addSubmitting = false;
 
   @override

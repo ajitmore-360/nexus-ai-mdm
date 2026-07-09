@@ -19,29 +19,281 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Nexus AI MDM — Master Data Management Platform">
+  <meta name="description" content="Azile AI MDM — AI-Powered Master Data Management">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="Nexus MDM">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Azile">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>Nexus MDM</title>
+  <title>Azile</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Web loading splash — shown while Flutter engine initialises.
+       Fades out on the 'flutter-first-frame' event. -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    #ls {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #070E0B;
+      z-index: 9999;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      transition: opacity 0.4s ease;
+    }
+
+    /* Fine grid */
+    #ls::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(89,155,129,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(89,155,129,.05) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* Radial sage glow */
+    #ls-glow {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 55% 50% at 50% 44%, rgba(89,155,129,.15) 0%, rgba(89,155,129,.05) 44%, transparent 70%);
+      animation: ls-breathe 10s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+    @keyframes ls-breathe { from { opacity: 1; } to { opacity: 0.5; } }
+
+    /* Lockup */
+    #ls-lockup {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      margin-top: -24px;
+      animation: ls-arrive 0.9s cubic-bezier(.22,1,.36,1) 0.1s both;
+    }
+    @keyframes ls-arrive {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* SVG mark */
+    #ls-mark { width: 70px; height: 64px; overflow: visible; flex-shrink: 0; }
+
+    /* Mark draw animations */
+    .ls-leg {
+      stroke-dasharray: 82;
+      stroke-dashoffset: 82;
+      animation: ls-draw 0.62s cubic-bezier(.25,.46,.45,.94) 0.28s forwards;
+    }
+    .ls-cross {
+      stroke-dasharray: 52;
+      stroke-dashoffset: 52;
+      animation: ls-draw 0.44s cubic-bezier(.25,.46,.45,.94) 0.88s forwards;
+    }
+    .ls-apex {
+      transform-origin: 50px 10px;
+      transform: scale(0);
+      animation: ls-pop 0.3s cubic-bezier(.34,1.56,.64,1) 0.22s forwards;
+    }
+    .ls-halo {
+      opacity: 0;
+      transform-origin: 50px 10px;
+      animation: ls-halo 0.55s ease 0.22s forwards;
+    }
+    @keyframes ls-draw { to { stroke-dashoffset: 0; } }
+    @keyframes ls-pop  { to { transform: scale(1); } }
+    @keyframes ls-halo {
+      0%   { opacity: 0; transform: scale(0.6); }
+      65%  { opacity: 1; }
+      100% { opacity: 0.65; transform: scale(1); }
+    }
+
+    /* Vertical rule */
+    #ls-rule {
+      width: 1px;
+      height: 50px;
+      flex-shrink: 0;
+      background: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(89,155,129,.26) 28%,
+        rgba(89,155,129,.26) 72%,
+        transparent 100%
+      );
+    }
+
+    /* Wordmark */
+    #ls-wm {
+      animation: ls-wm-in 0.8s cubic-bezier(.22,1,.36,1) 0.45s both;
+    }
+    @keyframes ls-wm-in {
+      from { opacity: 0; transform: translateX(12px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    #ls-name {
+      font-size: 46px;
+      font-weight: 300;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #DCF0E8;
+      line-height: 1;
+      padding-right: 0.18em;
+    }
+    #ls-name span { color: #599B81; font-weight: 500; }
+
+    #ls-sub {
+      margin-top: 7px;
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.38em;
+      text-transform: uppercase;
+      color: #3D5547;
+      padding-right: 0.38em;
+    }
+
+    /* Tagline */
+    #ls-tagline {
+      position: relative;
+      z-index: 10;
+      margin-top: 30px;
+      font-size: 12.5px;
+      font-weight: 300;
+      letter-spacing: 0.1em;
+      color: rgba(61,85,71,.8);
+      animation: ls-fade 0.8s ease 1.05s both;
+    }
+    @keyframes ls-fade { from { opacity: 0; } to { opacity: 1; } }
+
+    /* Status bar */
+    #ls-status {
+      position: fixed;
+      bottom: 46px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      animation: ls-fade 0.8s ease 1.4s both;
+      z-index: 10;
+      white-space: nowrap;
+    }
+    #ls-track {
+      width: 152px;
+      height: 1px;
+      background: rgba(89,155,129,.10);
+      position: relative;
+    }
+    #ls-fill {
+      position: absolute;
+      inset: 0;
+      width: 0;
+      background: #599B81;
+      animation: ls-load 5s cubic-bezier(.33,1,.68,1) 1.5s forwards;
+    }
+    #ls-fill::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: #82BBA3;
+      box-shadow: 0 0 6px 2px rgba(89,155,129,.55);
+    }
+    @keyframes ls-load {
+      0%   { width: 0%;   }
+      25%  { width: 38%;  }
+      55%  { width: 70%;  }
+      80%  { width: 90%;  }
+      100% { width: 100%; }
+    }
+    #ls-lbl {
+      font-size: 8.5px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(89,155,129,.28);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; }
+      .ls-leg, .ls-cross { stroke-dashoffset: 0; }
+      .ls-apex { transform: scale(1); }
+      .ls-halo { opacity: 0.65; transform: scale(1); }
+      #ls-fill { width: 100%; }
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <!-- Loading splash — visible while Flutter boots, removed on first frame -->
+  <div id="ls" aria-label="Azile AI MDM loading" role="status">
+    <div id="ls-glow"></div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+    <div id="ls-lockup">
+      <!-- Geometric A mark -->
+      <svg id="ls-mark" viewBox="0 0 100 90" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="ls-lg" x1="50" y1="10" x2="50" y2="82" gradientUnits="userSpaceOnUse">
+            <stop offset="0%"   stop-color="#82BBA3"/>
+            <stop offset="100%" stop-color="#2C5942"/>
+          </linearGradient>
+        </defs>
+        <circle class="ls-halo" cx="50" cy="10" r="10"
+          stroke="rgba(89,155,129,.3)" stroke-width="1"/>
+        <path class="ls-leg" d="M50,10 L14,82"
+          stroke="url(#ls-lg)" stroke-width="3.5" stroke-linecap="round"/>
+        <path class="ls-leg" d="M50,10 L86,82"
+          stroke="url(#ls-lg)" stroke-width="3.5" stroke-linecap="round"/>
+        <path class="ls-cross" d="M29,52 L42,52 L50,43 L58,52 L71,52"
+          stroke="#82BBA3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle class="ls-apex" cx="50" cy="10" r="4.5" fill="#599B81"/>
+      </svg>
+
+      <div id="ls-rule" aria-hidden="true"></div>
+
+      <div id="ls-wm">
+        <p id="ls-name"><span>A</span>ZILE</p>
+        <p id="ls-sub">AI · Master Data Management</p>
+      </div>
+    </div>
+
+    <p id="ls-tagline">Your data. Unified. Trusted.</p>
+
+    <div id="ls-status" aria-hidden="true">
+      <div id="ls-track"><div id="ls-fill"></div></div>
+      <span id="ls-lbl">Loading</span>
+    </div>
+  </div>
+
+  <!-- Remove the loading screen once Flutter renders its first frame -->
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var el = document.getElementById('ls');
+      if (el) {
+        el.style.opacity = '0';
+        setTimeout(function () {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        }, 420);
+      }
+    });
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

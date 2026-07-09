@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/auth/auth_manager.dart';
@@ -25,11 +25,10 @@ class _SplashPageState extends State<SplashPage>
     super.initState();
     _progressController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 2200),
     );
     _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-          parent: _progressController, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _progressController, curve: Curves.easeInOut),
     );
     _progressController.forward();
     _startNavigation();
@@ -67,58 +66,58 @@ class _SplashPageState extends State<SplashPage>
       backgroundColor: AppColors.navyBackground,
       body: Stack(
         children: [
-          // Animated graph background
+          // Subtle floating node network — sage-tinted
           const AnimatedGraphBackground(
-            nodeCount: 25,
-            opacity: 0.08,
+            nodeCount: 20,
+            color: AppColors.primary,
+            opacity: 0.07,
           ),
 
-          // Radial gradient overlay
+          // Radial sage glow from center
           Container(
             decoration: const BoxDecoration(
               gradient: RadialGradient(
                 center: Alignment.center,
                 radius: 1.2,
                 colors: [
-                  Color(0x3000C896),
+                  Color(0x28599B81),  // brand sage at ~16%
                   Colors.transparent,
                 ],
               ),
             ),
           ),
 
-          // Content
+          // Center content
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo
-                const AzileLogo(
-                  size: 80,
-                  shouldPulse: true,
-                )
+                // ── Logo lockup: mark | rule | wordmark ──────────────────
+                const _SplashLockup()
                     .animate()
-                    .fadeIn(duration: const Duration(milliseconds: 600))
-                    .scaleXY(
-                        begin: 0.6,
-                        end: 1.0,
-                        duration: const Duration(milliseconds: 600),
-                        curve: Curves.elasticOut),
+                    .fadeIn(duration: const Duration(milliseconds: 500))
+                    .slideY(
+                      begin: 0.18,
+                      end: 0,
+                      duration: const Duration(milliseconds: 700),
+                      curve: Curves.easeOut,
+                    ),
 
-                const SizedBox(height: 48),
+                const SizedBox(height: 40),
 
                 // Tagline
                 Text(
-                  AppConstants.appTagline,
-                  style: AppTextStyles.bodyLarge.copyWith(
+                  'Your data. Unified. Trusted.',
+                  style: AppTextStyles.bodyMedium.copyWith(
                     color: AppColors.secondaryText,
-                    letterSpacing: 0.5,
+                    letterSpacing: 0.4,
+                    fontWeight: FontWeight.w300,
                   ),
                 )
-                    .animate(delay: const Duration(milliseconds: 400))
+                    .animate(delay: const Duration(milliseconds: 600))
                     .fadeIn(duration: const Duration(milliseconds: 600)),
 
-                const SizedBox(height: 64),
+                const SizedBox(height: 72),
 
                 // Loading bar
                 AnimatedBuilder(
@@ -127,26 +126,19 @@ class _SplashPageState extends State<SplashPage>
                     return Column(
                       children: [
                         SizedBox(
-                          width: 200,
-                          height: 3,
+                          width: 196,
+                          height: 1.5,
                           child: Stack(
                             children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: AppColors.divider,
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
+                              Container(color: AppColors.divider),
                               FractionallySizedBox(
                                 widthFactor: _progressAnimation.value,
                                 child: Container(
                                   decoration: BoxDecoration(
                                     gradient: AppColors.primaryGradient,
-                                    borderRadius: BorderRadius.circular(2),
                                     boxShadow: [
                                       BoxShadow(
-                                        color:
-                                            AppColors.primary.withValues(alpha:0.5),
+                                        color: AppColors.primary.withValues(alpha: 0.45),
                                         blurRadius: 6,
                                       ),
                                     ],
@@ -158,16 +150,17 @@ class _SplashPageState extends State<SplashPage>
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          _getLoadingMessage(_progressAnimation.value),
+                          _loadingMessage(_progressAnimation.value),
                           style: AppTextStyles.labelSmall.copyWith(
                             color: AppColors.mutedText,
+                            letterSpacing: 0.3,
                           ),
                         ),
                       ],
                     );
                   },
                 )
-                    .animate(delay: const Duration(milliseconds: 500))
+                    .animate(delay: const Duration(milliseconds: 700))
                     .fadeIn(duration: const Duration(milliseconds: 400)),
               ],
             ),
@@ -181,11 +174,11 @@ class _SplashPageState extends State<SplashPage>
             child: Text(
               'v${AppConstants.appVersion}',
               style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.mutedText.withValues(alpha:0.6),
+                color: AppColors.mutedText.withValues(alpha: 0.5),
               ),
               textAlign: TextAlign.center,
             )
-                .animate(delay: const Duration(milliseconds: 800))
+                .animate(delay: const Duration(milliseconds: 900))
                 .fadeIn(duration: const Duration(milliseconds: 400)),
           ),
         ],
@@ -193,10 +186,112 @@ class _SplashPageState extends State<SplashPage>
     );
   }
 
-  String _getLoadingMessage(double progress) {
+  String _loadingMessage(double progress) {
     if (progress < 0.33) return 'Initializing AI engines...';
     if (progress < 0.66) return 'Loading data connections...';
-    if (progress < 0.9) return 'Preparing your workspace...';
+    if (progress < 0.90) return 'Preparing your workspace...';
     return 'Almost ready...';
+  }
+}
+
+// ── Splash lockup: mark | vertical rule | wordmark ──────────────────────────
+//
+// Mirrors the HTML splash screen design: geometric A mark on the left,
+// a thin fading vertical rule as a separator, the AZILE wordmark on the right.
+// "A" is rendered in brand sage; "ZILE" in off-white light weight.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SplashLockup extends StatelessWidget {
+  const _SplashLockup();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Mark only — animates in, then apex pulses
+        const AzileLogo(
+          size: 72,
+          showText: false,
+          animateIn: true,
+          shouldPulse: true,
+        ),
+
+        // Vertical rule
+        Container(
+          width: 1,
+          height: 52,
+          margin: const EdgeInsets.symmetric(horizontal: 22),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                Color(0x44599B81),  // sage at 27%
+                Color(0x44599B81),
+                Colors.transparent,
+              ],
+              stops: [0.0, 0.3, 0.7, 1.0],
+            ),
+          ),
+        )
+            .animate(delay: const Duration(milliseconds: 300))
+            .fadeIn(duration: const Duration(milliseconds: 400)),
+
+        // Wordmark: "A" + "ZILE" + subtitle
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'A',
+                    style: AppTextStyles.displaySmall.copyWith(
+                      color: AppColors.primary,
+                      letterSpacing: 9,
+                      fontSize: 48,
+                      fontWeight: FontWeight.w600,
+                      height: 1.0,
+                    ),
+                  ),
+                  TextSpan(
+                    text: 'ZILE',
+                    style: AppTextStyles.displaySmall.copyWith(
+                      color: AppColors.primaryText,
+                      letterSpacing: 9,
+                      fontSize: 48,
+                      fontWeight: FontWeight.w300,
+                      height: 1.0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              'AI · MASTER DATA MANAGEMENT',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.secondaryText,
+                letterSpacing: 4.2,
+                fontSize: 9,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        )
+            .animate(delay: const Duration(milliseconds: 400))
+            .fadeIn(duration: const Duration(milliseconds: 500))
+            .slideX(
+              begin: 0.12,
+              end: 0,
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeOut,
+            ),
+      ],
+    );
   }
 }

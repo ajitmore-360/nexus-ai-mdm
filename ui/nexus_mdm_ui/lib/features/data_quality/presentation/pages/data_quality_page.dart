@@ -164,7 +164,7 @@ extension _VisualBlockTypeX on _VisualBlockType {
       case _VisualBlockType.fieldCheck:  return const Color(0xFF3B82F6);
       case _VisualBlockType.formatCheck: return const Color(0xFF8B5CF6);
       case _VisualBlockType.rangeCheck:  return const Color(0xFFFF6B35);
-      case _VisualBlockType.logicAnd:    return const Color(0xFF00C896);
+      case _VisualBlockType.logicAnd:    return const Color(0xFF3DB89A);
       case _VisualBlockType.logicOr:     return const Color(0xFFFFD700);
     }
   }
@@ -213,7 +213,7 @@ class _DataQualityPageState extends State<DataQualityPage>
 
   // Quality dimensions â€” loaded from API, fall back to defaults
   List<(String, double, Color)> _dimensions = [
-    ('Completeness', 0.82, const Color(0xFF00C896)),
+    ('Completeness', 0.82, const Color(0xFF3DB89A)),
     ('Accuracy',     0.77, const Color(0xFF3B82F6)),
     ('Consistency',  0.91, const Color(0xFF8B5CF6)),
     ('Uniqueness',   0.96, const Color(0xFFFF6B35)),
@@ -244,7 +244,7 @@ class _DataQualityPageState extends State<DataQualityPage>
       if (dims.isNotEmpty && mounted) {
         setState(() {
           _dimensions = [
-            ('Completeness', (dims['completeness'] as num?)?.toDouble() ?? 0.82, const Color(0xFF00C896)),
+            ('Completeness', (dims['completeness'] as num?)?.toDouble() ?? 0.82, const Color(0xFF3DB89A)),
             ('Accuracy',     (dims['accuracy']     as num?)?.toDouble() ?? 0.77, const Color(0xFF3B82F6)),
             ('Consistency',  (dims['consistency']  as num?)?.toDouble() ?? 0.91, const Color(0xFF8B5CF6)),
             ('Uniqueness',   (dims['uniqueness']   as num?)?.toDouble() ?? 0.96, const Color(0xFFFF6B35)),
@@ -688,7 +688,7 @@ class _DataQualityPageState extends State<DataQualityPage>
   Widget _buildOverallGauge() {
     final score = _overallScore;
     final color = score >= 0.9
-        ? const Color(0xFF00C896)
+        ? const Color(0xFF3DB89A)
         : score >= 0.75
             ? AppColors.warning
             : AppColors.error;
@@ -851,7 +851,7 @@ class _DataQualityPageState extends State<DataQualityPage>
           'Auto-Resolved Today',
           '34',
           Icons.check_circle_outline_rounded,
-          const Color(0xFF00C896),
+          const Color(0xFF3DB89A),
           'Via enrichment rules',
         ),
       ],

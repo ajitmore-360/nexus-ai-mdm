@@ -407,7 +407,7 @@ class AppTheme {
         activeTrackColor: AppColors.primary,
         inactiveTrackColor: AppColors.divider,
         thumbColor: AppColors.primary,
-        overlayColor: Color(0x2000C896),
+        overlayColor: Color(0x20599B81),
         valueIndicatorColor: AppColors.darkGreen,
         valueIndicatorTextStyle: TextStyle(
           color: AppColors.primaryText,

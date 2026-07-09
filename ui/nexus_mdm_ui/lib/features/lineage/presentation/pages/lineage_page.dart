@@ -42,7 +42,7 @@ class _LineagePageState extends State<LineagePage>
 
   // Target nodes: distribution sinks â€” no dedicated API yet, use sensible defaults
   static const _targetNodes = [
-    _LineageNode('Data Warehouse', Icons.warehouse_outlined, Color(0xFF00C896),
+    _LineageNode('Data Warehouse', Icons.warehouse_outlined, Color(0xFF3DB89A),
         'Golden records', 'Mode: CDC'),
     _LineageNode('Analytics BI', Icons.bar_chart_outlined, Color(0xFF3B82F6),
         'Reporting layer', 'Mode: Pull'),
@@ -86,7 +86,7 @@ class _LineagePageState extends State<LineagePage>
       setState(() {
         _stats = [
           _LineStat('Total Lineage Events', _compactNum(total), Icons.timeline_rounded, AppColors.primary),
-          _LineStat('Source Systems', '${_sourceNodes.length}', Icons.hub_rounded, const Color(0xFF00C896)),
+          _LineStat('Source Systems', '${_sourceNodes.length}', Icons.hub_rounded, const Color(0xFF3DB89A)),
           _LineStat('Active Pipelines', '${_sourceNodes.length + _targetNodes.length}', Icons.speed_rounded, const Color(0xFF8B5CF6)),
           _LineStat('Lineage Types', '${(data['by_type'] as Map?)?.length ?? 0}', Icons.verified_rounded, const Color(0xFF3B82F6)),
         ];
@@ -170,7 +170,7 @@ class _LineagePageState extends State<LineagePage>
   static Color _colorForConnector(String type) {
     switch (type) {
       case 'salesforce': return AppColors.primary;
-      case 'sap':        return const Color(0xFF00C896);
+      case 'sap':        return const Color(0xFF3DB89A);
       case 'oracle':     return const Color(0xFFFF6B35);
       case 'manual':     return const Color(0xFF8B5CF6);
       case 'hubspot':    return const Color(0xFFFF7A59);
@@ -587,7 +587,7 @@ class _LineagePageState extends State<LineagePage>
       case 'derived':       return AppColors.primary;
       case 'merged':        return const Color(0xFF8B5CF6);
       case 'transformed':   return const Color(0xFF3B82F6);
-      case 'replicated':    return const Color(0xFF00C896);
+      case 'replicated':    return const Color(0xFF3DB89A);
       default:              return AppColors.secondaryText;
     }
   }
@@ -749,7 +749,7 @@ class _FlowLanePainter extends CustomPainter {
     for (int i = 0; i < 4; i++) {
       final y = size.height * (i + 0.5) / 4;
       _drawArrow(canvas, size, Offset(cx + 40, cy), Offset(size.width, y),
-          const Color(0xFF1E3A5F), const Color(0xFF00C896),
+          const Color(0xFF1E3A5F), const Color(0xFF3DB89A),
           (progress + 0.5) % 1.0, i);
     }
   }
@@ -876,7 +876,7 @@ class _DagNodeBox extends StatelessWidget {
   static Color _typeColor(String type) {
     switch (type.toLowerCase()) {
       case 'customer':     return AppColors.primary;
-      case 'product':      return const Color(0xFF00C896);
+      case 'product':      return const Color(0xFF3DB89A);
       case 'vendor':       return const Color(0xFFFF6B35);
       case 'location':     return const Color(0xFF3B82F6);
       case 'employee':     return const Color(0xFF8B5CF6);
@@ -929,7 +929,7 @@ class _DagEdgePainter extends CustomPainter {
       case 'derived':     return AppColors.primary;
       case 'merged':      return const Color(0xFF8B5CF6);
       case 'transformed': return const Color(0xFF3B82F6);
-      case 'replicated':  return const Color(0xFF00C896);
+      case 'replicated':  return const Color(0xFF3DB89A);
       default:            return AppColors.secondaryText;
     }
   }

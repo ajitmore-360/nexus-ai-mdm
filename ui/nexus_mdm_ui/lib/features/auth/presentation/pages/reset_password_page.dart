@@ -123,7 +123,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0x1500C896), Colors.transparent, Color(0x150A1628)],
+                colors: [Color(0x15599B81), Colors.transparent, Color(0x15070E0B)],
               ),
             ),
           ),

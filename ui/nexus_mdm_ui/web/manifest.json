@@ -1,11 +1,11 @@
-﻿{
-    "name": "azile_mdm_ui",
-    "short_name": "azile_mdm_ui",
+{
+    "name": "Azile AI MDM",
+    "short_name": "Azile",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#070E0B",
+    "theme_color": "#599B81",
+    "description": "AI-powered Master Data Management — your data, unified and trusted.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

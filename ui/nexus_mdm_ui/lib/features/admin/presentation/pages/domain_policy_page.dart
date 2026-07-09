@@ -712,9 +712,9 @@ class _WeightBar extends StatelessWidget {
 
   static const _labels = ['Exact', 'Fuzzy', 'Phonetic', 'Semantic', 'Vector'];
   static const _colors = [
-    Color(0xFF7C3AED), // violet — exact
+    Color(0xFF599B81), // sage — exact
     Color(0xFF00D9FF), // cyan — fuzzy
-    Color(0xFFA855F7), // violet light — phonetic
+    Color(0xFF3DB89A), // teal — phonetic
     Color(0xFFFFB800), // amber — semantic
     Color(0xFF10F090), // green — vector
   ];
@@ -1157,7 +1157,7 @@ class _PolicyEditDialogState extends State<_PolicyEditDialog> {
                       value: _exact,
                       min: 0.0,
                       max: 1.0,
-                      activeColor: const Color(0xFF7C3AED),
+                      activeColor: const Color(0xFF599B81),
                       onChanged: (v) => setState(() => _exact = v),
                     ),
                     const SizedBox(height: 4),
@@ -1175,7 +1175,7 @@ class _PolicyEditDialogState extends State<_PolicyEditDialog> {
                       value: _phonetic,
                       min: 0.0,
                       max: 1.0,
-                      activeColor: const Color(0xFFA855F7),
+                      activeColor: const Color(0xFF3DB89A),
                       onChanged: (v) => setState(() => _phonetic = v),
                     ),
                     const SizedBox(height: 4),

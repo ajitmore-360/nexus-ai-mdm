@@ -4,7 +4,7 @@
   // App Info
   static const String appName = 'Azile AI MDM';
   static const String appVersion = '1.0.0';
-  static const String appTagline = 'Intelligent Master Data Management';
+  static const String appTagline = 'Your data. Unified. Trusted.';
 
   // API Configuration
   static const String baseUrl = 'http://localhost:8080';
