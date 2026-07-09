@@ -402,7 +402,7 @@ services:
       kafka:
         condition: service_healthy
     environment:
-      <<: [*db-env, *redis-env, *kafka-env, *obs-env]
+      <<: [*db-env, *redis-env, *auth-env, *kafka-env, *obs-env]
       MDM_CORE_URL:         http://mdm-core:8081
       INGEST_PORT:          "8083"
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
@@ -619,7 +619,7 @@ services:
 
   azile-ui:
     build:
-      context: ../ui/azile_mdm_ui
+      context: ../ui/nexus_mdm_ui
       dockerfile: Dockerfile
     container_name: azile-ui
     restart: unless-stopped
