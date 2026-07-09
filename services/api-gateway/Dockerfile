@@ -30,11 +30,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Create a dedicated non-root user — principle of least privilege
 RUN groupadd --gid 10001 azile \
- && useradd  --uid 10001 --gid nexus --no-create-home --shell /usr/sbin/nologin azile
+ && useradd  --uid 10001 --gid azile --no-create-home --shell /usr/sbin/nologin azile
 
 COPY --from=builder /workspace/target/release/api-gateway /usr/local/bin/api-gateway
 
-# Ensure binary is owned by root but executable by nexus user
+# Ensure binary is owned by root but executable by azile user
 RUN chown root:azile /usr/local/bin/api-gateway \
  && chmod 550 /usr/local/bin/api-gateway
 
