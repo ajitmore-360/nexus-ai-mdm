@@ -1,4 +1,4 @@
--- ============================================================================
+- ============================================================================
 -- 0013 — Data Quality Rules & Violations
 --
 -- Stores tenant-authored quality rules (completeness, format, range checks
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS core_mdm.quality_violations (
                                 ON DELETE SET NULL,
     -- Full rule snapshot at detection time for audit trail
     rule_snapshot   JSONB       NOT NULL,
-    entity_id       UUID        REFERENCES core_mdm.entities(id)
+    entity_id       UUID        REFERENCES core_mdm.entities(entity_id)
                                 ON DELETE CASCADE,
     entity_type     TEXT        NOT NULL,
     violated_fields JSONB       NOT NULL DEFAULT '[]'::jsonb,

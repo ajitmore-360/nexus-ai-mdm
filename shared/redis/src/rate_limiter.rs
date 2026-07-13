@@ -81,6 +81,32 @@ impl RedisRateLimiter {
         Ok(ok)
     }
 
+    /// Store an arbitrary string value under `key` (prefixed) with a TTL.
+    /// Used by cross-service coordination (e.g. recording password-change timestamps).
+    pub async fn set_raw(&self, key: &str, value: &str, ttl_secs: u64) -> Result<()> {
+        let full_key = format!("{}:{}", self.prefix, key);
+        let mut conn = self.pool.get().await?;
+        let _: () = redis::cmd("SET")
+            .arg(&full_key)
+            .arg(value)
+            .arg("EX")
+            .arg(ttl_secs)
+            .query_async(&mut conn)
+            .await?;
+        Ok(())
+    }
+
+    /// Retrieve a raw string value stored under `key` (prefixed).
+    pub async fn get_raw(&self, key: &str) -> Result<Option<String>> {
+        let full_key = format!("{}:{}", self.prefix, key);
+        let mut conn = self.pool.get().await?;
+        let val: Option<String> = redis::cmd("GET")
+            .arg(&full_key)
+            .query_async(&mut conn)
+            .await?;
+        Ok(val)
+    }
+
     /// Return the remaining request budget for `client_key` in the current window.
     pub async fn remaining(&self, client_key: &str) -> Result<u64> {
         let key = format!("{}:ratelimit:{}", self.prefix, client_key);

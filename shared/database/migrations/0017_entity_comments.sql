@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS core_mdm.entity_comments (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id   UUID        NOT NULL REFERENCES core_mdm.tenants(tenant_id),
-    entity_id   UUID        NOT NULL REFERENCES core_mdm.entities(id) ON DELETE CASCADE,
+    entity_id   UUID        NOT NULL REFERENCES core_mdm.entities(entity_id) ON DELETE CASCADE,
     author_id   UUID        NOT NULL,
     author_name VARCHAR(255) NOT NULL DEFAULT '',
     content     TEXT        NOT NULL CHECK (char_length(content) BETWEEN 1 AND 5000),

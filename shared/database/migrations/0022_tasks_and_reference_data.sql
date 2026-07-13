@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS core_mdm.tasks (
                                  CHECK (status IN ('Open','InProgress','Completed','Cancelled','Escalated')),
     priority         SMALLINT    NOT NULL DEFAULT 2 CHECK (priority BETWEEN 1 AND 5),
     -- Related entity/entity_type context
-    entity_id        UUID        REFERENCES core_mdm.entities(id) ON DELETE SET NULL,
+    entity_id        UUID        REFERENCES core_mdm.entities(entity_id) ON DELETE SET NULL,
     entity_type      VARCHAR(100),
     -- Assignment
     assignee_id      UUID,

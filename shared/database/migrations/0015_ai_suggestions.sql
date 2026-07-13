@@ -8,7 +8,7 @@
 CREATE TABLE IF NOT EXISTS core_mdm.ai_suggestions (
     id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id        UUID         NOT NULL REFERENCES core_mdm.tenants(tenant_id),
-    entity_id        UUID         REFERENCES core_mdm.entities(id) ON DELETE CASCADE,
+    entity_id        UUID         REFERENCES core_mdm.entities(entity_id) ON DELETE CASCADE,
     entity_type      TEXT         NOT NULL DEFAULT '',
 
     -- What triggered this suggestion

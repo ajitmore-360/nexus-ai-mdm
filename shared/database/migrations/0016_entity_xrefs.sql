@@ -7,7 +7,7 @@
 CREATE TABLE IF NOT EXISTS core_mdm.entity_xrefs (
     id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID         NOT NULL REFERENCES core_mdm.tenants(tenant_id),
-    entity_id       UUID         NOT NULL REFERENCES core_mdm.entities(id) ON DELETE CASCADE,
+    entity_id       UUID         NOT NULL REFERENCES core_mdm.entities(entity_id) ON DELETE CASCADE,
     source_system   VARCHAR(100) NOT NULL,
     external_id     VARCHAR(500) NOT NULL,
     external_type   VARCHAR(100),

@@ -43,6 +43,37 @@ async fn forward_get_with_service_auth(
     forward_get_with_auth(http, base_url, path, headers, Some(mdm_service_auth())).await
 }
 
+/// Forward a GET with service-to-service auth AND an optional raw query string.
+async fn forward_get_with_service_auth_and_query(
+    http:      &reqwest::Client,
+    base_url:  &str,
+    path:      &str,
+    query:     Option<&str>,
+    headers:   &HeaderMap,
+) -> Response {
+    let base = format!("{}{}", base_url.trim_end_matches('/'), path);
+    let url = match query {
+        Some(q) if !q.is_empty() => format!("{}?{}", base, q),
+        _ => base,
+    };
+    let mut req = http.get(&url).header("authorization", mdm_service_auth());
+    for (k, v) in headers.iter() {
+        if k.as_str() == "authorization" { continue; }
+        if let Ok(v) = v.to_str() { req = req.header(k.as_str(), v); }
+    }
+    match req.send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            (status, Json(body)).into_response()
+        }
+        Err(e) => {
+            tracing::error!(error=%e, url=%url, "upstream GET failed");
+            (StatusCode::BAD_GATEWAY, Json(json!({ "error": "upstream unavailable" }))).into_response()
+        }
+    }
+}
+
 /// Forward a GET, optionally appending a raw query string (e.g. `"key=val&key2=val2"`).
 async fn forward_get_with_query(
     http:      &reqwest::Client,
@@ -1563,7 +1594,7 @@ pub async fn list_quality_violations(
     headers:                        HeaderMap,
     axum::extract::RawQuery(query): axum::extract::RawQuery,
 ) -> impl IntoResponse {
-    forward_get_with_query(
+    forward_get_with_service_auth_and_query(
         &state.services.http,
         &state.settings.mdm_core_url,
         "/quality-violations",
@@ -2189,4 +2220,218 @@ pub async fn proxy_entities_by_role(
     let qs = params.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<_>>().join("&");
     let qs_opt = if qs.is_empty() { None } else { Some(qs.as_str()) };
     forward_get_with_query(&state.services.http, &state.settings.mdm_core_url, "/party-roles/by-role", qs_opt, &headers).await
+}
+
+// ── SSO configuration proxy ───────────────────────────────────────────────────
+
+pub async fn list_sso_configs(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_get(&state.services.http, &state.settings.mdm_core_url, "/sso-configurations", &headers).await
+}
+
+pub async fn upsert_sso_config(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> impl IntoResponse {
+    forward_put(&state.services.http, &state.settings.mdm_core_url, "/sso-configurations", &headers, body).await
+}
+
+pub async fn delete_sso_config(
+    State(state):          State<AppState>,
+    Path(provider_type):   Path<String>,
+    headers:               HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/sso-configurations/{}", provider_type);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+// ── SCIM token management proxy ───────────────────────────────────────────────
+
+pub async fn proxy_list_scim_tokens(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_get(&state.services.http, &state.settings.mdm_core_url, "/scim/tokens", &headers).await
+}
+
+pub async fn proxy_create_scim_token(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/scim/tokens", &headers, body).await
+}
+
+pub async fn proxy_revoke_scim_token(
+    State(state):  State<AppState>,
+    Path(id):      Path<Uuid>,
+    headers:       HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/scim/tokens/{}", id);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+// ── Workflow engine proxy ─────────────────────────────────────────────────────
+
+pub async fn proxy_list_workflow_step_types(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_get(&state.services.http, &state.settings.mdm_core_url, "/workflow-step-types", &headers).await
+}
+
+pub async fn proxy_list_workflows(
+    State(state):  State<AppState>,
+    headers:       HeaderMap,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let qs = build_qs_map(&params);
+    let path = if qs.is_empty() { "/workflows".to_string() } else { format!("/workflows?{}", qs) };
+    forward_get(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_create_workflow(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/workflows", &headers, body).await
+}
+
+pub async fn proxy_get_workflow(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/workflows/{}", id);
+    forward_get(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_update_workflow(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> impl IntoResponse {
+    let path = format!("/workflows/{}", id);
+    forward_put(&state.services.http, &state.settings.mdm_core_url, &path, &headers, body).await
+}
+
+pub async fn proxy_delete_workflow(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/workflows/{}", id);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_toggle_workflow(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/workflows/{}/toggle", id);
+    forward_put(&state.services.http, &state.settings.mdm_core_url, &path, &headers, serde_json::json!({})).await
+}
+
+pub async fn proxy_list_workflow_runs(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/workflows/{}/runs", id);
+    forward_get(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_trigger_workflow(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+    body:         Option<Json<Value>>,
+) -> impl IntoResponse {
+    let b = body.map(|j| j.0).unwrap_or(serde_json::json!({}));
+    let path = format!("/workflows/{}/trigger", id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, b).await
+}
+
+// ── Connector marketplace proxy ───────────────────────────────────────────────
+
+pub async fn proxy_list_connector_catalog(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_get(&state.services.http, &state.settings.mdm_core_url, "/connector-catalog", &headers).await
+}
+
+pub async fn proxy_list_connectors(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_get(&state.services.http, &state.settings.mdm_core_url, "/connectors", &headers).await
+}
+
+pub async fn proxy_create_connector(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    Json(body):   Json<Value>,
+) -> impl IntoResponse {
+    forward_post(&state, &state.settings.mdm_core_url, "/connectors", &headers, body).await
+}
+
+pub async fn proxy_delete_connector(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/connectors/{}", id);
+    forward_delete(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
+}
+
+pub async fn proxy_test_connector(
+    State(state): State<AppState>,
+    Path(id):     Path<Uuid>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    let path = format!("/connectors/{}/test", id);
+    forward_post(&state, &state.settings.mdm_core_url, &path, &headers, serde_json::json!({})).await
+}
+
+// ── Enrichment configuration proxy ───────────────────────────────────────────
+
+pub async fn proxy_list_enrichment_providers(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_get(&state.services.http, &state.settings.mdm_core_url, "/enrichment-providers", &headers).await
+}
+
+pub async fn proxy_list_enrichment_configs(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+) -> impl IntoResponse {
+    forward_get(&state.services.http, &state.settings.mdm_core_url, "/enrichment-configs", &headers).await
+}
+
+pub async fn proxy_update_enrichment_config(
+    State(state):     State<AppState>,
+    Path(code):       Path<String>,
+    headers:          HeaderMap,
+    Json(body):       Json<Value>,
+) -> impl IntoResponse {
+    let path = format!("/enrichment-configs/{}", code);
+    forward_put(&state.services.http, &state.settings.mdm_core_url, &path, &headers, body).await
+}
+
+pub async fn proxy_list_enrichment_requests(
+    State(state):  State<AppState>,
+    headers:       HeaderMap,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let qs = build_qs_map(&params);
+    let path = if qs.is_empty() { "/enrichment-requests".to_string() } else { format!("/enrichment-requests?{}", qs) };
+    forward_get(&state.services.http, &state.settings.mdm_core_url, &path, &headers).await
 }

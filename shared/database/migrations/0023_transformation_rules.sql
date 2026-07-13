@@ -81,7 +81,7 @@ CREATE POLICY tenant_isolation ON core_mdm.transformation_log
 CREATE TABLE IF NOT EXISTS core_mdm.party_roles (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id        UUID        NOT NULL REFERENCES core_mdm.tenants(tenant_id),
-    entity_id        UUID        NOT NULL REFERENCES core_mdm.entities(id) ON DELETE CASCADE,
+    entity_id        UUID        NOT NULL REFERENCES core_mdm.entities(entity_id) ON DELETE CASCADE,
     role_code        VARCHAR(50) NOT NULL CHECK (role_code IN (
         'Customer', 'Supplier', 'Employee', 'Partner',
         'Prospect', 'Competitor', 'Regulator', 'Shareholder', 'Other'

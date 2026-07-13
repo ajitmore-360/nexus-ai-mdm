@@ -544,6 +544,20 @@ class AppRouter {
       final loggedIn = await AuthManager.isLoggedIn()
           .timeout(const Duration(seconds: 5), onTimeout: () => false);
       if (!loggedIn) return '/login';
+
+      // Role guard — only admin and steward may write entity data
+      const dataWriteRoutes = {
+        '/dashboard/entities/create',
+        '/dashboard/entities/ingest',
+        '/dashboard/entities/bulk',
+      };
+      if (dataWriteRoutes.contains(loc)) {
+        final role = await AuthManager.getUserRole() ?? '';
+        if (!{'admin', 'steward', 'super_admin'}.contains(role)) {
+          return '/dashboard';
+        }
+      }
+
       return null;
     } catch (e) {
       debugPrint('AZILE GUARD ERROR: $e');

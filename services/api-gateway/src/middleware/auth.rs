@@ -86,7 +86,36 @@ pub async fn auth_middleware(
                         Ok(false) => {}
                     }
                 }
-                // Inject claims so downstream handlers can use them
+                // VAPT-013: Reject tokens issued before the user's last password change.
+                // Fail-open on Redis errors so a Redis outage never locks out all users.
+                if let Some(ref redis_limiter) = state.redis_rate_limiter {
+                    match redis_limiter
+                        .get_raw(&format!("pw_changed:{}", claims.sub))
+                        .await
+                    {
+                        Ok(Some(ts_str)) => {
+                            if let Ok(pw_ts) = ts_str.parse::<i64>() {
+                                if claims.iat < pw_ts {
+                                    return (
+                                        StatusCode::UNAUTHORIZED,
+                                        Json(json!({
+                                            "success": false,
+                                            "error": "session invalidated - please log in again"
+                                        })),
+                                    ).into_response();
+                                }
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            tracing::warn!(
+                                error=%e,
+                                "Redis password-change check failed; allowing request"
+                            );
+                        }
+                    }
+                }
+                                // Inject claims so downstream handlers can use them
                 request.extensions_mut().insert(claims);
                 return next.run(request).await;
             }

@@ -72,14 +72,14 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.9",
+ "azile-redis",
+ "azile-telemetry",
  "chrono",
  "contracts",
  "dashmap",
  "database",
  "dotenvy",
  "futures",
- "nexus-redis",
- "nexus-telemetry",
  "reqwest",
  "serde",
  "serde_json",
@@ -169,14 +169,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.7.9",
+ "azile-auth",
+ "azile-redis",
+ "azile-telemetry",
  "chrono",
  "contracts",
  "dashmap",
  "dotenvy",
  "futures-util",
- "nexus-auth",
- "nexus-redis",
- "nexus-telemetry",
  "prometheus",
  "redis",
  "reqwest",
@@ -370,6 +370,81 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "azile-auth"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcrypt",
+ "chrono",
+ "jsonwebtoken",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "azile-datagen"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "csv",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "azile-redis"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "deadpool-redis",
+ "redis",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "azile-security"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "base64 0.22.1",
+ "rand",
+]
+
+[[package]]
+name = "azile-telemetry"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum 0.7.9",
+ "chrono",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "prometheus",
+ "tokio",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -921,6 +996,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.9",
+ "azile-redis",
+ "azile-telemetry",
  "chrono",
  "contracts",
  "database",
@@ -928,8 +1005,6 @@ dependencies = [
  "futures",
  "hex",
  "hmac",
- "nexus-redis",
- "nexus-telemetry",
  "rdkafka",
  "reqwest",
  "serde",
@@ -1000,13 +1075,13 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.9",
+ "azile-redis",
+ "azile-telemetry",
  "chrono",
  "contracts",
  "database",
  "dotenvy",
  "futures",
- "nexus-redis",
- "nexus-telemetry",
  "rand",
  "rdkafka",
  "reqwest",
@@ -1789,6 +1864,9 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.9",
+ "azile-auth",
+ "azile-redis",
+ "azile-telemetry",
  "base64 0.22.1",
  "chrono",
  "contracts",
@@ -1796,9 +1874,6 @@ dependencies = [
  "database",
  "dotenvy",
  "futures",
- "nexus-auth",
- "nexus-redis",
- "nexus-telemetry",
  "rand",
  "rdkafka",
  "reqwest",
@@ -1903,10 +1978,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.7.9",
+ "azile-telemetry",
  "chrono",
  "dotenvy",
  "futures",
- "nexus-telemetry",
  "rdkafka",
  "serde",
  "serde_json",
@@ -2071,6 +2146,10 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.9",
+ "azile-auth",
+ "azile-redis",
+ "azile-security",
+ "azile-telemetry",
  "base64 0.22.1",
  "chrono",
  "config",
@@ -2081,10 +2160,6 @@ dependencies = [
  "futures",
  "hex",
  "hmac",
- "nexus-auth",
- "nexus-redis",
- "nexus-security",
- "nexus-telemetry",
  "prometheus",
  "quick-xml",
  "rand",
@@ -2164,81 +2239,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexus-auth"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcrypt",
- "chrono",
- "jsonwebtoken",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "nexus-datagen"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "csv",
- "rand",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "nexus-redis"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "deadpool-redis",
- "redis",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "nexus-security"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "base64 0.22.1",
- "rand",
-]
-
-[[package]]
-name = "nexus-telemetry"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum 0.7.9",
- "chrono",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "prometheus",
- "tokio",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2263,6 +2263,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.7.9",
+ "azile-redis",
+ "azile-telemetry",
  "chrono",
  "contracts",
  "database",
@@ -2272,8 +2274,6 @@ dependencies = [
  "hex",
  "hmac",
  "lettre",
- "nexus-redis",
- "nexus-telemetry",
  "redis",
  "reqwest",
  "serde",
@@ -2729,13 +2729,13 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.9",
+ "azile-redis",
+ "azile-telemetry",
  "chrono",
  "contracts",
  "database",
  "dotenvy",
  "futures",
- "nexus-redis",
- "nexus-telemetry",
  "reqwest",
  "serde",
  "serde_json",
@@ -3312,13 +3312,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.7.9",
+ "azile-redis",
+ "azile-telemetry",
  "chrono",
  "contracts",
  "database",
  "dotenvy",
  "futures",
- "nexus-redis",
- "nexus-telemetry",
  "reqwest",
  "serde",
  "serde_json",
@@ -3900,15 +3900,15 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.9",
+ "azile-auth",
+ "azile-redis",
+ "azile-telemetry",
  "chrono",
  "contracts",
  "database",
  "dotenvy",
  "futures",
  "jsonwebtoken",
- "nexus-auth",
- "nexus-redis",
- "nexus-telemetry",
  "reqwest",
  "serde",
  "serde_json",

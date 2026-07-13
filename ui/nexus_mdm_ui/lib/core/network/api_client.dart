@@ -194,12 +194,18 @@ class _AuthInterceptor extends Interceptor {
             }
             err.requestOptions.headers[AppConstants.authHeaderKey] =
                 '${AppConstants.authHeaderPrefix}$newToken';
-            final clonedRequest = await Dio().fetch(err.requestOptions);
-            return handler.resolve(clonedRequest);
+            // Retry with new token — a 4xx here (e.g. 403) is a normal error,
+            // not a session failure, so pass it through rather than logging out.
+            try {
+              final clonedRequest = await Dio().fetch(err.requestOptions);
+              return handler.resolve(clonedRequest);
+            } on DioException catch (retryErr) {
+              return handler.next(retryErr);
+            }
           }
         }
       } catch (_) {
-        // Refresh failed — clear all auth tokens then kick user to login.
+        // Refresh request itself failed — clear all auth tokens then kick user to login.
         await SecureStorage.clearAuth();
         AuthManager.onUnauthorized?.call();
         return; // don't propagate — the redirect will rebuild the widget tree

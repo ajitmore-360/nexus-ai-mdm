@@ -62,8 +62,11 @@ pub async fn login(
             }
         };
 
-        const SYSTEM_TENANT: Uuid = Uuid::from_bytes([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]);
-        let tenant_id = req.tenant_id.unwrap_or(SYSTEM_TENANT);
+        let system_tenant = std::env::var("SYSTEM_TENANT_ID")
+            .ok()
+            .and_then(|s| s.parse::<Uuid>().ok())
+            .unwrap_or_else(|| Uuid::from_bytes([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]));
+        let tenant_id = req.tenant_id.unwrap_or(system_tenant);
 
         let pair = match issue_tokens(&cfg, Uuid::new_v4(), tenant_id, &req.email, Role::Admin) {
             Ok(p) => p,

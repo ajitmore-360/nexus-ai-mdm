@@ -205,6 +205,15 @@ async fn main() {
         );
     }
 
+    if !jwt_secret.is_empty() && jwt_secret.len() < 32 {
+        panic!(
+            "SECURITY: JWT_SECRET is too short ({} chars). \
+             A minimum of 32 characters is required. \
+             Generate a strong secret: openssl rand -hex 32",
+            jwt_secret.len()
+        );
+    }
+
     // Guard: API_BEARER_TOKEN must be set and must not be the known dev default in
     // non-development environments. mdm_service_auth() sends this as the
     // service-to-service Authorization header on every proxied write to mdm-core.

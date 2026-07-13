@@ -1,4 +1,5 @@
-﻿use std::sync::Arc;
+﻿use std::net::IpAddr;
+use std::sync::Arc;
 
 use axum::{
     extract::{Extension, Path, Query, State},
@@ -11,6 +12,61 @@ use uuid::Uuid;
 
 use crate::crypto::{encrypt_config, decrypt_config};
 use crate::state::AppState;
+
+// ── SSRF guard ────────────────────────────────────────────────────────────────
+
+fn ssrf_safe_url(url_str: &str) -> Result<(), String> {
+    let parsed = reqwest::Url::parse(url_str)
+        .map_err(|e| format!("invalid URL: {}", e))?;
+    match parsed.scheme() {
+        "http" | "https" => {}
+        s => return Err(format!("URL scheme '{}' is not allowed; use http or https", s)),
+    }
+    let host = parsed.host_str().ok_or_else(|| "URL has no host".to_string())?;
+    ssrf_safe_host(host)
+}
+
+fn ssrf_safe_host(host: &str) -> Result<(), String> {
+    let lower = host.to_lowercase();
+    if lower == "localhost"
+        || lower.ends_with(".localhost")
+        || lower == "metadata.google.internal"
+        || lower.ends_with(".internal")
+        || lower.ends_with(".local")
+    {
+        return Err(format!("host '{}' is not allowed", host));
+    }
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return if is_ssrf_blocked_ip(ip) {
+            Err(format!("IP '{}' is a private/reserved address", ip))
+        } else {
+            Ok(())
+        };
+    }
+    Ok(())
+}
+
+fn is_ssrf_blocked_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            let o = v4.octets();
+            v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.is_unspecified()
+                || o[0] == 10
+                || (o[0] == 172 && (16..=31).contains(&o[1]))
+                || (o[0] == 192 && o[1] == 168)
+                || (o[0] == 169 && o[1] == 254)
+        }
+        IpAddr::V6(v6) => v6.is_loopback() || v6.is_unspecified(),
+    }
+}
+
+fn ssrf_safe_addr(addr: &str) -> Result<(), String> {
+    let host = addr.rsplit_once(':').map(|(h, _)| h).unwrap_or(addr);
+    ssrf_safe_host(host)
+}
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // REQUEST / RESPONSE TYPES
@@ -444,6 +500,7 @@ async fn probe_rest_api(config: &serde_json::Value) -> Result<String, String> {
     if url.is_empty() {
         return Err("URL not configured".to_string());
     }
+    ssrf_safe_url(url)?;
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
         .build()
@@ -461,6 +518,7 @@ async fn probe_rest_api_url(url: &str) -> Result<String, String> {
     if url.is_empty() {
         return Err("URL not configured".to_string());
     }
+    ssrf_safe_url(url)?;
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
         .build()
@@ -489,6 +547,7 @@ async fn probe_tcp_host_port(addr: &str) -> Result<String, String> {
     if addr.starts_with(':') || addr.is_empty() {
         return Err("Host not configured".to_string());
     }
+    ssrf_safe_addr(addr)?;
     use tokio::net::TcpStream;
     use tokio::time::timeout;
     match timeout(

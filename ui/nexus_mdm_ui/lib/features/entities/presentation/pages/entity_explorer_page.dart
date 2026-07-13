@@ -76,6 +76,11 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
       _userRole == 'business_admin' ||
       _userRole == 'steward';
 
+  bool get _canCreate =>
+      _userRole == 'admin' ||
+      _userRole == 'steward' ||
+      _userRole == 'super_admin';
+
   Future<void> _loadStewardTypes() async {
     final types = await AuthManager.getAssignedEntityTypes();
     if (!mounted) return;
@@ -210,11 +215,13 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.navyBackground,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _navigateToCreateEntity,
-        icon: const Icon(Icons.add),
-        label: const Text('New Entity'),
-      ).animate(delay: 400.ms).fadeIn().scaleXY(begin: 0.8, end: 1.0),
+      floatingActionButton: _canCreate
+          ? FloatingActionButton.extended(
+              onPressed: _navigateToCreateEntity,
+              icon: const Icon(Icons.add),
+              label: const Text('New Entity'),
+            ).animate(delay: 400.ms).fadeIn().scaleXY(begin: 0.8, end: 1.0)
+          : null,
       body: Column(
         children: [
           _buildToolbar(),
@@ -501,8 +508,8 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
         description: _searchController.text.isNotEmpty
             ? 'No entities match your search. Try different keywords.'
             : 'No entities yet. Create your first entity to get started.',
-        actionLabel: 'Create Entity',
-        onAction: _navigateToCreateEntity,
+        actionLabel: _canCreate ? 'Create Entity' : null,
+        onAction: _canCreate ? _navigateToCreateEntity : null,
       );
     }
 

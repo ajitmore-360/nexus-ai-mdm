@@ -93,11 +93,11 @@ pub async fn login(
     }
 
     // â”€â”€ Brute-force protection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // x-real-ip is injected by the api-gateway's user_context middleware from
+    // ConnectInfo (TCP peer). x-forwarded-for is stripped there to prevent spoofing.
     let client_ip = headers
-        .get("x-forwarded-for")
+        .get("x-real-ip")
         .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .map(str::trim)
         .unwrap_or("unknown");
 
     let rate_key = format!("login:{}:{}", client_ip, &email[..email.len().min(64)]);
@@ -947,6 +947,22 @@ pub async fn change_password(
     }
 
     tracing::info!(identity_id=%identity_id, "password changed");
+
+    // VAPT-013: Record the change timestamp so the gateway can invalidate
+    // tokens issued before this point. Fail-open so a Redis error never
+    // blocks the user from successfully changing their password.
+    if let Some(ref redis_limiter) = state.redis_rate_limiter {
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        if let Err(e) = redis_limiter
+            .set_raw(&format!("pw_changed:{}", identity_id), &ts.to_string(), 86400)
+            .await
+        {
+            tracing::warn!(error=%e, "failed to record password change timestamp in Redis");
+        }
+    }
 
     if let Ok(actor_uuid) = Uuid::parse_str(identity_id) {
         state.audit_service.log_background(AuditEvent {

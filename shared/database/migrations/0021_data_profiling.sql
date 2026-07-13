@@ -47,7 +47,7 @@ CREATE POLICY tenant_isolation ON core_mdm.data_profiles
 CREATE TABLE IF NOT EXISTS core_mdm.entity_versions (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id        UUID        NOT NULL REFERENCES core_mdm.tenants(tenant_id),
-    entity_id        UUID        NOT NULL REFERENCES core_mdm.entities(id) ON DELETE CASCADE,
+    entity_id        UUID        NOT NULL REFERENCES core_mdm.entities(entity_id) ON DELETE CASCADE,
     -- Transaction time: when we recorded this version
     recorded_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     recorded_by      UUID,

@@ -5,15 +5,15 @@
 -- entity_hierarchies = ALL ancestor-descendant pairs (for traversal at any depth).
 
 ALTER TABLE core_mdm.entities
-    ADD COLUMN IF NOT EXISTS parent_entity_id UUID REFERENCES core_mdm.entities(id) ON DELETE SET NULL;
+    ADD COLUMN IF NOT EXISTS parent_entity_id UUID REFERENCES core_mdm.entities(entity_id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS idx_entities_parent
     ON core_mdm.entities (parent_entity_id)
     WHERE parent_entity_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS core_mdm.entity_hierarchies (
-    ancestor_id   UUID    NOT NULL REFERENCES core_mdm.entities(id) ON DELETE CASCADE,
-    descendant_id UUID    NOT NULL REFERENCES core_mdm.entities(id) ON DELETE CASCADE,
+    ancestor_id   UUID    NOT NULL REFERENCES core_mdm.entities(entity_id) ON DELETE CASCADE,
+    descendant_id UUID    NOT NULL REFERENCES core_mdm.entities(entity_id) ON DELETE CASCADE,
     depth         INTEGER NOT NULL DEFAULT 0 CHECK (depth >= 0),
     tenant_id     UUID    NOT NULL,
     PRIMARY KEY (ancestor_id, descendant_id)
