@@ -222,12 +222,15 @@ class _ShellPageState extends State<ShellPage> {
     ),
   ];
 
-  static const _bottomNavItems = [
-    _NavItem(icon: Icons.home_outlined, label: 'Dashboard', route: '/dashboard'),
-    _NavItem(icon: Icons.search_outlined, label: 'Explorer', route: '/dashboard/entities'),
-    _NavItem(icon: Icons.gps_fixed_outlined, label: 'Queue', route: '/dashboard/match-queue'),
-    _NavItem(icon: Icons.auto_awesome_outlined, label: 'AI', route: '/dashboard/ai-prism', isAi: true),
-    _NavItem(icon: Icons.settings_outlined, label: 'Settings', route: '/dashboard/settings'),
+  List<_NavItem> get _bottomNavItems => [
+    const _NavItem(icon: Icons.home_outlined, label: 'Dashboard', route: '/dashboard'),
+    const _NavItem(icon: Icons.search_outlined, label: 'Explorer', route: '/dashboard/entities'),
+    const _NavItem(icon: Icons.gps_fixed_outlined, label: 'Queue', route: '/dashboard/match-queue'),
+    const _NavItem(icon: Icons.auto_awesome_outlined, label: 'AI', route: '/dashboard/ai-prism', isAi: true),
+    if (_currentUser.canManageSettings)
+      const _NavItem(icon: Icons.settings_outlined, label: 'Settings', route: '/dashboard/settings')
+    else
+      const _NavItem(icon: Icons.person_outline, label: 'Profile', route: '/dashboard/profile'),
   ];
 
   // â”€â”€ Lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -451,15 +454,16 @@ class _ShellPageState extends State<ShellPage> {
             ),
             child: Column(
               children: [
-                _buildNavItemWidget(
-                  context,
-                  const _NavItem(
-                    icon: Icons.settings_outlined,
-                    label: 'Settings',
-                    route: '/dashboard/settings',
+                if (_currentUser.canManageSettings)
+                  _buildNavItemWidget(
+                    context,
+                    const _NavItem(
+                      icon: Icons.settings_outlined,
+                      label: 'Settings',
+                      route: '/dashboard/settings',
+                    ),
+                    location.startsWith('/dashboard/settings'),
                   ),
-                  location.startsWith('/dashboard/settings'),
-                ),
                 const SizedBox(height: 8),
                 _buildUserTile(),
               ],
@@ -908,14 +912,15 @@ class _ShellPageState extends State<ShellPage> {
             Text('Profile'),
           ]),
         ),
-        const PopupMenuItem(
-          value: 'settings',
-          child: Row(children: [
-            Icon(Icons.settings_outlined, size: 16),
-            SizedBox(width: 8),
-            Text('Settings'),
-          ]),
-        ),
+        if (_currentUser.canManageSettings)
+          const PopupMenuItem(
+            value: 'settings',
+            child: Row(children: [
+              Icon(Icons.settings_outlined, size: 16),
+              SizedBox(width: 8),
+              Text('Settings'),
+            ]),
+          ),
         const PopupMenuDivider(),
         const PopupMenuItem(
           value: 'logout',
@@ -930,6 +935,7 @@ class _ShellPageState extends State<ShellPage> {
       ],
       onSelected: (value) {
         if (value == 'logout') _handleLogout();
+        if (value == 'profile') context.go('/dashboard/profile');
         if (value == 'settings') context.go('/dashboard/settings');
       },
     );
@@ -997,6 +1003,7 @@ class _ShellPageState extends State<ShellPage> {
     if (location.startsWith('/dashboard/distribution')) return 'Distribution Monitor';
     if (location.startsWith('/dashboard/notifications')) return 'Notifications';
     if (location.startsWith('/dashboard/settings')) return 'Settings';
+    if (location.startsWith('/dashboard/profile')) return 'My Profile';
     if (location.startsWith('/dashboard/org/sso')) return 'Enterprise SSO';
     if (location.startsWith('/dashboard/org/scim-tokens')) return 'SCIM 2.0 Provisioning';
     if (location.startsWith('/dashboard/org/workflows')) return 'Workflow Engine';

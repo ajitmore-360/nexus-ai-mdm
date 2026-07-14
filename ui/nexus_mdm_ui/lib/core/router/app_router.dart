@@ -15,6 +15,7 @@ import '../../features/ai_prism/presentation/pages/ai_prism_page.dart';
 import '../../features/governance/presentation/pages/governance_page.dart';
 import '../../features/analytics/presentation/pages/analytics_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/match_queue/presentation/pages/match_review_page.dart';
 import '../../features/merge/presentation/pages/merge_studio_page.dart';
 import '../../features/entities/presentation/pages/entity_create_page.dart';
@@ -337,6 +338,14 @@ class AppRouter {
             ),
           ),
           GoRoute(
+            path: '/dashboard/profile',
+            name: 'profile',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const ProfilePage(),
+            ),
+          ),
+          GoRoute(
             path: '/dashboard/admin/tenants',
             name: 'admin-tenants',
             pageBuilder: (context, state) => _buildFadePage(
@@ -556,6 +565,12 @@ class AppRouter {
         if (!{'admin', 'steward', 'super_admin'}.contains(role)) {
           return '/dashboard';
         }
+      }
+
+      // Steward cannot access Settings; redirect to their Profile page instead
+      if (loc == '/dashboard/settings') {
+        final role = await AuthManager.getUserRole() ?? '';
+        if (role == 'steward') return '/dashboard/profile';
       }
 
       return null;
