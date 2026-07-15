@@ -157,16 +157,17 @@ class _ShellPageState extends State<ShellPage> {
       ],
     ),
 
-    // â”€â”€ Data access: admin and stewards only â€” BusinessAdmin excluded â”€â”€â”€â”€â”€â”€
+    // â”€â”€ Data access: stewards and viewers only â€” Admins/BusinessAdmins manage
+    // the schema (entity types, attributes) but do not access entity records.
     _NavGroup(
       label: 'ENTITIES',
-      visibleTo: [UserRole.admin, UserRole.steward, UserRole.viewer],
+      visibleTo: [UserRole.steward, UserRole.viewer],
       items: [
         _NavItem(icon: Icons.search_outlined,    label: 'Browse & Search', route: '/dashboard/entities'),
         _NavItem(icon: Icons.add_circle_outline, label: 'Create Entity',   route: '/dashboard/entities/create',
-            visibleTo: [UserRole.admin, UserRole.steward]),
+            visibleTo: [UserRole.steward]),
         _NavItem(icon: Icons.upload_outlined,    label: 'Ingest Data',     route: '/dashboard/entities/ingest',
-            visibleTo: [UserRole.admin, UserRole.steward]),
+            visibleTo: [UserRole.steward]),
       ],
     ),
     _NavGroup(

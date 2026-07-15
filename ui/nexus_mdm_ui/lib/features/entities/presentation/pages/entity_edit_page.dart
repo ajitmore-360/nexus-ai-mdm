@@ -10,6 +10,7 @@ import '../../../../shared/models/entity.dart';
 import '../../data/entity_repository.dart';
 import '../../../../shared/widgets/azile_dialog.dart';
 import '../../../../features/admin/data/entity_type_repository.dart';
+import '../../../../features/admin/data/governance_repository.dart';
 import '../../../../features/admin/data/submaster_repository.dart';
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -154,13 +155,15 @@ class EntityEditPage extends StatefulWidget {
 
 class _EntityEditPageState extends State<EntityEditPage> {
   final _formKey = GlobalKey<FormState>();
-  late final EntityRepository    _repository;
-  late final EntityTypeRepository _entityTypeRepo;
-  late final SubmasterRepository  _submasterRepo;
+  late final EntityRepository     _repository;
+  late final EntityTypeRepository  _entityTypeRepo;
+  late final SubmasterRepository   _submasterRepo;
+  late final GovernanceRepository  _governanceRepo;
 
   _EditEntityType _selectedType   = _EditEntityType.customer;
   _EditStatus     _selectedStatus = _EditStatus.active;
   List<_AttrRow>  _attributes     = [];
+  List<_EditEntityType> _allowedTypes = _EditEntityType.values;
 
   bool _isSaving        = false;
   bool _loadingSchemas  = false;
@@ -172,8 +175,31 @@ class _EntityEditPageState extends State<EntityEditPage> {
     _repository     = EntityRepository(api);
     _entityTypeRepo = EntityTypeRepository(api);
     _submasterRepo  = SubmasterRepository(api);
+    _governanceRepo = GovernanceRepository(api);
     _prefillFromEntity(widget.entity);
+    _loadRole();
     _loadAttributeSchemas();
+  }
+
+  Future<void> _loadRole() async {
+    final role = await AuthManager.getUserRole() ?? '';
+    if (role != 'steward') return;
+    final result = await _governanceRepo.myAssignedTypes();
+    if (!mounted) return;
+    List<_EditEntityType> allowed;
+    if (result is Success<List<Map<String, String>>>) {
+      final codes = result.data.map((m) => m['entity_type_code'] ?? '').toSet();
+      allowed = _EditEntityType.values
+          .where((t) => codes.contains(t.displayLabel))
+          .toList();
+    } else {
+      allowed = [_EditEntityType.customer];
+    }
+    if (allowed.isEmpty) allowed = [_EditEntityType.customer];
+    setState(() {
+      _allowedTypes = allowed;
+      if (!allowed.contains(_selectedType)) _selectedType = allowed.first;
+    });
   }
 
   void _prefillFromEntity(CanonicalEntity? entity) {
@@ -405,7 +431,7 @@ class _EntityEditPageState extends State<EntityEditPage> {
                 const SizedBox(height: 8),
                 _StyledDropdown<_EditEntityType>(
                   value: _selectedType,
-                  items: _EditEntityType.values,
+                  items: _allowedTypes,
                   labelOf: (t) => t.displayLabel,
                   onChanged: (v) =>
                       v != null ? setState(() => _selectedType = v) : null,

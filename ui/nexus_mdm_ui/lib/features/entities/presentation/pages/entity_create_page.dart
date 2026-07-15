@@ -302,6 +302,9 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
   bool _isPublishing = false;
   bool _isSavingDraft = false;
   bool _isSteward = false;
+  bool _roleLoaded = false;
+  // For stewards: only the entity types they are assigned to.
+  List<_EntityType> _allowedTypes = _EntityType.values;
 
   // AI duplicate check state
   bool _isDupChecking = false;
@@ -329,7 +332,32 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
 
   Future<void> _loadRole() async {
     final role = await AuthManager.getUserRole() ?? '';
-    if (mounted) setState(() => _isSteward = role == 'steward');
+    if (role != 'steward') {
+      if (mounted) setState(() { _isSteward = false; _roleLoaded = true; });
+      return;
+    }
+    // Fetch the entity types this steward is assigned to.
+    final result = await _governanceRepo.myAssignedTypes();
+    if (!mounted) return;
+    List<_EntityType> allowed;
+    if (result is Success<List<Map<String, String>>>) {
+      final codes = result.data.map((m) => m['entity_type_code'] ?? '').toSet();
+      allowed = _EntityType.values
+          .where((t) => codes.contains(t.label))
+          .toList();
+    } else {
+      allowed = [_EntityType.customer];
+    }
+    if (allowed.isEmpty) allowed = [_EntityType.customer];
+    setState(() {
+      _isSteward    = true;
+      _roleLoaded   = true;
+      _allowedTypes = allowed;
+      if (!allowed.contains(_selectedType)) {
+        _selectedType = allowed.first;
+        _attributes   = List.from(_selectedType.defaultAttributes);
+      }
+    });
   }
 
   Future<void> _loadSourceSystems() async {
@@ -695,6 +723,34 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_roleLoaded) {
+      return Scaffold(
+        backgroundColor: AppColors.navyBackground,
+        appBar: _buildAppBar(),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (!_isSteward) {
+      return Scaffold(
+        backgroundColor: AppColors.navyBackground,
+        appBar: _buildAppBar(),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_outline, size: 48, color: AppColors.secondaryText),
+              const SizedBox(height: 16),
+              Text('Access restricted', style: AppTextStyles.headlineMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Only data stewards can create entities.',
+                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondaryText),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.navyBackground,
       appBar: _buildAppBar(),
@@ -787,7 +843,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
                     const SizedBox(height: 8),
                     _StyledDropdown<_EntityType>(
                       value: _selectedType,
-                      items: _EntityType.values,
+                      items: _allowedTypes,
                       labelOf: (t) => t.label,
                       onChanged: _onTypeChanged,
                     ),
