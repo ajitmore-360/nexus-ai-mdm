@@ -174,7 +174,7 @@ class _ShellPageState extends State<ShellPage> {
       visibleTo: [UserRole.admin, UserRole.steward],
       items: [
         _NavItem(icon: Icons.gps_fixed_outlined,      label: 'Match Queue',       route: '/dashboard/match-queue'),
-        _NavItem(icon: Icons.merge_outlined,           label: 'Merge Studio',      route: '/dashboard/merge'),
+        _NavItem(icon: Icons.merge_outlined,           label: 'Merge Studio',      route: '/dashboard/match-queue'),
         _NavItem(icon: Icons.star_outline,             label: 'Golden Records',    route: '/dashboard/golden-records'),
         _NavItem(icon: Icons.tune_outlined,            label: 'Matching Rules',    route: '/dashboard/matching-rules',
             visibleTo: [UserRole.admin]),
