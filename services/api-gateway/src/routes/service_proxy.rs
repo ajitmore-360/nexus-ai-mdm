@@ -2040,7 +2040,7 @@ pub async fn proxy_list_tasks(
     headers:                        HeaderMap,
     axum::extract::RawQuery(query): axum::extract::RawQuery,
 ) -> impl IntoResponse {
-    forward_get_with_query(
+    forward_get_with_service_auth_and_query(
         &state.services.http,
         &state.settings.mdm_core_url,
         "/tasks",

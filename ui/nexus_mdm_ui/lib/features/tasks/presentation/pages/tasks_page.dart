@@ -33,11 +33,13 @@ class TaskModel {
   });
 
   factory TaskModel.fromJson(Map<String, dynamic> json) {
-    TaskPriority parsePriority(String? s) {
-      switch (s?.toLowerCase()) {
-        case 'high':   return TaskPriority.high;
-        case 'medium': return TaskPriority.medium;
-        default:       return TaskPriority.low;
+    TaskPriority parsePriority(dynamic raw) {
+      // Backend stores priority as i16: 3=High, 2=Medium, 1=Low
+      final n = raw is int ? raw : int.tryParse(raw?.toString() ?? '');
+      switch (n) {
+        case 3: return TaskPriority.high;
+        case 2: return TaskPriority.medium;
+        default: return TaskPriority.low;
       }
     }
 
@@ -53,7 +55,7 @@ class TaskModel {
       id:          json['id']?.toString() ?? '',
       title:       json['title']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
-      priority:    parsePriority(json['priority']?.toString()),
+      priority:    parsePriority(json['priority']),
       status:      parseStatus(json['status']?.toString()),
       assignee:    json['assignee']?.toString(),
       entityId:    json['entity_id']?.toString(),
@@ -175,6 +177,14 @@ class _TasksPageState extends State<TasksPage> {
     }
   }
 
+  int _priorityToInt(String p) {
+    switch (p) {
+      case 'High':   return 3;
+      case 'Medium': return 2;
+      default:       return 1;
+    }
+  }
+
   Future<void> _createTask({
     required String title,
     required String description,
@@ -186,7 +196,7 @@ class _TasksPageState extends State<TasksPage> {
       final body = <String, dynamic>{
         'title':       title,
         'description': description,
-        'priority':    priority,
+        'priority':    _priorityToInt(priority),
       };
       if (entityId != null && entityId.isNotEmpty) body['entity_id'] = entityId;
       if (dueAt != null) body['due_at'] = dueAt.toIso8601String();
