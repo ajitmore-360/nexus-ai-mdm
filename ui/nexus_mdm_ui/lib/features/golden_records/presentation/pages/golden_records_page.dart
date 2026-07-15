@@ -112,35 +112,35 @@ class _GoldenRecordsPageState extends State<GoldenRecordsPage> {
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
       child: Row(
         children: [
-          _KpiCard(
+          Expanded(child: _KpiCard(
             label: 'Golden Records',
             value: '$total',
             icon: Icons.stars_rounded,
             color: AppColors.statusGolden,
-          ).animate().fadeIn(duration: 350.ms),
+          ).animate().fadeIn(duration: 350.ms)),
           const SizedBox(width: 12),
-          _KpiCard(
+          Expanded(child: _KpiCard(
             label: 'Verified',
             value: '$verified',
             sub: '${total > 0 ? (verified / total * 100).round() : 0}% of total',
             icon: Icons.verified_rounded,
             color: AppColors.primary,
-          ).animate(delay: 60.ms).fadeIn(duration: 350.ms),
+          ).animate(delay: 60.ms).fadeIn(duration: 350.ms)),
           const SizedBox(width: 12),
-          _KpiCard(
+          Expanded(child: _KpiCard(
             label: 'Avg Trust Score',
             value: '${(avgTrust * 100).round()}%',
             icon: Icons.shield_outlined,
             color: AppColors.info,
-          ).animate(delay: 120.ms).fadeIn(duration: 350.ms),
+          ).animate(delay: 120.ms).fadeIn(duration: 350.ms)),
           const SizedBox(width: 12),
-          _KpiCard(
+          Expanded(child: _KpiCard(
             label: 'Contributing Sources',
             value: '$totalSources',
             sub: 'across all records',
             icon: Icons.storage_rounded,
             color: AppColors.aiPurple,
-          ).animate(delay: 180.ms).fadeIn(duration: 350.ms),
+          ).animate(delay: 180.ms).fadeIn(duration: 350.ms)),
         ],
       ),
     );
@@ -488,37 +488,35 @@ class _KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.cardSurface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, size: 18, color: color),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
             ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value, style: AppTextStyles.titleMedium.copyWith(color: color)),
-                Text(label, style: AppTextStyles.labelSmall.copyWith(color: AppColors.secondaryText)),
-                if (sub != null)
-                  Text(sub!, style: AppTextStyles.timestamp.copyWith(fontSize: 10)),
-              ],
-            ),
-          ],
-        ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value, style: AppTextStyles.titleMedium.copyWith(color: color)),
+              Text(label, style: AppTextStyles.labelSmall.copyWith(color: AppColors.secondaryText)),
+              if (sub != null)
+                Text(sub!, style: AppTextStyles.timestamp.copyWith(fontSize: 10)),
+            ],
+          ),
+        ],
       ),
     );
   }
