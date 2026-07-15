@@ -58,20 +58,38 @@ async fn build_test_app() -> (Router, PgPool) {
         },
         matching::{Matcher, MatchingPolicy},
         services::{
+            ai_suggestion_service::AiSuggestionService,
             audit_service::AuditService,
             branding_service::BrandingService,
+            bulk_service::BulkService,
+            comment_service::CommentService,
+            connector_service::ConnectorService,
+            data_profile_service::DataProfileService,
             data_quality_service::DataQualityService,
             distribution_service::DistributionService,
             domain_policy_service::DomainPolicyService,
+            enrichment_service::EnrichmentService,
             entity_service::EntityService,
             golden_record_service::GoldenRecordService,
+            hierarchy_service::HierarchyService,
             license_service::LicenseService,
             matching_service::MatchingService,
             merge_service::MergeService,
             notification_service::NotificationService,
+            party_role_service::PartyRoleService,
+            quality_analytics_service::QualityAnalyticsService,
+            reference_data_service::ReferenceDataService,
             relationship_service::RelationshipService,
             review_service::ReviewService,
+            scim_service::ScimService,
+            sso_service::SsoService,
             survivorship_service::SurvivorshipService,
+            task_service::TaskService,
+            temporal_service::TemporalService,
+            transformation_service::TransformationService,
+            unmerge_service::UnmergeService,
+            workflow_service::WorkflowService,
+            xref_service::XrefService,
         },
         AppState,
     };
@@ -98,6 +116,31 @@ async fn build_test_app() -> (Router, PgPool) {
         Arc::new(gr_repo.clone()),
     ));
 
+    let bulk_service              = Arc::new(BulkService::new(db.clone()));
+    let comment_service           = Arc::new(CommentService::new(db.clone()));
+    let hierarchy_service         = Arc::new(HierarchyService::new(db.clone()));
+    let quality_analytics_service = Arc::new(QualityAnalyticsService::new(db.clone()));
+    let unmerge_service           = Arc::new(UnmergeService::new(db.clone()));
+    let xref_service              = Arc::new(XrefService::new(db.clone()));
+    let data_profile_service      = Arc::new(DataProfileService::new(db.clone()));
+    let reference_data_service    = Arc::new(ReferenceDataService::new(db.clone()));
+    let task_service              = Arc::new(TaskService::new(db.clone()));
+    let temporal_service          = Arc::new(TemporalService::new(db.clone()));
+    let transformation_service    = Arc::new(TransformationService::new(db.clone()));
+    let party_role_service        = Arc::new(PartyRoleService::new(db.clone()));
+    let ai_suggestion_service     = Arc::new(AiSuggestionService::new(
+        db.clone(),
+        std::env::var("AI_SERVICE_URL").unwrap_or_else(|_| "http://ai-service:8082".to_string()),
+    ));
+    let sso_service        = Arc::new(SsoService::new(db.clone()));
+    let scim_service       = Arc::new(ScimService::new(
+        db.clone(),
+        std::env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:8081".to_string()),
+    ));
+    let workflow_service   = Arc::new(WorkflowService::new(db.clone()));
+    let connector_service  = Arc::new(ConnectorService::new(db.clone()));
+    let enrichment_service = Arc::new(EnrichmentService::new(db.clone()));
+
     let state = Arc::new(AppState {
         db:                     db.clone(),
         entity_repository:      entity_repo,
@@ -119,9 +162,29 @@ async fn build_test_app() -> (Router, PgPool) {
         audit_service:          Arc::new(AuditService::new(db.clone())),
         notification_service:   Arc::new(NotificationService::new(db.clone())),
         data_quality_service:   Arc::new(DataQualityService::new(db.clone())),
+        ai_suggestion_service,
         distribution_service:   Arc::new(DistributionService::new(db.clone())),
+        bulk_service,
+        comment_service,
+        hierarchy_service,
+        quality_analytics_service,
+        data_profile_service,
+        reference_data_service,
+        task_service,
+        temporal_service,
+        transformation_service,
+        party_role_service,
+        unmerge_service,
+        xref_service,
+        sso_service,
+        scim_service,
+        workflow_service,
+        connector_service,
+        enrichment_service,
         matching_policy:        live_policy,
         redis_rate_limiter:     None,
+        task_queue:             None,
+        pubsub:                 None,
         field_encryption:       None,
     });
 

@@ -503,7 +503,6 @@ fn parse_saml_response_claims(xml: &str, cfg: &SsoConfig) -> Result<SamlClaims> 
     let mut in_name_id        = false;
     let mut in_attr_name      = false;
     let mut in_attr_value     = false;
-    let mut in_status_code    = false;
     let mut current_attr_name = String::new();
 
     let mut name_id           = String::new();
@@ -528,7 +527,6 @@ fn parse_saml_response_claims(xml: &str, cfg: &SsoConfig) -> Result<SamlClaims> 
                         }
                     }
                     "AttributeValue" if in_attr_name => in_attr_value = true,
-                    "StatusCode" => in_status_code = true,
                     _ => {}
                 }
             }
@@ -559,10 +557,9 @@ fn parse_saml_response_claims(xml: &str, cfg: &SsoConfig) -> Result<SamlClaims> 
             Ok(Event::End(ref e)) => {
                 let local = local_name(e.name().as_ref());
                 match local.as_str() {
-                    "NameID"         => in_name_id    = false,
-                    "Attribute"      => { in_attr_name  = false; in_attr_value = false; }
-                    "AttributeValue" => in_attr_value  = false,
-                    "StatusCode"     => in_status_code = false,
+                    "NameID"         => in_name_id   = false,
+                    "Attribute"      => { in_attr_name = false; in_attr_value = false; }
+                    "AttributeValue" => in_attr_value = false,
                     _ => {}
                 }
             }

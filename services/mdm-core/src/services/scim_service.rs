@@ -441,15 +441,13 @@ impl ScimService {
         #[derive(sqlx::FromRow)]
         struct RoleRow {
             role: String,
-            member_count: i64,
         }
 
         let rows = sqlx::query_as::<_, RoleRow>(
             r#"
-            SELECT role, COUNT(*) as member_count
+            SELECT DISTINCT role
             FROM core_mdm.tenant_memberships
             WHERE tenant_id = $1
-            GROUP BY role
             ORDER BY role
             LIMIT $2 OFFSET $3
             "#,

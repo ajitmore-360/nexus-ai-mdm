@@ -343,14 +343,17 @@ pub async fn list_users(
         .into_iter()
         .map(|r| {
             json!({
-                "user_id":      r.try_get::<Uuid, _>("identity_id").unwrap_or(Uuid::nil()),
-                "email":        r.try_get::<String, _>("email").unwrap_or_default(),
-                "display_name": r.try_get::<String, _>("display_name").unwrap_or_default(),
-                "role":         r.try_get::<String, _>("role").unwrap_or_default(),
-                "status":       r.try_get::<String, _>("status").unwrap_or_default(),
-                "created_at":   r.try_get::<chrono::DateTime<Utc>, _>("joined_at")
-                                  .map(|d| d.to_rfc3339())
-                                  .unwrap_or_default(),
+                "user_id":       r.try_get::<Uuid, _>("identity_id").unwrap_or(Uuid::nil()),
+                "email":         r.try_get::<String, _>("email").unwrap_or_default(),
+                "display_name":  r.try_get::<String, _>("display_name").unwrap_or_default(),
+                "role":          r.try_get::<String, _>("role").unwrap_or_default(),
+                "status":        r.try_get::<String, _>("status").unwrap_or_default(),
+                "created_at":    r.try_get::<chrono::DateTime<Utc>, _>("joined_at")
+                                   .map(|d| d.to_rfc3339())
+                                   .unwrap_or_default(),
+                "last_login_at": r.try_get::<chrono::DateTime<Utc>, _>("last_login_at")
+                                   .ok()
+                                   .map(|d| d.to_rfc3339()),
             })
         })
         .collect();
