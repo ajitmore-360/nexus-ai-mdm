@@ -25,7 +25,7 @@ pub async fn ingest_batch(
     Extension(claims): Extension<Claims>,
     Json(mut batch):   Json<IngestBatch>,
 ) -> impl IntoResponse {
-    // Enforce tenant isolation â€” always use the JWT-authenticated tenant, ignoring any body value.
+    // Enforce tenant isolation â€" always use the JWT-authenticated tenant, ignoring any body value.
     batch.tenant_id = claims.nxs_tenant_id;
     if batch.records.is_empty() {
         return (
@@ -48,7 +48,7 @@ pub async fn ingest_batch(
             let job_id = match persist_job(&state.pool, &batch, &result).await {
                 Ok(id) => Some(id),
                 Err(e) => {
-                    tracing::warn!(error=%e, "failed to persist ingest job â€” result still returned");
+                    tracing::warn!(error=%e, "failed to persist ingest job â€" result still returned");
                     None
                 }
             };
@@ -112,7 +112,7 @@ pub async fn ingest_entities(
             let job_id = match persist_job(&state.pool, &batch, &result).await {
                 Ok(id) => Some(id),
                 Err(e) => {
-                    tracing::warn!(error=%e, "failed to persist ingest job â€” result still returned");
+                    tracing::warn!(error=%e, "failed to persist ingest job â€" result still returned");
                     None
                 }
             };
@@ -196,15 +196,15 @@ pub async fn ingest_csv(
             let job_id = match persist_job(&state.pool, &batch, &result).await {
                 Ok(id) => Some(id),
                 Err(e) => {
-                    tracing::warn!(error=%e, “failed to persist ingest job â€” result still returned”);
+                    tracing::warn!(error=%e, "failed to persist ingest job â€" result still returned");
                     None
                 }
             };
-            (StatusCode::OK, Json(json!({ “success”: true, “job_id”: job_id, “result”: result })))
+            (StatusCode::OK, Json(json!({ "success": true, "job_id": job_id, "result": result })))
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ “success”: false, “error”: e.to_string() })),
+            Json(json!({ "success": false, "error": e.to_string() })),
         ),
     }
 }
@@ -234,9 +234,9 @@ pub async fn ingest_csv_upload(
 
     while let Ok(Some(field)) = multipart.next_field().await {
         match field.name() {
-            Some(“source_system”) => { source_system = field.text().await.ok(); }
-            Some(“entity_type”)   => { entity_type   = field.text().await.ok(); }
-            Some(“file”) => {
+            Some("source_system") => { source_system = field.text().await.ok(); }
+            Some("entity_type")   => { entity_type   = field.text().await.ok(); }
+            Some("file") => {
                 file_name_opt = field.file_name().map(str::to_owned);
                 csv_bytes     = field.bytes().await.ok().map(|b| b.to_vec());
             }
@@ -250,8 +250,8 @@ pub async fn ingest_csv_upload(
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({
-                “success”: false,
-                “error”: “multipart form requires 'source_system', 'entity_type', and 'file' fields”
+                "success": false,
+                "error": "multipart form requires 'source_system', 'entity_type', and 'file' fields"
             })),
         );
     };
@@ -263,7 +263,7 @@ pub async fn ingest_csv_upload(
         Err(e) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(json!({ “success”: false, “error”: format!(“CSV header parse error: {e}”) })),
+                Json(json!({ "success": false, "error": format!("CSV header parse error: {e}") })),
             );
         }
     };
@@ -279,8 +279,8 @@ pub async fn ingest_csv_upload(
                     .collect();
 
                 let source_id = fields
-                    .get(“id”)
-                    .or_else(|| fields.get(“source_id”))
+                    .get("id")
+                    .or_else(|| fields.get("source_id"))
                     .and_then(|v| v.as_str())
                     .map(str::to_owned)
                     .unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -292,14 +292,14 @@ pub async fn ingest_csv_upload(
                     fields,
                 ));
             }
-            Err(e) => { tracing::warn!(error=%e, “skipping malformed CSV row”); }
+            Err(e) => { tracing::warn!(error=%e, "skipping malformed CSV row"); }
         }
     }
 
     if all_records.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
-            Json(json!({ “success”: false, “error”: “CSV contained no valid rows” })),
+            Json(json!({ "success": false, "error": "CSV contained no valid rows" })),
         );
     }
 
@@ -322,7 +322,7 @@ pub async fn ingest_csv_upload(
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ “success”: false, “error”: format!(“failed to create job: {e}”) })),
+                Json(json!({ "success": false, "error": format!("failed to create job: {e}") })),
             );
         }
     };
@@ -332,8 +332,8 @@ pub async fn ingest_csv_upload(
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({
-                “success”: false,
-                “error”: “Redis task queue not configured — set REDIS_URL to enable async CSV ingest”
+                "success": false,
+                "error": "Redis task queue not configured — set REDIS_URL to enable async CSV ingest"
             })),
         );
     };
@@ -344,29 +344,29 @@ pub async fn ingest_csv_upload(
             task_types::INGEST_BATCH,
             claims.nxs_tenant_id.to_string(),
             serde_json::json!({
-                “job_id”:        job_id,
-                “batch_id”:      Uuid::new_v4(),
-                “tenant_id”:     claims.nxs_tenant_id,
-                “source_system”: source_system,
-                “records”:       chunk,
+                "job_id":        job_id,
+                "batch_id":      Uuid::new_v4(),
+                "tenant_id":     claims.nxs_tenant_id,
+                "source_system": source_system,
+                "records":       chunk,
             }),
         );
         match task_queue.enqueue(task_types::INGEST_BATCH, &task).await {
             Ok(())  => { enqueued += 1; }
-            Err(e) => { tracing::error!(job_id=%job_id, error=%e, “failed to enqueue ingest chunk”); }
+            Err(e) => { tracing::error!(job_id=%job_id, error=%e, "failed to enqueue ingest chunk"); }
         }
     }
 
     (
         StatusCode::ACCEPTED,
         Json(json!({
-            “success”:       true,
-            “job_id”:        job_id,
-            “total_records”: total_records,
-            “chunks_queued”: enqueued,
-            “chunk_size”:    chunk_size,
-            “message”: format!(
-                “Ingest job accepted. {} records split into {} chunks of up to {}. Poll /ingest/jobs/{} for progress.”,
+            "success":       true,
+            "job_id":        job_id,
+            "total_records": total_records,
+            "chunks_queued": enqueued,
+            "chunk_size":    chunk_size,
+            "message": format!(
+                "Ingest job accepted. {} records split into {} chunks of up to {}. Poll /ingest/jobs/{} for progress.",
                 total_records, enqueued, chunk_size, job_id
             )
         })),

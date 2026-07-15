@@ -33,9 +33,9 @@ use crate::db::repositories::entity_repository::EntityRepository;
 pub struct EntityService {
     pool:              DbPool,
     entity_repository: Arc<EntityRepository>,
-    /// Optional Redis task queue â€” if absent, embeddings are skipped silently.
+    /// Optional Redis task queue â€" if absent, embeddings are skipped silently.
     task_queue:        Option<Arc<TaskQueue>>,
-    /// Optional Redis entity cache â€” if absent, every read hits PostgreSQL.
+    /// Optional Redis entity cache â€" if absent, every read hits PostgreSQL.
     entity_cache:      Option<Arc<EntityCache>>,
     /// AES-256-GCM PII encryption. None = plaintext (dev only).
     field_encryption:  Option<Arc<FieldEncryptionService>>,
@@ -55,7 +55,7 @@ impl EntityService {
         self
     }
 
-    /// Optionally attach a cache â€” passes through `None` gracefully.
+    /// Optionally attach a cache â€" passes through `None` gracefully.
     pub fn with_cache_opt(mut self, cache: Option<Arc<EntityCache>>) -> Self {
         self.entity_cache = cache;
         self
@@ -113,7 +113,7 @@ impl EntityService {
     /// Encrypt plaintext string values for PII-tagged attributes.
     /// Checks both the built-in static key list and `schema_pii_keys` (keys the
     /// tenant declared `is_pii=true` in `core_mdm.attribute_schemas`).
-    /// Returns a new attribute list â€” non-PII and already-encrypted attrs are unchanged.
+    /// Returns a new attribute list â€" non-PII and already-encrypted attrs are unchanged.
     pub(crate) fn encrypt_pii_attributes(
         attrs:           Vec<EntityAttribute>,
         enc:             &FieldEncryptionService,
@@ -129,7 +129,7 @@ impl EntityService {
                             attr.encrypted = true;
                         }
                         Err(e) => {
-                            tracing::warn!(key=%attr.key, error=%e, "PII encryption failed â€” storing plaintext");
+                            tracing::warn!(key=%attr.key, error=%e, "PII encryption failed â€" storing plaintext");
                         }
                     }
                 } else if !matches!(attr.value, serde_json::Value::Null) {
@@ -140,7 +140,7 @@ impl EntityService {
                         Ok(ciphertext) => {
                             tracing::warn!(
                                 key=%attr.key,
-                                "PII attribute has a non-string value â€” serialised to JSON before encryption"
+                                "PII attribute has a non-string value â€" serialised to JSON before encryption"
                             );
                             attr.value     = serde_json::Value::String(ciphertext);
                             attr.encrypted = true;
@@ -175,7 +175,7 @@ impl EntityService {
 
     /// Validate entity attributes against the tenant's configured attribute schemas.
     ///
-    /// If no schemas exist for this entity type, validation is a silent no-op â€”
+    /// If no schemas exist for this entity type, validation is a silent no-op â€"
     /// the feature only activates once the tenant defines schemas via the admin UI.
     async fn validate_attributes_against_schema(
         &self,
@@ -237,7 +237,7 @@ impl EntityService {
                 None if schema.is_required => {
                     errors.push(format!("'{}' is required", schema.attribute_key));
                 }
-                None => {} // optional absent â€” fine
+                None => {} // optional absent â€" fine
                 Some(attr) => {
                     let val_str = attr.value.as_str();
 
@@ -326,7 +326,7 @@ impl EntityService {
                             attr.encrypted = false;
                         }
                         Err(e) => {
-                            tracing::warn!(key=%attr.key, error=%e, "PII decryption failed â€” returning ciphertext");
+                            tracing::warn!(key=%attr.key, error=%e, "PII decryption failed â€" returning ciphertext");
                         }
                     }
                 }
@@ -360,7 +360,7 @@ impl EntityService {
             return Err(anyhow!("cannot create entity with deleted status"));
         }
 
-        // â”€â”€ Idempotency â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Idempotency â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         // A client that retries on network failure must not create a duplicate.
         // If the id was provided and already exists, return the existing record.
         if !entity.entity_id.is_nil() && self
@@ -369,7 +369,7 @@ impl EntityService {
             .await?
             .is_some()
         {
-            tracing::debug!(entity_id=%entity.entity_id, "idempotent entity create â€” returning existing");
+            tracing::debug!(entity_id=%entity.entity_id, "idempotent entity create â€" returning existing");
             return Ok(CreateEntityResponse {
                 entity_id:         entity.entity_id,
                 distribution_id:   None,
@@ -377,7 +377,7 @@ impl EntityService {
             });
         }
 
-        // â”€â”€ Attribute schema validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Attribute schema validation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         // Validates required fields and basic type constraints against
         // core_mdm.attribute_schemas for this entity type.
         // Fails fast before any transaction is opened.
@@ -389,7 +389,7 @@ impl EntityService {
         )
         .await?;
 
-        // â”€â”€ Auto-assign business number â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Auto-assign business number â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         // If no business number is present, auto-generate one from the sequence.
         // This assigns CUST-000001, VEND-000001, PROD-000001, etc.
         let entity_type_str = entity.entity_type.to_string();
@@ -441,7 +441,7 @@ impl EntityService {
             }
         }
 
-        // â”€â”€ Origin enrichment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Origin enrichment â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         if request.record_origin == EntityRecordOrigin::MdmAuthoritative {
             entity.metadata.insert(
                 "record_origin".to_string(),
@@ -456,7 +456,7 @@ impl EntityService {
             });
         }
 
-        // â”€â”€ Transactional write with RLS context â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Transactional write with RLS context â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         // begin_uow() sets app.current_tenant, app.request_id,
         // app.correlation_id, app.trace_id, app.current_user_id on the
         // PostgreSQL session before any DML so RLS policies can filter correctly.
@@ -466,7 +466,7 @@ impl EntityService {
             .await?;
 
         // Encrypt PII attributes before writing to DB. The in-memory entity
-        // retains plaintext for outbox events and cache â€” the security boundary
+        // retains plaintext for outbox events and cache â€" the security boundary
         // is the PostgreSQL database.
         let schema_pii_keys = Self::load_schema_pii_keys(&self.pool, ctx.tenant_id).await;
         let db_entity = if let Some(enc) = &self.field_encryption {
@@ -534,19 +534,19 @@ impl EntityService {
 
         uow.commit().await?;
 
-        // â”€â”€ Redis entity cache (write-through) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Redis entity cache (write-through) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         // Store immediately after commit so subsequent reads are cache hits.
         if let Some(cache) = &self.entity_cache {
             if let Err(e) = cache.set_entity(entity.tenant_id, entity.entity_id, &entity).await {
                 tracing::warn!(
                     entity_id=%entity.entity_id,
                     error=%e,
-                    "entity cache write failed â€” entity created but not cached"
+                    "entity cache write failed â€" entity created but not cached"
                 );
             }
         }
 
-        // â”€â”€ Async embedding â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Async embedding â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         // Enqueue a low-priority task so the ai-service can embed this entity's
         // attributes into pgvector.  This is fire-and-forget; failure is logged
         // but does not fail the create response.
@@ -564,7 +564,7 @@ impl EntityService {
                 tracing::warn!(
                     entity_id=%entity.entity_id,
                     error=%e,
-                    "embedding task enqueue failed â€” entity created but not embedded"
+                    "embedding task enqueue failed â€" entity created but not embedded"
                 );
             }
         }
@@ -576,7 +576,7 @@ impl EntityService {
         })
     }
 
-    /// Fetch an entity by id â€” checks Redis cache first, falls back to DB.
+    /// Fetch an entity by id â€" checks Redis cache first, falls back to DB.
     ///
     /// On cache miss the entity is stored in Redis for the next call.
     pub async fn get_entity(
@@ -584,21 +584,21 @@ impl EntityService {
         tenant_id: Uuid,
         entity_id: Uuid,
     ) -> Result<Option<contracts::mdm::entity::CanonicalEntity>> {
-        // â”€â”€ Cache hit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Cache hit â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         if let Some(cache) = &self.entity_cache {
             match cache.get_entity(tenant_id, entity_id).await {
                 Ok(Some(cached)) => {
                     tracing::debug!(entity_id=%entity_id, "entity cache hit");
                     return Ok(Some(cached));
                 }
-                Ok(None) => {} // cache miss â€” fall through to DB
+                Ok(None) => {} // cache miss â€" fall through to DB
                 Err(e) => {
-                    tracing::warn!(error=%e, "entity cache read failed â€” falling back to DB");
+                    tracing::warn!(error=%e, "entity cache read failed â€" falling back to DB");
                 }
             }
         }
 
-        // â”€â”€ DB fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ DB fallback â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         let entity = self
             .entity_repository
             .fetch_entity(tenant_id, entity_id)
@@ -610,7 +610,7 @@ impl EntityService {
                 e
             });
 
-        // Populate cache on miss (cache stores decrypted plaintext â€” stays in Redis TTL only)
+        // Populate cache on miss (cache stores decrypted plaintext â€" stays in Redis TTL only)
         if let (Some(cache), Some(ref e)) = (&self.entity_cache, &entity) {
             if let Err(err) = cache.set_entity(tenant_id, entity_id, e).await {
                 tracing::warn!(error=%err, "entity cache population failed");

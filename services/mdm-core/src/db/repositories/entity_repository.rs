@@ -984,7 +984,7 @@ impl EntityRepository {
         let mut tx = self.pool.begin().await?;
         set_tenant_ctx(&mut tx, tenant_id).await?;
 
-        // â”€â”€ 1. Fetch all entity rows in one round-trip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ 1. Fetch all entity rows in one round-trip â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         let entity_rows = sqlx::query(
             r#"
             SELECT
@@ -1007,7 +1007,7 @@ impl EntityRepository {
         .fetch_all(&mut *tx)
         .await?;
 
-        // â”€â”€ 2. Fetch all attributes for those entities in one round-trip â”€â”€â”€â”€â”€â”€
+        // â"€â"€ 2. Fetch all attributes for those entities in one round-trip â"€â"€â"€â"€â"€â"€
         let attr_rows = sqlx::query(
             r#"
             SELECT *
@@ -1023,14 +1023,14 @@ impl EntityRepository {
 
         tx.commit().await?;
 
-        // â”€â”€ 3. Group attributes by entity_id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ 3. Group attributes by entity_id â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         let mut attrs_by_entity: HashMap<Uuid, Vec<_>> = HashMap::new();
         for attr in &attr_rows {
             let eid: Uuid = attr.try_get("entity_id")?;
             attrs_by_entity.entry(eid).or_default().push(attr);
         }
 
-        // â”€â”€ 4. Assemble CanonicalEntity for each entity row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ 4. Assemble CanonicalEntity for each entity row â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         let mut entities = Vec::with_capacity(entity_rows.len());
 
         for row in &entity_rows {
@@ -1450,7 +1450,7 @@ impl EntityRepository {
     ) -> Result<bool> {
         set_tenant_ctx(tx, tenant_id).await?;
 
-        // Build a dynamic UPDATE â€” only touch columns that were supplied.
+        // Build a dynamic UPDATE â€" only touch columns that were supplied.
         let mut set_clauses: Vec<String> = vec!["updated_at = NOW()".to_string()];
         let mut param_index: i32 = 3; // $1=tenant_id, $2=entity_id already reserved
 
@@ -1483,7 +1483,7 @@ impl EntityRepository {
             return Ok(false);
         }
 
-        // Replace attributes when supplied â€” delete-then-insert is the MDM
+        // Replace attributes when supplied â€" delete-then-insert is the MDM
         // golden-record survivorship pattern for authority-authored records.
         if let Some(attrs) = attributes {
             sqlx::query(
@@ -1608,7 +1608,7 @@ impl EntityRepository {
     }
 }
 
-// â”€â”€ Attribute row â†’ EntityAttribute â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Attribute row â†’ EntityAttribute â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 /// Build an `EntityAttribute` from a single sqlx row (entity_attributes table).
 /// Shared by `fetch_entity` and `fetch_entities_batch` to avoid duplication.
@@ -1685,7 +1685,7 @@ pub fn build_entity_attribute(attr: &sqlx::postgres::PgRow) -> anyhow::Result<En
     })
 }
 
-// â”€â”€ Mapping helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Mapping helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 pub fn entity_type_to_flutter(entity_type: &str) -> &'static str {
     match entity_type {

@@ -16,7 +16,7 @@ use crate::{
     AppState,
 };
 
-// â”€â”€ Serialisable response types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Serialisable response types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 #[derive(Debug, Serialize)]
 pub struct DashboardStats {
@@ -51,7 +51,7 @@ pub struct DuplicateSourcePoint {
     percentage: f64,
 }
 
-// â”€â”€ /dashboard/stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ /dashboard/stats â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 pub async fn get_dashboard_stats(
     State(state):          State<Arc<AppState>>,
@@ -104,7 +104,7 @@ pub async fn get_dashboard_stats(
     .await
     .unwrap_or(0);
 
-    // Average AI confidence (0â€“1) scaled to 0â€“100
+    // Average AI confidence (0â€"1) scaled to 0â€"100
     let ai_match_score: f64 = sqlx::query_scalar(
         r#"SELECT COALESCE(AVG(ai_score) * 100.0, 0.0)::double precision
            FROM core_mdm.match_candidates
@@ -115,7 +115,7 @@ pub async fn get_dashboard_stats(
     .await
     .unwrap_or(0.0_f64);
 
-    // Average trust score as overall data quality proxy (0â€“1 â†’ 0â€“100)
+    // Average trust score as overall data quality proxy (0â€"1 â†’ 0â€"100)
     let overall_data_quality: f64 = sqlx::query_scalar(
         r#"SELECT COALESCE(AVG(trust_score::double precision) * 100.0, 0.0)::double precision
            FROM core_mdm.entities
@@ -284,7 +284,7 @@ pub async fn get_dashboard_stats(
     )
 }
 
-// â”€â”€ /dashboard/activity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ /dashboard/activity â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 pub async fn get_activity_feed(
     State(state):          State<Arc<AppState>>,
@@ -362,7 +362,7 @@ pub async fn get_activity_feed(
     )
 }
 
-// â”€â”€ /dashboard/steward-performance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ /dashboard/steward-performance â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 pub async fn get_steward_performance(
     State(state):          State<Arc<AppState>>,
@@ -428,7 +428,7 @@ pub async fn get_steward_performance(
     )
 }
 
-// â”€â”€ /dashboard/quality-dimensions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ /dashboard/quality-dimensions â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 //
 // Computes per-dimension data quality scores from live entity data.
 // Returns scores in the range [0, 1] for each of the 6 standard dimensions.

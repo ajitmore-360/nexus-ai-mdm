@@ -81,14 +81,14 @@ async fn main() {
     let port = settings.port;
 
     let jwt_config = JwtConfig::from_env()
-        .expect("JWT_SECRET must be set â€” ingest-service requires JWT authentication");
+        .expect("JWT_SECRET must be set â€" ingest-service requires JWT authentication");
 
     let db_config = DatabaseConfig { database_url: settings.database_url.clone() };
     let pool = create_pool(&db_config)
         .await
         .expect("failed to connect to PostgreSQL");
 
-    // â”€â”€ Optional Redis task queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ Optional Redis task queue â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     // If REDIS_URL is set, create the task queue used for async CSV ingest.
     // If Redis is unavailable, the service still starts but large CSV upload
     // will return 503 and the /ingest/csv/upload endpoint won't function.
@@ -98,11 +98,11 @@ async fn main() {
             .create_pool(Some(deadpool_redis::Runtime::Tokio1))
         {
             Ok(redis_pool) => {
-                tracing::info!(“Redis connected — async ingest queue enabled”);
-                Some(std::sync::Arc::new(azile_redis::TaskQueue::new(redis_pool, “azile”)))
+                tracing::info!("Redis connected — async ingest queue enabled");
+                Some(std::sync::Arc::new(azile_redis::TaskQueue::new(redis_pool, "azile")))
             }
             Err(e) => {
-                tracing::warn!(error=%e, “Redis unavailable — async CSV ingest disabled”);
+                tracing::warn!(error=%e, "Redis unavailable — async CSV ingest disabled");
                 None
             }
         }
@@ -111,7 +111,7 @@ async fn main() {
     let worker_concurrency = settings.worker_concurrency;
     let state = Arc::new(AppState::new(settings, pool, jwt_config, task_queue));
 
-    // â”€â”€ Async ingest workers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ Async ingest workers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     // Spawns N worker tasks (INGEST_WORKER_CONCURRENCY, default 4) each
     // polling the Redis `ingest.batch` queue independently. Workers process
     // chunks produced by POST /ingest/csv/upload in parallel.
@@ -120,10 +120,10 @@ async fn main() {
             let worker_state = Arc::clone(&state);
             tokio::spawn(worker::run_worker(worker_state, worker_id));
         }
-        tracing::info!(count=worker_concurrency, “async ingest workers started”);
+        tracing::info!(count=worker_concurrency, "async ingest workers started");
     }
 
-    // â”€â”€ Scheduled REST pull loops â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ Scheduled REST pull loops â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     // Spawns one background task per REST connector configured with
     // sync_mode='scheduled'. No-op if none are registered.
     {
@@ -175,7 +175,7 @@ async fn main() {
         .expect("ingest service crashed");
 }
 
-// â”€â”€ Job status handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Job status handlers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 #[derive(Deserialize)]
 struct JobListParams {

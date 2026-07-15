@@ -55,14 +55,14 @@ impl MergeService {
         let tenant_id  = ctx.tenant_id;
         let started_at = Utc::now();
 
-        // â”€â”€ Load primary entity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Load primary entity â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         let primary = self
             .entity_repository
             .fetch_entity(tenant_id, request.primary_entity_id)
             .await?
             .ok_or_else(|| anyhow!("primary entity {} not found", request.primary_entity_id))?;
 
-        // â”€â”€ Load candidate entities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Load candidate entities â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         let mut entities: Vec<CanonicalEntity> = vec![primary.clone()];
         let mut merged_ids: Vec<Uuid> = Vec::new();
 
@@ -88,18 +88,18 @@ impl MergeService {
             ));
         }
 
-        // â”€â”€ Survivorship â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Survivorship â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         // Load active rules from the DB so configured strategies (TrustedSource,
         // MostRecent, HybridWeighted, etc.) are applied. Falls back to the
         // engine's built-in latest-wins default when no rules exist.
         let rules = load_survivorship_rules(&self.pool, tenant_id).await
             .unwrap_or_else(|e| {
-                tracing::warn!(error=%e, “failed to load survivorship rules — using default latest-wins”);
+                tracing::warn!(error=%e, "failed to load survivorship rules — using default latest-wins");
                 vec![]
             });
         let golden = apply_survivorship(entities.clone(), rules);
 
-        // â”€â”€ Atomic write with tenant RLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // â"€â"€ Atomic write with tenant RLS â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         let factory = RequestContextFactory::new(self.pool.clone());
         let mut uow = factory
             .begin_uow(ctx.tenant_id, ctx.user_id, ctx.trace_id.clone())

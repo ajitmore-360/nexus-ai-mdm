@@ -38,7 +38,7 @@ pub struct ActivateLicenseBody {
 // ========================================
 //
 // These canonical key prefixes are validated on the server. The client never
-// stores a local keyâ†’tier table â€” every key is authorised by this endpoint.
+// stores a local keyâ†’tier table â€" every key is authorised by this endpoint.
 //
 
 fn tier_from_key(key: &str) -> Option<&'static str> {
@@ -152,7 +152,7 @@ pub async fn get_my_license(
 }
 
 /// GET /internal/license/:tenant_id
-/// No auth â€” internal gateway use only.
+/// No auth â€" internal gateway use only.
 /// Returns the same license + usage shape for gateway feature-gating and caching.
 pub async fn internal_get_license(
     State(state):          State<Arc<AppState>>,

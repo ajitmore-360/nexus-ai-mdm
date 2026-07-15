@@ -1,5 +1,5 @@
 ﻿// ============================================================================
-// SSO Service â€” SAML 2.0 SP + SCIM token management
+// SSO Service â€" SAML 2.0 SP + SCIM token management
 //
 // Implements:
 //   - SAML 2.0 SP metadata XML generation
@@ -27,7 +27,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 use x509_parser::prelude::*;
 
-// â”€â”€ DB row types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ DB row types â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 #[derive(Debug, sqlx::FromRow, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SsoConfig {
@@ -63,7 +63,7 @@ pub struct ScimToken {
     pub created_at:    chrono::DateTime<Utc>,
 }
 
-// â”€â”€ Upsert payload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Upsert payload â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 #[derive(Debug, serde::Deserialize)]
 pub struct UpsertSsoConfig {
@@ -82,7 +82,7 @@ pub struct UpsertSsoConfig {
     pub group_role_mappings: Option<serde_json::Value>,
 }
 
-// â”€â”€ Parsed SAML claims (output of ACS) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Parsed SAML claims (output of ACS) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 #[derive(Debug)]
 pub struct SamlClaims {
@@ -92,7 +92,7 @@ pub struct SamlClaims {
     pub raw_attrs:   std::collections::HashMap<String, Vec<String>>,
 }
 
-// â”€â”€ Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Service â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 #[derive(Clone)]
 pub struct SsoService {
@@ -104,7 +104,7 @@ impl SsoService {
         Self { db }
     }
 
-    // â”€â”€ Config CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ Config CRUD â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
     pub async fn get_config(&self, tenant_id: Uuid) -> Result<Option<SsoConfig>> {
         let cfg = sqlx::query_as::<_, SsoConfig>(
@@ -179,7 +179,7 @@ impl SsoService {
         Ok(())
     }
 
-    // â”€â”€ SAML SP Metadata XML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ SAML SP Metadata XML â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
     pub fn generate_metadata(&self, cfg: &SsoConfig, base_url: &str) -> String {
         let tenant_slug = cfg.tenant_id.to_string();
@@ -208,7 +208,7 @@ impl SsoService {
         )
     }
 
-    // â”€â”€ SAML AuthnRequest â€” redirect binding â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ SAML AuthnRequest â€" redirect binding â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
     /// Returns the full IdP SSO redirect URL (including SAMLRequest + RelayState).
     pub async fn build_authn_redirect(
@@ -263,7 +263,7 @@ impl SsoService {
         ))
     }
 
-    // â”€â”€ SAML ACS â€” parse response, verify, return claims â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ SAML ACS â€" parse response, verify, return claims â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
     pub async fn process_acs_response(
         &self,
@@ -304,10 +304,10 @@ impl SsoService {
                     }
                 }
             } else {
-                warn!("No IdP certificate configured â€” SAML signature NOT verified");
+                warn!("No IdP certificate configured â€" SAML signature NOT verified");
             }
         } else {
-            warn!("No IdP certificate configured â€” SAML signature NOT verified");
+            warn!("No IdP certificate configured â€" SAML signature NOT verified");
         }
 
         // 4. Parse claims from XML
@@ -319,9 +319,9 @@ impl SsoService {
         Ok((claims, redirect))
     }
 
-    // â”€â”€ SCIM Token Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ SCIM Token Management â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-    /// Creates a new SCIM token. Returns (row, raw_token) â€” raw token shown once only.
+    /// Creates a new SCIM token. Returns (row, raw_token) â€" raw token shown once only.
     pub async fn create_scim_token(
         &self,
         tenant_id: Uuid,
@@ -407,7 +407,7 @@ impl SsoService {
     }
 }
 
-// â”€â”€ SAML XML Signature Verification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ SAML XML Signature Verification â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 //
 // Implements RSA-SHA256 signature verification as used by Okta, Azure AD,
 // Google Workspace, and ADFS.
@@ -480,7 +480,7 @@ fn decode_pem_cert(pem_or_b64: &str) -> Result<Vec<u8>> {
         .map_err(|e| anyhow!("Certificate base64 decode failed: {}", e))
 }
 
-// â”€â”€ SAML Response XML Parsing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ SAML Response XML Parsing â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 fn parse_saml_response_claims(xml: &str, cfg: &SsoConfig) -> Result<SamlClaims> {
     let attr_mappings = &cfg.attribute_mappings;
@@ -570,7 +570,7 @@ fn parse_saml_response_claims(xml: &str, cfg: &SsoConfig) -> Result<SamlClaims> 
         buf.clear();
     }
 
-    // Determine email â€” prefer NameID, fall back to attribute mapping
+    // Determine email â€" prefer NameID, fall back to attribute mapping
     let email = if name_id.contains('@') {
         name_id.clone()
     } else if let Some(vals) = attrs.get(email_attr) {
@@ -656,7 +656,7 @@ fn percent_encode_saml(input: &str) -> String {
     out
 }
 
-/// Strips XML namespace prefix â€” returns the local name.
+/// Strips XML namespace prefix â€" returns the local name.
 fn local_name(name: &[u8]) -> String {
     let s = std::str::from_utf8(name).unwrap_or("");
     let local = if let Some(pos) = s.rfind(':') { &s[pos + 1..] } else { s };

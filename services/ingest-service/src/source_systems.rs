@@ -68,9 +68,9 @@ fn ssrf_safe_addr(addr: &str) -> Result<(), String> {
     ssrf_safe_host(host)
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 // REQUEST / RESPONSE TYPES
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 #[derive(Debug, Deserialize)]
 pub struct ListSourceSystemsParams {
@@ -106,9 +106,9 @@ pub struct UpdateSourceSystemRequest {
     pub connection_config: Option<serde_json::Value>,
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 // HELPERS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const VALID_CONNECTOR_TYPES: &[&str] = &[
     "salesforce", "sap", "csv", "kafka", "rest_api", "database", "hubspot", "custom",
@@ -141,9 +141,9 @@ fn validate_sync_mode(sm: &str) -> Result<(), String> {
     }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 // HANDLERS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 /// GET /source-systems?tenant_id=&limit=&offset=
 ///
@@ -220,7 +220,7 @@ pub async fn list_source_systems(
     }
 }
 
-/// POST /source-systems â€” register a new source system
+/// POST /source-systems â€" register a new source system
 pub async fn create_source_system(
     State(state):      State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
@@ -247,7 +247,7 @@ pub async fn create_source_system(
     let trust_weight = body.trust_weight.unwrap_or(1.0);
     let priority     = body.priority.unwrap_or(100);
     let entity_types = body.entity_types.as_deref().unwrap_or(&[]);
-    let icon         = body.icon.as_deref().unwrap_or("ðŸ”Œ");
+    let icon         = body.icon.as_deref().unwrap_or("ðŸ"Œ");
 
     let raw_config    = body.connection_config.unwrap_or_else(|| serde_json::json!({}));
     let stored_config = encrypt_config(&raw_config);
@@ -301,7 +301,7 @@ pub async fn create_source_system(
     }
 }
 
-/// PUT /source-systems/:id â€” update a source system
+/// PUT /source-systems/:id â€" update a source system
 pub async fn update_source_system(
     State(state):      State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
@@ -319,7 +319,7 @@ pub async fn update_source_system(
     let encrypted_config: Option<serde_json::Value> =
         body.connection_config.as_ref().map(|cfg| encrypt_config(cfg));
 
-    // Use COALESCE so unprovided fields are left untouched â€” simpler than
+    // Use COALESCE so unprovided fields are left untouched â€" simpler than
     // building a dynamic SET clause and equally correct for sparse updates.
     match sqlx::query_scalar::<_, Uuid>(
         "UPDATE core_mdm.source_systems_registry SET
@@ -364,7 +364,7 @@ pub async fn update_source_system(
     }
 }
 
-/// DELETE /source-systems/:id â€” remove a source system
+/// DELETE /source-systems/:id â€" remove a source system
 pub async fn delete_source_system(
     State(state):      State<Arc<AppState>>,
     Extension(claims): Extension<Claims>,
@@ -392,7 +392,7 @@ pub async fn delete_source_system(
     }
 }
 
-/// POST /source-systems/:id/test â€” probe actual connectivity for a source system.
+/// POST /source-systems/:id/test â€" probe actual connectivity for a source system.
 ///
 /// Fetches `connector_type` and decrypted `connection_config`, then dispatches
 /// to a per-connector probe. Updates `is_connected` based on the outcome.
@@ -488,7 +488,7 @@ async fn probe_connector(
                 config.get("port").and_then(|v| v.as_str()).unwrap_or("3300"),
             )
         ).await,
-        // CSV, manual, custom â€” no live probe possible
+        // CSV, manual, custom â€" no live probe possible
         _ => Ok("No live probe for this connector type (config saved)".to_string()),
     }
 }
@@ -507,7 +507,7 @@ async fn probe_rest_api(config: &serde_json::Value) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     let req = crate::scheduler::apply_auth(client.get(url), config);
     match req.send().await {
-        Ok(resp) => Ok(format!("HTTP {} â€” reachable", resp.status())),
+        Ok(resp) => Ok(format!("HTTP {} â€" reachable", resp.status())),
         Err(e) if e.is_timeout() => Err("Connection timed out".to_string()),
         Err(e) if e.is_connect() => Err(format!("Cannot connect: {}", e)),
         Err(e) => Err(e.to_string()),
@@ -525,7 +525,7 @@ async fn probe_rest_api_url(url: &str) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
 
     match client.get(url).send().await {
-        Ok(resp) => Ok(format!("HTTP {} â€” reachable", resp.status())),
+        Ok(resp) => Ok(format!("HTTP {} â€" reachable", resp.status())),
         Err(e) if e.is_timeout() => Err("Connection timed out".to_string()),
         Err(e) if e.is_connect() => Err(format!("Cannot connect: {}", e)),
         Err(e) => Err(e.to_string()),

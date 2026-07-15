@@ -20,9 +20,9 @@ use crate::middleware::tenant::TenantContext;
 use crate::services::audit_service::AuditEvent;
 use crate::AppState;
 
-// azile_auth::Claims is used by gdpr_erase_entity â€” referenced via full path below.
+// azile_auth::Claims is used by gdpr_erase_entity â€" referenced via full path below.
 
-// â”€â”€ Query params for GET /entities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Query params for GET /entities â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 #[derive(Deserialize)]
 pub struct ListEntitiesParams {
@@ -62,9 +62,9 @@ pub async fn create_entity(
             );
         }
         Err(e) => {
-            // Quota service unavailable â€” log and continue (fail open to avoid
+            // Quota service unavailable â€" log and continue (fail open to avoid
             // blocking legitimate creates when the license table is unreachable).
-            error!(error=?e, "record quota check failed â€” proceeding without enforcement");
+            error!(error=?e, "record quota check failed â€" proceeding without enforcement");
         }
         Ok(quota) => {
             // Fire quota-proximity notification (debounced to once per 24 h).
@@ -77,7 +77,7 @@ pub async fn create_entity(
         }
     }
 
-    // â”€â”€ Input validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ Input validation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     // Checked here (not in the service) because the service accepts trusted
     // internal callers that bypass the HTTP boundary.
     if let Some(err) = validate_entity_attributes(&request.entity.attributes) {
@@ -97,7 +97,7 @@ pub async fn create_entity(
         .and_then(|v| v.to_str().ok())
         .and_then(|s| Uuid::parse_str(s).ok());
 
-    // â”€â”€ Quality rules check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ Quality rules check â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     // Run active quality rules against incoming attributes before persisting.
     // Blocking actions (reject/quarantine) return 422; non-blocking violations
     // are saved asynchronously after the entity is written.
@@ -358,7 +358,7 @@ pub(crate) fn extract_request_context(
     RequestContext::new(tenant_ctx.tenant_id, user_id, trace_id)
 }
 
-// â”€â”€ GET /entities â€” paginated list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ GET /entities â€" paginated list â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 pub async fn list_entities(
     State(state):          State<Arc<AppState>>,
@@ -443,7 +443,7 @@ pub async fn list_entities(
     }
 }
 
-// â”€â”€ GET /entities/:id â€” single entity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ GET /entities/:id â€" single entity â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 pub async fn get_entity_by_id(
     State(state):          State<Arc<AppState>>,
@@ -609,7 +609,7 @@ pub async fn get_entity_by_id(
     }
 }
 
-// â”€â”€ PATCH /entities/:id â€” partial entity update â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ PATCH /entities/:id â€" partial entity update â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 #[derive(serde::Deserialize)]
 pub struct PatchEntityRequest {
@@ -741,7 +741,7 @@ pub async fn patch_entity(
     }
 }
 
-// â”€â”€ DELETE /entities/:id/gdpr-erase â€” permanent GDPR Art. 17 erasure â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ DELETE /entities/:id/gdpr-erase â€" permanent GDPR Art. 17 erasure â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 /// Hard-deletes an entity and all its personal data.
 ///
@@ -778,7 +778,7 @@ pub async fn gdpr_erase_entity(
 
     let tenant_id = tenant_ctx.tenant_id;
 
-    // Call stored procedure â€” runs all deletes in FK-safe order atomically.
+    // Call stored procedure â€" runs all deletes in FK-safe order atomically.
     let deleted: i32 = match sqlx::query_scalar(
         "SELECT core_mdm.gdpr_erase_entity($1, $2)",
     )
@@ -834,7 +834,7 @@ pub async fn gdpr_erase_entity(
         .into_response()
 }
 
-// â”€â”€ Local type-mapping helpers (use string variants from DB) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Local type-mapping helpers (use string variants from DB) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 fn entity_type_to_flutter_type(et: &EntityType) -> &'static str {
     match et {
@@ -858,7 +858,7 @@ fn entity_status_to_flutter_status(es: &EntityStatus) -> &'static str {
     }
 }
 
-// â”€â”€ Input validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Input validation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 const MAX_ATTRIBUTES:     usize = 200;
 const MAX_ATTR_KEY_LEN:   usize = 256;
@@ -894,7 +894,7 @@ pub(crate) fn validate_entity_attributes(
                 &attr.key[..32.min(attr.key.len())],
             ));
         }
-        // Validate string values only â€” numbers/bools/arrays are fine at any size.
+        // Validate string values only â€" numbers/bools/arrays are fine at any size.
         if let serde_json::Value::String(s) = &attr.value {
             if s.len() > MAX_ATTR_VALUE_LEN {
                 return Some(format!(
