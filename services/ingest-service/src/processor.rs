@@ -176,6 +176,111 @@ impl IngestProcessor {
     }
 }
 
+    /// Process a batch using a single bulk HTTP call to mdm-core.
+    ///
+    /// This replaces `process_batch` for large-scale ingest: instead of one
+    /// `POST /entities` per record, all normalised entities are sent together
+    /// as a `POST /entities/ingest-bulk` request so the database sees one
+    /// transaction per chunk (not N transactions for N records).
+    #[instrument(skip(self, batch), fields(
+        batch_id  = %batch.batch_id,
+        tenant_id = %batch.tenant_id,
+        records   = batch.records.len(),
+    ))]
+    pub async fn process_batch_bulk(
+        &self,
+        batch:    &IngestBatch,
+        mappings: &[SchemaMapping],
+    ) -> Result<IngestResult> {
+        let started = Instant::now();
+        let mut result = IngestResult::new(batch.batch_id);
+
+        let mapper = if mappings.is_empty() {
+            SchemaMapper::with_defaults()
+        } else {
+            SchemaMapper::new(mappings.to_vec())
+        };
+
+        // ── 1–3. Pipeline: strip → map → normalise → build entity ────────────
+        let mut entities = Vec::with_capacity(batch.records.len());
+        for record in &batch.records {
+            let mut sanitized_fields = record.raw_fields.clone();
+            for field in INTERNAL_FIELDS {
+                sanitized_fields.remove(*field);
+            }
+            let mut sanitized_record = record.clone();
+            sanitized_record.raw_fields = sanitized_fields;
+
+            let mapped_fields = mapper.map(sanitized_record.raw_fields.clone());
+            let mut normalised = sanitized_record.clone();
+            normalised.raw_fields = mapped_fields;
+            let normalised = self.normalizer.normalize_record(normalised, mappings);
+
+            entities.push(build_entity(batch.tenant_id, &normalised));
+        }
+
+        // ── 4. Single bulk POST to MDM-Core ──────────────────────────────────
+        let url = format!("{}/entities/ingest-bulk", self.mdm_core_url.trim_end_matches('/'));
+        let payload = serde_json::json!({ "entities": entities });
+
+        match self.http
+            .post(&url)
+            .header("x-tenant-id", batch.tenant_id.to_string())
+            .json(&payload)
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => {
+                if let Ok(body) = resp.json::<serde_json::Value>().await {
+                    if let Some(ids) = body.get("entity_ids").and_then(|v| v.as_array()) {
+                        for id in ids {
+                            if let Some(s) = id.as_str() {
+                                if let Ok(eid) = uuid::Uuid::parse_str(s) {
+                                    result.entity_ids.push(eid);
+                                }
+                            }
+                        }
+                    }
+                    result.processed = result.entity_ids.len();
+                    result.failed    = body.get("failed")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as usize;
+                    if let Some(errs) = body.get("errors").and_then(|v| v.as_array()) {
+                        for e in errs {
+                            if let Some(s) = e.as_str() {
+                                result.errors.push(s.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(resp) => {
+                let status = resp.status();
+                let body   = resp.text().await.unwrap_or_default();
+                warn!(http_status=%status, body=%body, "bulk ingest: mdm-core rejected batch");
+                result.failed = batch.records.len();
+                result.errors.push(format!("http {} — {}", status, body));
+            }
+            Err(e) => {
+                warn!(error=%e, "bulk ingest: network error calling mdm-core");
+                result.failed = batch.records.len();
+                result.errors.push(format!("network error — {}", e));
+            }
+        }
+
+        result.finalize(started.elapsed().as_millis() as u64);
+        info!(
+            batch_id=%batch.batch_id,
+            processed=result.processed,
+            failed=result.failed,
+            duration_ms=result.duration_ms,
+            "bulk batch processing complete"
+        );
+
+        Ok(result)
+    }
+}
+
 fn parse_entity_type(s: &str) -> EntityType {
     match s.to_lowercase().as_str() {
         "customer" | "person" | "individual" | "client" | "contact" => EntityType::Customer,

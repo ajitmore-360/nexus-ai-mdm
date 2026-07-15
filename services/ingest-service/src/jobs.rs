@@ -5,6 +5,94 @@ use uuid::Uuid;
 
 use crate::models::{IngestBatch, IngestResult, IngestStatus};
 
+// ── Async job helpers ────────────────────────────────────────────────────────
+
+/// Create a job record immediately (before processing starts) with
+/// `status=processing`. Returns the new `job_id`.
+pub async fn create_job_pending(
+    pool:         &PgPool,
+    tenant_id:    Uuid,
+    source_system: &str,
+    file_name:    Option<&str>,
+    total_records: i32,
+    chunks_total: i32,
+    chunk_size:   i32,
+) -> Result<Uuid> {
+    let job_id  = Uuid::new_v4();
+    let batch_id = Uuid::new_v4();
+
+    sqlx::query(
+        r#"
+        INSERT INTO ingest.ingest_jobs (
+            job_id, batch_id, tenant_id, source_system, status,
+            total_records, processed, failed, skipped,
+            entity_ids, errors, duration_ms, file_name,
+            chunks_total, chunks_done, chunk_size
+        ) VALUES ($1,$2,$3,$4,'processing',$5,0,0,0,'{}','{}',0,$6,$7,0,$8)
+        "#,
+    )
+    .bind(job_id)
+    .bind(batch_id)
+    .bind(tenant_id)
+    .bind(source_system)
+    .bind(total_records)
+    .bind(file_name)
+    .bind(chunks_total)
+    .bind(chunk_size)
+    .execute(pool)
+    .await?;
+
+    Ok(job_id)
+}
+
+/// Atomically increment `processed` and `failed` counters and bump
+/// `chunks_done`. Called by the worker after each chunk finishes.
+pub async fn update_job_progress(
+    pool:      &PgPool,
+    job_id:    Uuid,
+    processed: i32,
+    failed:    i32,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE ingest.ingest_jobs
+        SET processed   = processed + $2,
+            failed      = failed    + $3,
+            chunks_done = chunks_done + 1
+        WHERE job_id = $1
+        "#,
+    )
+    .bind(job_id)
+    .bind(processed)
+    .bind(failed)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Mark a job as completed or failed once all chunks are done.
+pub async fn complete_job(pool: &PgPool, job_id: Uuid) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE ingest.ingest_jobs
+        SET status       = CASE
+                             WHEN failed = 0 THEN 'completed'
+                             WHEN processed = 0 THEN 'failed'
+                             ELSE 'partial_success'
+                           END,
+            completed_at = NOW(),
+            duration_ms  = EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000
+        WHERE job_id = $1
+        "#,
+    )
+    .bind(job_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 /// Persist the result of a completed batch to `ingest.ingest_jobs`.
 /// Returns the newly created `job_id`.
 pub async fn persist_job(

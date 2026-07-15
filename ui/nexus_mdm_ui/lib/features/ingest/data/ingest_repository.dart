@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../../../core/network/api_client.dart';
 
 class IngestJob {
@@ -8,6 +10,8 @@ class IngestJob {
   final int totalRecords;
   final int processed;
   final int failed;
+  final int chunksTotal;
+  final int chunksDone;
   final int durationMs;
   final String? fileName;
   final DateTime createdAt;
@@ -20,6 +24,8 @@ class IngestJob {
     required this.totalRecords,
     required this.processed,
     required this.failed,
+    required this.chunksTotal,
+    required this.chunksDone,
     required this.durationMs,
     this.fileName,
     required this.createdAt,
@@ -34,6 +40,8 @@ class IngestJob {
       totalRecords: json['total_records'] as int? ?? 0,
       processed:    json['processed']     as int? ?? 0,
       failed:       json['failed']        as int? ?? 0,
+      chunksTotal:  json['chunks_total']  as int? ?? 0,
+      chunksDone:   json['chunks_done']   as int? ?? 0,
       durationMs:   json['duration_ms']   as int? ?? 0,
       fileName:     json['file_name']     as String?,
       createdAt: json['created_at'] != null
@@ -41,6 +49,31 @@ class IngestJob {
           : DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
+
+  bool get isAsync => chunksTotal > 0;
+
+  double get progressFraction {
+    if (!isAsync || chunksTotal == 0) return processed > 0 ? 1.0 : 0.0;
+    return chunksDone / chunksTotal;
+  }
+}
+
+class IngestUploadResult {
+  final bool success;
+  final String? jobId;
+  final int totalRecords;
+  final int chunksQueued;
+  final String? error;
+  final String? message;
+
+  const IngestUploadResult({
+    required this.success,
+    this.jobId,
+    this.totalRecords = 0,
+    this.chunksQueued = 0,
+    this.error,
+    this.message,
+  });
 }
 
 class IngestRepository {
@@ -67,5 +100,60 @@ class IngestRepository {
     return items
         .map((e) => IngestJob.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Upload a large CSV file using multipart/form-data.
+  /// The server enqueues the file as async chunks and returns a job_id
+  /// immediately (HTTP 202 Accepted). Progress is polled via [getJob].
+  Future<IngestUploadResult> uploadCsvFile({
+    required String sourceSystem,
+    required String entityType,
+    required String fileName,
+    required List<int> fileBytes,
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        'source_system': sourceSystem,
+        'entity_type':   entityType,
+        'file': MultipartFile.fromBytes(
+          fileBytes,
+          filename: fileName,
+          contentType: DioMediaType('text', 'csv'),
+        ),
+      });
+
+      final response = await _client.post<Map<String, dynamic>>(
+        '/v1/ingest/csv/upload',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+        onSendProgress: onProgress,
+      );
+
+      final body = response.data ?? {};
+      return IngestUploadResult(
+        success:      body['success'] as bool? ?? false,
+        jobId:        body['job_id']  as String?,
+        totalRecords: body['total_records'] as int? ?? 0,
+        chunksQueued: body['chunks_queued'] as int? ?? 0,
+        message:      body['message'] as String?,
+        error:        body['error']   as String?,
+      );
+    } on DioException catch (e) {
+      final body = e.response?.data;
+      final errorMsg = (body is Map ? body['error']?.toString() : null)
+          ?? e.message
+          ?? 'Upload failed';
+      return IngestUploadResult(success: false, error: errorMsg);
+    } catch (e) {
+      return IngestUploadResult(success: false, error: e.toString());
+    }
+  }
+
+  Future<IngestJob?> getJob(String jobId) async {
+    final response = await _client.get<Map<String, dynamic>>('/v1/ingest/jobs/$jobId');
+    final data = response.data;
+    if (data == null || data['success'] != true) return null;
+    return IngestJob.fromJson(data['job'] as Map<String, dynamic>);
   }
 }

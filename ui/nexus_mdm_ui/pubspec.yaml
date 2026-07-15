@@ -39,6 +39,9 @@ dependencies:
   get_it: ^7.7.0
   shared_preferences: ^2.2.3
 
+  # File picker â€” cross-platform CSV file selection for large-scale ingest
+  file_picker: ^8.1.2
+
   # Security â€” encrypted storage for auth tokens
   # Uses Keychain (iOS/macOS), Keystore (Android), libsecret (Linux), DPAPI (Windows)
   flutter_secure_storage: ^9.2.2

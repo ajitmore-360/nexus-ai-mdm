@@ -36,6 +36,12 @@ pub struct IngestSettings {
 
     /// Base URL of the AI enrichment service.
     pub ai_service_url: String,
+
+    /// Records per chunk when splitting a large CSV upload for async processing.
+    pub chunk_size: usize,
+
+    /// Number of parallel worker tasks consuming the ingest.batch queue.
+    pub worker_concurrency: usize,
 }
 
 impl IngestSettings {
@@ -85,6 +91,16 @@ impl IngestSettings {
 
             ai_service_url: std::env::var("AI_SERVICE_URL")
                 .unwrap_or_else(|_| "http://localhost:8083".to_string()),
+
+            chunk_size: std::env::var("INGEST_CHUNK_SIZE")
+                .unwrap_or_else(|_| "5000".to_string())
+                .parse::<usize>()
+                .context("INGEST_CHUNK_SIZE must be a positive integer")?,
+
+            worker_concurrency: std::env::var("INGEST_WORKER_CONCURRENCY")
+                .unwrap_or_else(|_| "4".to_string())
+                .parse::<usize>()
+                .context("INGEST_WORKER_CONCURRENCY must be a positive integer")?,
         })
     }
 }

@@ -9,7 +9,7 @@ use uuid::Uuid;
 use contracts::events::mdm_events::MDMEventPayload;
 use contracts::mdm::entity::{CanonicalEntity, EntityStatus};
 use contracts::mdm::merge::{MergeExecutionResult, MergeRequest};
-use contracts::mdm::survivorship::SurvivorshipRule;
+use contracts::mdm::survivorship::{SurvivorshipRule, SurvivorshipScope, SurvivorshipStatus, SurvivorshipStrategy};
 use database::{DbPool, PendingOutboxEvent, RequestContext, RequestContextFactory};
 use azile_redis::{TaskQueue, queue::task_types};
 
@@ -89,10 +89,14 @@ impl MergeService {
         }
 
         // â”€â”€ Survivorship â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        // Rules come from the proposed golden record's attributes if present,
-        // otherwise a default empty rule set is used (latest-wins fallback in
-        // the survivorship engine).
-        let rules: Vec<SurvivorshipRule> = vec![];
+        // Load active rules from the DB so configured strategies (TrustedSource,
+        // MostRecent, HybridWeighted, etc.) are applied. Falls back to the
+        // engine's built-in latest-wins default when no rules exist.
+        let rules = load_survivorship_rules(&self.pool, tenant_id).await
+            .unwrap_or_else(|e| {
+                tracing::warn!(error=%e, “failed to load survivorship rules — using default latest-wins”);
+                vec![]
+            });
         let golden = apply_survivorship(entities.clone(), rules);
 
         // â”€â”€ Atomic write with tenant RLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -228,4 +232,70 @@ impl MergeService {
             metadata:                 Default::default(),
         })
     }
+}
+
+// ── Survivorship rules loader ────────────────────────────────────────────────
+
+async fn load_survivorship_rules(pool: &DbPool, tenant_id: Uuid) -> Result<Vec<SurvivorshipRule>> {
+    use sqlx::Row;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT rule_id, rule_name, description, attribute_name, strategy, scope,
+               source_priority, source_weights, minimum_confidence, ai_assisted,
+               explainability_enabled, allow_manual_override, status, priority,
+               effective_from, effective_to, created_by, metadata
+        FROM core_mdm.survivorship_rules
+        WHERE tenant_id = $1
+          AND status = 'active'
+          AND (effective_from IS NULL OR effective_from <= NOW())
+          AND (effective_to   IS NULL OR effective_to   >  NOW())
+        ORDER BY priority DESC
+        "#,
+    )
+    .bind(tenant_id)
+    .fetch_all(pool)
+    .await?;
+
+    let rules = rows.iter().map(|row| {
+        let strategy_str: String = row.get("strategy");
+        let strategy = serde_json::from_value(serde_json::Value::String(strategy_str))
+            .unwrap_or(SurvivorshipStrategy::MostRecent);
+
+        let scope_str: String = row.get("scope");
+        let scope = serde_json::from_value(serde_json::Value::String(scope_str))
+            .unwrap_or(SurvivorshipScope::Tenant);
+
+        let status_str: String = row.get("status");
+        let status = serde_json::from_value(serde_json::Value::String(status_str))
+            .unwrap_or(SurvivorshipStatus::Active);
+
+        let source_priority: Vec<String> = row
+            .get::<sqlx::types::Json<Vec<String>>, _>("source_priority")
+            .0;
+
+        SurvivorshipRule {
+            rule_id:               row.get("rule_id"),
+            rule_name:             row.get("rule_name"),
+            description:           row.get("description"),
+            attribute:             row.get("attribute_name"),
+            strategy,
+            scope,
+            source_priority,
+            source_weights:        Default::default(),
+            minimum_confidence:    row.get::<Option<f64>, _>("minimum_confidence").map(|v| v as f32),
+            ai_assisted:           row.get("ai_assisted"),
+            explainability_enabled: row.get("explainability_enabled"),
+            allow_manual_override: row.get("allow_manual_override"),
+            status,
+            priority:              row.get("priority"),
+            effective_from:        row.get("effective_from"),
+            effective_to:          row.get("effective_to"),
+            created_by:            row.get("created_by"),
+            audit:                 Default::default(),
+            metadata:              Default::default(),
+        }
+    }).collect();
+
+    Ok(rules)
 }

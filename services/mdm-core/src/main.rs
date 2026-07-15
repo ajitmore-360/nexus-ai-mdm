@@ -99,7 +99,7 @@ use handlers::{
     domain_policies::{
         delete_domain_policy, get_domain_policy, list_domain_policies, upsert_domain_policy,
     },
-    entities::{create_entity, gdpr_erase_entity, get_entity_by_id, list_entities, patch_entity},
+    entities::{create_entities_bulk, create_entity, gdpr_erase_entity, get_entity_by_id, list_entities, patch_entity},
     entity_types::{
         create_attribute, create_entity_type, delete_attribute, delete_entity_type,
         list_attributes, list_entity_types, next_sequence, reorder_attributes,
@@ -618,9 +618,11 @@ fn build_router(
 
     let protected = Router::new()
         // Hierarchy â€” static routes BEFORE /:id
-        .route("/entities/hierarchy/roots",   get(get_hierarchy_roots))
+        .route(“/entities/hierarchy/roots”,   get(get_hierarchy_roots))
+        // Bulk ingest â€” internal service-to-service endpoint, BEFORE /:id
+        .route(“/entities/ingest-bulk”,       post(create_entities_bulk))
         // Bulk operations â€” static routes BEFORE /:id to avoid route collision
-        .route("/entities/bulk/status",       post(bulk_update_entity_status))
+        .route(“/entities/bulk/status”,       post(bulk_update_entity_status))
         .route("/entities/bulk/export",       post(bulk_export_entities))
         .route("/entities/bulk/tag",          post(bulk_tag_entities))
         // XRef lookup â€” static route BEFORE /:id

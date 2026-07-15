@@ -8,6 +8,7 @@ mod scheduler;
 mod source_systems;
 mod sources;
 mod state;
+mod worker;
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -32,7 +33,7 @@ use source_systems::{
     create_source_system, delete_source_system, list_source_systems,
     test_connection, update_source_system,
 };
-use sources::rest::{ingest_batch, ingest_csv, ingest_entities};
+use sources::rest::{ingest_batch, ingest_csv, ingest_csv_upload, ingest_entities};
 use state::AppState;
 
 #[tokio::main]
@@ -87,7 +88,40 @@ async fn main() {
         .await
         .expect("failed to connect to PostgreSQL");
 
-    let state = Arc::new(AppState::new(settings, pool, jwt_config));
+    // â”€â”€ Optional Redis task queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // If REDIS_URL is set, create the task queue used for async CSV ingest.
+    // If Redis is unavailable, the service still starts but large CSV upload
+    // will return 503 and the /ingest/csv/upload endpoint won't function.
+    let task_queue: Option<std::sync::Arc<azile_redis::TaskQueue>> = {
+        let redis_url = settings.redis_url.clone();
+        match deadpool_redis::Config::from_url(&redis_url)
+            .create_pool(Some(deadpool_redis::Runtime::Tokio1))
+        {
+            Ok(redis_pool) => {
+                tracing::info!(“Redis connected — async ingest queue enabled”);
+                Some(std::sync::Arc::new(azile_redis::TaskQueue::new(redis_pool, “azile”)))
+            }
+            Err(e) => {
+                tracing::warn!(error=%e, “Redis unavailable — async CSV ingest disabled”);
+                None
+            }
+        }
+    };
+
+    let worker_concurrency = settings.worker_concurrency;
+    let state = Arc::new(AppState::new(settings, pool, jwt_config, task_queue));
+
+    // â”€â”€ Async ingest workers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Spawns N worker tasks (INGEST_WORKER_CONCURRENCY, default 4) each
+    // polling the Redis `ingest.batch` queue independently. Workers process
+    // chunks produced by POST /ingest/csv/upload in parallel.
+    if state.task_queue.is_some() {
+        for worker_id in 0..worker_concurrency {
+            let worker_state = Arc::clone(&state);
+            tokio::spawn(worker::run_worker(worker_state, worker_id));
+        }
+        tracing::info!(count=worker_concurrency, “async ingest workers started”);
+    }
 
     // â”€â”€ Scheduled REST pull loops â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Spawns one background task per REST connector configured with
@@ -113,6 +147,7 @@ async fn main() {
         .route("/ingest/batch",              post(ingest_batch))
         .route("/ingest/entities",           post(ingest_entities))
         .route("/ingest/csv",                post(ingest_csv))
+        .route("/ingest/csv/upload",         post(ingest_csv_upload))
         .route("/ingest/jobs",               get(list_ingest_jobs))
         .route("/ingest/jobs/:id",           get(get_ingest_job))
         .route("/source-systems",            get(list_source_systems).post(create_source_system))

@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../../core/auth/auth_manager.dart';
@@ -32,6 +34,14 @@ class _IngestDataPageState extends State<IngestDataPage>
   List<IngestJob> _recentJobs = [];
   bool _jobsLoading = false;
 
+  // ── File upload state ─────────────────────────────────────────────────────
+  String?     _pickedFileName;
+  List<int>?  _pickedFileBytes;
+  double?     _uploadSendProgress;  // 0.0–1.0 upload progress
+  String?     _activeJobId;         // job being polled
+  IngestJob?  _activeJob;           // latest polled job state
+  Timer?      _pollTimer;
+
   final _csvController = TextEditingController(text: _kSampleCsv);
   final _jsonController = TextEditingController(text: _kSampleJson);
 
@@ -50,13 +60,14 @@ class _IngestDataPageState extends State<IngestDataPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _ingestRepo = IngestRepository(_apiClient);
     _loadRecentJobs();
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _tabController.dispose();
     _csvController.dispose();
     _jsonController.dispose();
@@ -84,6 +95,11 @@ class _IngestDataPageState extends State<IngestDataPage>
     try {
       final tenantId =
           await AuthManager.getTenantId() ?? '';
+
+      if (_tabController.index == 2) {
+        _setResult('Use the Upload & Ingest button in the File Upload tab.', isError: true);
+        return;
+      }
 
       if (_tabController.index == 0) {
         final csv = _csvController.text.trim();
@@ -176,7 +192,10 @@ class _IngestDataPageState extends State<IngestDataPage>
             const SizedBox(height: 16),
             _buildTabContent(),
             const SizedBox(height: 20),
-            _buildActions(),
+            AnimatedBuilder(
+              animation: _tabController,
+              builder: (_, __) => _buildActions(),
+            ),
             if (_resultMessage != null) ...[
               const SizedBox(height: 16),
               _buildResult(),
@@ -199,7 +218,7 @@ class _IngestDataPageState extends State<IngestDataPage>
         Text('Ingest Data', style: AppTextStyles.headlineLarge),
         const SizedBox(height: 6),
         Text(
-          'Bulk-import entity records via CSV paste or JSON batch upload.',
+          'Import entity records via CSV paste, JSON batch, or large file upload (async, millions of records).',
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedText),
         ),
       ],
@@ -264,6 +283,7 @@ class _IngestDataPageState extends State<IngestDataPage>
       tabs: const [
         Tab(icon: Icon(Icons.table_chart_outlined, size: 18), text: 'CSV Import'),
         Tab(icon: Icon(Icons.data_object_outlined, size: 18), text: 'JSON Batch'),
+        Tab(icon: Icon(Icons.upload_file_outlined, size: 18), text: 'File Upload'),
       ],
     );
   }
@@ -276,6 +296,7 @@ class _IngestDataPageState extends State<IngestDataPage>
         children: [
           _buildCsvTab(),
           _buildJsonTab(),
+          _buildFileUploadTab(),
         ],
       ),
     );
@@ -312,6 +333,8 @@ class _IngestDataPageState extends State<IngestDataPage>
   }
 
   Widget _buildActions() {
+    // File Upload tab manages its own actions inline
+    if (_tabController.index == 2) return const SizedBox.shrink();
     return Row(
       children: [
         ElevatedButton.icon(
@@ -355,6 +378,240 @@ class _IngestDataPageState extends State<IngestDataPage>
         ),
       ],
     );
+  }
+
+  // ── File Upload tab ────────────────────────────────────────────────────────
+
+  Widget _buildFileUploadTab() {
+    final job = _activeJob;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Upload a large CSV file (up to millions of records). '
+          'The file is split into chunks and processed asynchronously. '
+          'Track progress below — you can navigate away and return.',
+          style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedText),
+        ),
+        const SizedBox(height: 16),
+
+        // File picker row
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _uploadSendProgress != null ? null : _pickFile,
+                icon: const Icon(Icons.folder_open_outlined, size: 16),
+                label: const Text('Choose CSV File'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  _pickedFileName ?? 'No file selected',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: _pickedFileName != null
+                        ? AppColors.secondaryText
+                        : AppColors.mutedText,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (_pickedFileName != null && _uploadSendProgress == null && _activeJobId == null)
+                ElevatedButton.icon(
+                  onPressed: _uploadFile,
+                  icon: const Icon(Icons.cloud_upload_outlined, size: 16),
+                  label: const Text('Upload & Ingest'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        // Upload send progress
+        if (_uploadSendProgress != null) ...[
+          const SizedBox(height: 16),
+          _buildProgressCard(
+            icon: Icons.upload_rounded,
+            label: 'Uploading file…',
+            fraction: _uploadSendProgress!,
+            subtitle: '${(_uploadSendProgress! * 100).toStringAsFixed(0)}% sent',
+            color: AppColors.primary,
+          ),
+        ],
+
+        // Async job progress
+        if (job != null) ...[
+          const SizedBox(height: 16),
+          _buildProgressCard(
+            icon: job.status == 'completed'
+                ? Icons.check_circle_outline
+                : job.status == 'failed'
+                    ? Icons.error_outline
+                    : Icons.sync_rounded,
+            label: job.status == 'completed'
+                ? 'Ingest complete'
+                : job.status == 'failed'
+                    ? 'Ingest failed'
+                    : 'Processing chunks…',
+            fraction: job.progressFraction,
+            subtitle: job.isAsync
+                ? '${job.chunksDone}/${job.chunksTotal} chunks — '
+                  '${job.processed} processed, ${job.failed} failed'
+                : '${job.processed}/${job.totalRecords} records',
+            color: job.status == 'completed'
+                ? AppColors.success
+                : job.status == 'failed'
+                    ? AppColors.error
+                    : AppColors.primary,
+          ),
+          if (job.status == 'completed' || job.status == 'failed') ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => setState(() {
+                _pickedFileName    = null;
+                _pickedFileBytes   = null;
+                _uploadSendProgress = null;
+                _activeJobId       = null;
+                _activeJob         = null;
+                _pollTimer?.cancel();
+              }),
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Upload Another File'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.mutedText,
+                side: const BorderSide(color: AppColors.divider),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildProgressCard({
+    required IconData icon,
+    required String label,
+    required double fraction,
+    required String subtitle,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 8),
+              Text(label, style: AppTextStyles.bodyMedium.copyWith(color: color)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          LinearProgressIndicator(
+            value: fraction.clamp(0.0, 1.0),
+            backgroundColor: AppColors.divider,
+            valueColor: AlwaysStoppedAnimation(color),
+            minHeight: 6,
+            borderRadius: BorderRadius.circular(3),
+          ),
+          const SizedBox(height: 6),
+          Text(subtitle,
+              style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedText)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    setState(() {
+      _pickedFileName  = file.name;
+      _pickedFileBytes = file.bytes?.toList();
+      _activeJobId     = null;
+      _activeJob       = null;
+      _uploadSendProgress = null;
+    });
+  }
+
+  Future<void> _uploadFile() async {
+    final bytes = _pickedFileBytes;
+    final name  = _pickedFileName;
+    if (bytes == null || name == null) return;
+
+    setState(() => _uploadSendProgress = 0.0);
+
+    final result = await _ingestRepo.uploadCsvFile(
+      sourceSystem: _sourceSystem,
+      entityType:   _selectedEntityType,
+      fileName:     name,
+      fileBytes:    bytes,
+      onProgress:   (sent, total) {
+        if (!mounted || total == 0) return;
+        setState(() => _uploadSendProgress = sent / total);
+      },
+    );
+
+    if (!mounted) return;
+    setState(() => _uploadSendProgress = null);
+
+    if (!result.success || result.jobId == null) {
+      setState(() {
+        _resultIsError  = true;
+        _resultMessage  = result.error ?? 'Upload failed';
+      });
+      return;
+    }
+
+    setState(() {
+      _activeJobId = result.jobId;
+      _activeJob   = null;
+    });
+    _pollJobProgress(result.jobId!);
+    _loadRecentJobs();
+  }
+
+  void _pollJobProgress(String jobId) {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      final job = await _ingestRepo.getJob(jobId);
+      if (!mounted) return;
+      setState(() => _activeJob = job);
+      if (job != null &&
+          (job.status == 'completed' || job.status == 'failed' || job.status == 'partial_success')) {
+        _pollTimer?.cancel();
+        _loadRecentJobs();
+      }
+    });
   }
 
   Widget _buildResult() {
@@ -436,49 +693,72 @@ class _IngestDataPageState extends State<IngestDataPage>
 
   Widget _buildJobRow(IngestJob job) {
     final statusColor = switch (job.status) {
-      'completed'      => AppColors.success,
-      'partial_success'=> AppColors.warning,
-      'failed'         => AppColors.error,
-      _                => AppColors.mutedText,
+      'completed'       => AppColors.success,
+      'partial_success' => AppColors.warning,
+      'failed'          => AppColors.error,
+      _                 => AppColors.primary,
     };
     final ago = _formatAgo(job.createdAt);
+    final isInProgress = job.isAsync &&
+        job.status != 'completed' &&
+        job.status != 'failed' &&
+        job.status != 'partial_success';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              job.sourceSystem,
-              style: AppTextStyles.tableCell,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Text('${job.processed}/${job.totalRecords} records',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.secondaryText)),
-          const SizedBox(width: 16),
-          SizedBox(
-            width: 80,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(4),
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
               ),
-              child: Text(
-                job.status.replaceAll('_', ' '),
-                style: AppTextStyles.badgeLabel.copyWith(color: statusColor),
-                textAlign: TextAlign.center,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  job.fileName ?? job.sourceSystem,
+                  style: AppTextStyles.tableCell,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text('${job.processed}/${job.totalRecords}',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.secondaryText)),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 84,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    job.status.replaceAll('_', ' '),
+                    style: AppTextStyles.badgeLabel.copyWith(color: statusColor),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(ago, style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedText)),
+            ],
+          ),
+          if (isInProgress) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 18),
+              child: LinearProgressIndicator(
+                value: job.progressFraction.clamp(0.0, 1.0),
+                backgroundColor: AppColors.divider,
+                valueColor: AlwaysStoppedAnimation(statusColor),
+                minHeight: 3,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Text(ago, style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedText)),
+          ],
         ],
       ),
     );

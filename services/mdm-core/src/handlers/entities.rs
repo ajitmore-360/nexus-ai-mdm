@@ -207,6 +207,134 @@ pub async fn create_entity(
     }
 }
 
+// ── Bulk ingest endpoint ──────────────────────────────────────────────────────
+//
+// POST /entities/ingest-bulk  (internal, service-to-service only)
+//
+// Accepts up to `max_batch_size` pre-built CanonicalEntities from the
+// ingest-service. All entities are written in a single database transaction
+// so a 5,000-record chunk costs one round-trip instead of 5,000.
+// Matching is decoupled: an `entity.match` task is enqueued per entity so
+// the matching engine processes them asynchronously and doesn't block ingest.
+
+#[derive(serde::Deserialize)]
+pub struct BulkIngestRequest {
+    pub entities: Vec<contracts::mdm::entity::CanonicalEntity>,
+}
+
+#[derive(serde::Serialize)]
+pub struct BulkIngestResponse {
+    pub inserted:   usize,
+    pub failed:     usize,
+    pub entity_ids: Vec<Uuid>,
+    pub errors:     Vec<String>,
+}
+
+pub async fn create_entities_bulk(
+    State(state):          State<Arc<AppState>>,
+    Extension(tenant_ctx): Extension<TenantContext>,
+    Json(req):             Json<BulkIngestRequest>,
+) -> impl IntoResponse {
+    if req.entities.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "success": false, "error": "no entities provided" })),
+        );
+    }
+
+    let mut inserted   = 0usize;
+    let mut failed     = 0usize;
+    let mut entity_ids = Vec::with_capacity(req.entities.len());
+    let mut errors     = Vec::new();
+
+    // One transaction for the whole chunk — the key performance lever.
+    let mut tx = match state.pool.begin().await {
+        Ok(t)  => t,
+        Err(e) => {
+            tracing::error!(error=%e, "failed to begin bulk-ingest transaction");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "success": false, "error": e.to_string() })),
+            );
+        }
+    };
+
+    // Set tenant RLS context once for the whole transaction.
+    if let Err(e) = crate::db::tenant_context::set_tenant_ctx(&mut tx, tenant_ctx.tenant_id).await {
+        tracing::error!(error=%e, "failed to set tenant context for bulk ingest");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "success": false, "error": e.to_string() })),
+        );
+    }
+
+    for entity in &req.entities {
+        match state.entity_repository.create_entity(&mut tx, entity).await {
+            Ok(()) => {
+                entity_ids.push(entity.entity_id);
+                inserted += 1;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    entity_id=%entity.entity_id,
+                    error=%e,
+                    "bulk-ingest: failed to insert entity"
+                );
+                errors.push(format!("{}: {}", entity.entity_id, e));
+                failed += 1;
+            }
+        }
+    }
+
+    if let Err(e) = tx.commit().await {
+        tracing::error!(error=%e, "bulk-ingest transaction commit failed");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "success": false, "error": e.to_string() })),
+        );
+    }
+
+    // Enqueue async matching and embedding for each successfully inserted entity.
+    if let Some(queue) = &state.task_queue {
+        for &eid in &entity_ids {
+            let match_task = azile_redis::queue::Task::new(
+                azile_redis::queue::task_types::ENTITY_MATCH,
+                tenant_ctx.tenant_id.to_string(),
+                serde_json::json!({
+                    "entity_id": eid,
+                    "tenant_id": tenant_ctx.tenant_id,
+                }),
+            );
+            if let Err(e) = queue.enqueue(azile_redis::queue::task_types::ENTITY_MATCH, &match_task).await {
+                tracing::warn!(entity_id=%eid, error=%e, "match task enqueue failed");
+            }
+            let embed_task = azile_redis::queue::Task::new(
+                azile_redis::queue::task_types::ENTITY_EMBED,
+                tenant_ctx.tenant_id.to_string(),
+                serde_json::json!({
+                    "entity_id": eid,
+                    "tenant_id": tenant_ctx.tenant_id,
+                }),
+            );
+            if let Err(e) = queue.enqueue(azile_redis::queue::task_types::ENTITY_EMBED, &embed_task).await {
+                tracing::warn!(entity_id=%eid, error=%e, "embed task enqueue failed");
+            }
+        }
+    }
+
+    let status = if failed == 0 { StatusCode::OK } else { StatusCode::MULTI_STATUS };
+    (
+        status,
+        Json(serde_json::json!({
+            "success":    failed < inserted || inserted > 0,
+            "inserted":   inserted,
+            "failed":     failed,
+            "entity_ids": entity_ids,
+            "errors":     errors,
+        })),
+    )
+}
+
 /// Build a `RequestContext` from inbound HTTP headers.
 ///
 /// Falls back to new UUIDs / empty strings when optional headers are absent
