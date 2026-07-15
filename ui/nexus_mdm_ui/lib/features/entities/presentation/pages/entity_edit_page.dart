@@ -125,7 +125,6 @@ class _AttrRow {
     required this.key,
     required String value,
     required this.type,
-    this.dropdownOptions,
   })  : keyCtrl   = TextEditingController(text: key),
         valueCtrl = TextEditingController(text: value);
 

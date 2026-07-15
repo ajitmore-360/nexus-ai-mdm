@@ -53,13 +53,13 @@ class _DataGovernancePageState extends State<DataGovernancePage> {
       if (!mounted) return;
       setState(() {
         _assignments = r0 is Success<List<GovernanceAssignment>>
-            ? (r0 as Success<List<GovernanceAssignment>>).data
+            ? r0.data
             : [];
         _entityTypes = r1 is Success<List<EntityTypeModel>>
-            ? (r1 as Success<List<EntityTypeModel>>).data
+            ? r1.data
             : [];
         _users = r2 is Success<List<TenantUserModel>>
-            ? (r2 as Success<List<TenantUserModel>>).data
+            ? r2.data
             : [];
         _loading = false;
       });
@@ -225,7 +225,7 @@ class _DataGovernancePageState extends State<DataGovernancePage> {
       _load();
     } else if (result is Failure<String>) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text((result as Failure<String>).exception.message),
+        content: Text(result.exception.message),
         backgroundColor: AppColors.error,
       ));
     }
@@ -242,7 +242,7 @@ class _DataGovernancePageState extends State<DataGovernancePage> {
       _load();
     } else if (result is Failure<bool>) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text((result as Failure<bool>).exception.message),
+        content: Text(result.exception.message),
         backgroundColor: AppColors.error,
       ));
     }

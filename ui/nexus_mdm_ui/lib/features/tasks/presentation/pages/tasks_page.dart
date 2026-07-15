@@ -97,7 +97,6 @@ class _TasksPageState extends State<TasksPage> {
 
   bool _loading = true;
   String? _error;
-  String _tenantId = '';
   String _userId = '';
 
   List<TaskModel> _tasks = [];
@@ -106,6 +105,9 @@ class _TasksPageState extends State<TasksPage> {
   static const List<_TaskFilter> _filters = [
     _TaskFilter(label: 'My Tasks'),
     _TaskFilter(label: 'All Tasks'),
+    _TaskFilter(label: 'Pending',         status: 'Pending'),
+    _TaskFilter(label: 'In Progress',     status: 'InProgress'),
+    _TaskFilter(label: 'Completed',       status: 'Completed'),
     _TaskFilter(label: 'High Priority',   priority: 'High'),
     _TaskFilter(label: 'Medium Priority', priority: 'Medium'),
     _TaskFilter(label: 'Low Priority',    priority: 'Low'),
@@ -120,8 +122,7 @@ class _TasksPageState extends State<TasksPage> {
   }
 
   Future<void> _init() async {
-    _tenantId = await AuthManager.getTenantId() ?? '';
-    _userId   = await AuthManager.getUserId() ?? '';
+    _userId = await AuthManager.getUserId() ?? '';
     await _loadTasks();
   }
 
@@ -470,10 +471,13 @@ class _TasksPageState extends State<TasksPage> {
     switch (index) {
       case 0: return Icons.person_outline;
       case 1: return Icons.list_outlined;
-      case 2: return Icons.priority_high;
-      case 3: return Icons.remove_circle_outline;
-      case 4: return Icons.arrow_downward_outlined;
-      case 5: return Icons.warning_amber_outlined;
+      case 2: return Icons.radio_button_unchecked;
+      case 3: return Icons.play_circle_outline;
+      case 4: return Icons.check_circle_outline;
+      case 5: return Icons.priority_high;
+      case 6: return Icons.remove_circle_outline;
+      case 7: return Icons.arrow_downward_outlined;
+      case 8: return Icons.warning_amber_outlined;
       default: return Icons.filter_list;
     }
   }

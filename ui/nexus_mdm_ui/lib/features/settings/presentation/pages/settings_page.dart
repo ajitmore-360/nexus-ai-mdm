@@ -1331,16 +1331,26 @@ class _AdministrationTabState extends State<_AdministrationTab> {
   Future<void> _loadUsers() async {
     try {
       final api = GetIt.instance<ApiClient>();
-      final resp = await api.get<Map<String, dynamic>>('/v1/users');
+      final resp = await api.get<Map<String, dynamic>>('/v1/admin/users');
       if (!mounted) return;
       final rows = (resp.data?['data'] as List<dynamic>? ?? []);
       final users = rows.map((u) {
         final m = u as Map<String, dynamic>;
+        final rawLogin = m['last_login_at'] as String?;
+        String lastLogin = '';
+        if (rawLogin != null) {
+          final dt = DateTime.tryParse(rawLogin)?.toLocal();
+          if (dt != null) {
+            lastLogin =
+                '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+          }
+        }
         return _AppUser(
-          id:    (m['user_id'] as String?) ?? '',
-          name:  (m['display_name'] as String?) ?? (m['email'] as String?) ?? 'Unknown',
-          email: (m['email']        as String?) ?? '',
-          role:  (m['role']         as String?) ?? 'viewer',
+          id:        (m['user_id']      as String?) ?? '',
+          name:      (m['display_name'] as String?) ?? (m['email'] as String?) ?? 'Unknown',
+          email:     (m['email']        as String?) ?? '',
+          role:      (m['role']         as String?) ?? 'viewer',
+          lastLogin: lastLogin,
         );
       }).toList();
       setState(() { _users = users; _usersLoading = false; });
@@ -1353,7 +1363,7 @@ class _AdministrationTabState extends State<_AdministrationTab> {
     try {
       final api = GetIt.instance<ApiClient>();
       await api.post<Map<String, dynamic>>(
-        '/v1/users/invite',
+        '/v1/admin/users/invite',
         data: {'email': email, 'role': role},
       );
       if (!mounted) return;
@@ -1376,7 +1386,7 @@ class _AdministrationTabState extends State<_AdministrationTab> {
     try {
       final api = GetIt.instance<ApiClient>();
       await api.patch<Map<String, dynamic>>(
-        '/v1/users/${user.id}/role',
+        '/v1/admin/users/${user.id}/role',
         data: {'role': newRole},
       );
       if (!mounted) return;

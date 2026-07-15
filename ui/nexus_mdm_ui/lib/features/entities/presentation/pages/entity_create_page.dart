@@ -228,8 +228,6 @@ class _AttributeRow {
     required this.value,
     required this.type,
     this.isCustom = false,
-    this.submasterCode,
-    this.dropdownOptions,
   })  : keyController = TextEditingController(text: key),
         valueController = TextEditingController(text: value);
 
@@ -285,12 +283,10 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
   late final GovernanceRepository _governanceRepo;
   late final EntityTypeRepository _entityTypeRepo;
   late final SubmasterRepository _submasterRepo;
-  bool _loadingSchemas = false;
-
-  static final SourceSystemModel _manualEntry = SourceSystemModel(
+  static const SourceSystemModel _manualEntry = SourceSystemModel(
     id: '', tenantId: '', name: 'Manual Entry', code: 'azile-mdm',
     connectorType: 'manual', description: 'Manually entered data',
-    icon: '', trustWeight: 1.0, priority: 0, entityTypes: const [],
+    icon: '', trustWeight: 1.0, priority: 0, entityTypes: [],
     syncMode: 'manual', isActive: true, isConnected: true,
     lastSyncStatus: 'active',
   );
@@ -372,7 +368,6 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
   /// onto the matching _AttributeRow entries for the current entity type.
   Future<void> _loadAttributeSchemas() async {
     if (!mounted) return;
-    setState(() => _loadingSchemas = true);
     try {
       final tenantId = await AuthManager.getTenantId() ?? '';
       final typeCode = _selectedType.name; // enum name matches entity type code
@@ -381,7 +376,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
       if (!mounted) return;
       if (schemasResult is! Success<List<AttributeSchemaModel>>) return;
 
-      final schemas = (schemasResult as Success<List<AttributeSchemaModel>>).data;
+      final schemas = schemasResult.data;
 
       // Collect unique submaster codes that have a linked attribute
       final submasterCodes = schemas
@@ -394,8 +389,7 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
       await Future.wait(submasterCodes.map((smCode) async {
         final result = await _submasterRepo.listValues(tenantId, smCode);
         if (result is Success<List<SubmasterValueModel>>) {
-          optionsByCode[smCode] = (result as Success<List<SubmasterValueModel>>)
-              .data
+          optionsByCode[smCode] = result.data
               .map((v) => _SubmasterOption(code: v.code, label: v.label))
               .toList();
         }
@@ -427,11 +421,8 @@ class _EntityCreatePageState extends State<EntityCreatePage> {
             }
           }
         }
-        _loadingSchemas = false;
       });
-    } catch (e) {
-      if (mounted) setState(() => _loadingSchemas = false);
-    }
+    } catch (_) {}
   }
 
   void _onTypeChanged(_EntityType? type) {
