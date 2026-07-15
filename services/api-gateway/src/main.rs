@@ -145,6 +145,16 @@ use routes::{
         list_sso_configs, upsert_sso_config, delete_sso_config,
         // SCIM token management
         proxy_list_scim_tokens, proxy_create_scim_token, proxy_revoke_scim_token,
+        // Workflow engine
+        proxy_list_workflow_step_types, proxy_list_workflows, proxy_create_workflow,
+        proxy_get_workflow, proxy_update_workflow, proxy_delete_workflow,
+        proxy_toggle_workflow, proxy_list_workflow_runs, proxy_trigger_workflow,
+        // Connector marketplace
+        proxy_list_connector_catalog, proxy_list_connectors, proxy_create_connector,
+        proxy_delete_connector, proxy_test_connector,
+        // Enrichment configuration
+        proxy_list_enrichment_providers, proxy_list_enrichment_configs,
+        proxy_update_enrichment_config, proxy_list_enrichment_requests,
     },
 };
 
@@ -500,6 +510,10 @@ async fn main() {
             // Task management (steward minimum â€" create + update own tasks)
             .route("/tasks",                                     post(proxy_create_task))
             .route("/tasks/:id",                                 patch(proxy_update_task))
+            // Workflow triggers (steward minimum — can trigger a defined workflow)
+            .route("/workflows/:id/trigger",                     post(proxy_trigger_workflow))
+            // Connector test (steward minimum — can test a configured connector)
+            .route("/connectors/:id/test",                       post(proxy_test_connector))
             // Reference data writes (steward can add values; list creation is admin)
             .route("/reference-data/:list_id/values",            post(proxy_upsert_reference_value))
             .route("/reference-data/:list_id/values/bulk",       post(proxy_bulk_import_ref_values))
@@ -583,6 +597,15 @@ async fn main() {
             // SCIM token management (writes)
             .route("/scim/tokens",                                     post(proxy_create_scim_token))
             .route("/scim/tokens/:id",                                 delete(proxy_revoke_scim_token))
+            // Workflow engine (writes — admin manages workflow definitions)
+            .route("/workflows",                                       post(proxy_create_workflow))
+            .route("/workflows/:id",                                   put(proxy_update_workflow).delete(proxy_delete_workflow))
+            .route("/workflows/:id/toggle",                            put(proxy_toggle_workflow))
+            // Connector marketplace (writes — admin configures connectors)
+            .route("/connectors",                                      post(proxy_create_connector))
+            .route("/connectors/:id",                                  delete(proxy_delete_connector))
+            // Enrichment configuration (writes — admin manages enrichment providers)
+            .route("/enrichment-configs/:code",                        put(proxy_update_enrichment_config))
             .layer(axum_middleware::from_fn(require_admin))
     );
 
@@ -718,6 +741,18 @@ async fn main() {
             .route("/admin/quality-violations",                get(list_quality_violations))
             // AI suggestions (read â€" any authenticated user can view suggestions for their entities)
             .route("/ai-suggestions",                          get(list_ai_suggestions))
+            // Workflow engine (reads — any authenticated user can view workflow definitions/runs)
+            .route("/workflow-step-types",                     get(proxy_list_workflow_step_types))
+            .route("/workflows",                               get(proxy_list_workflows))
+            .route("/workflows/:id",                           get(proxy_get_workflow))
+            .route("/workflows/:id/runs",                      get(proxy_list_workflow_runs))
+            // Connector marketplace (reads — any authenticated user can browse connectors)
+            .route("/connector-catalog",                       get(proxy_list_connector_catalog))
+            .route("/connectors",                              get(proxy_list_connectors))
+            // Enrichment configuration (reads — any authenticated user)
+            .route("/enrichment-providers",                    get(proxy_list_enrichment_providers))
+            .route("/enrichment-configs",                      get(proxy_list_enrichment_configs))
+            .route("/enrichment-requests",                     get(proxy_list_enrichment_requests))
             // User notification inbox
             .route("/notifications",                 get(list_notifications))
             .route("/notifications/unread-count",    get(notifications_unread_count))
