@@ -25,14 +25,13 @@ class _IngestDataPageState extends State<IngestDataPage>
   late final IngestRepository _ingestRepo;
 
   String _selectedEntityType = 'Customer';
+  List<String> _allowedEntityTypes = AppConstants.entityTypes;
   String _sourceSystem = 'Manual';
   bool _isLoading = false;
   String? _resultMessage;
   bool _resultIsError = false;
-  String? _lastJobId;
-
   List<IngestJob> _recentJobs = [];
-  bool _jobsLoading = false;
+  bool  _jobsLoading = false;
 
   // ── File upload state ─────────────────────────────────────────────────────
   String?     _pickedFileName;
@@ -62,7 +61,24 @@ class _IngestDataPageState extends State<IngestDataPage>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _ingestRepo = IngestRepository(_apiClient);
+    _initEntityTypes();
     _loadRecentJobs();
+  }
+
+  Future<void> _initEntityTypes() async {
+    final role    = await AuthManager.getUserRole() ?? '';
+    final isSteward = role.toLowerCase() == 'steward';
+    if (!isSteward) return;
+
+    final assigned = await AuthManager.getAssignedEntityTypes();
+    if (assigned.isEmpty || !mounted) return;
+
+    setState(() {
+      _allowedEntityTypes = assigned;
+      if (!_allowedEntityTypes.contains(_selectedEntityType)) {
+        _selectedEntityType = _allowedEntityTypes.first;
+      }
+    });
   }
 
   @override
@@ -153,7 +169,6 @@ class _IngestDataPageState extends State<IngestDataPage>
     if (ok) {
       final processed = result['processed'] as int? ?? 0;
       final failed    = result['failed']    as int? ?? 0;
-      _lastJobId = jobId;
       _setResult(
         'Imported $processed record${processed == 1 ? '' : 's'}'
         '${failed > 0 ? ' ($failed failed)' : ''}.'
@@ -245,7 +260,7 @@ class _IngestDataPageState extends State<IngestDataPage>
                 const SizedBox(height: 6),
                 _styledDropdown(
                   value: _selectedEntityType,
-                  items: AppConstants.entityTypes,
+                  items: _allowedEntityTypes,
                   onChanged: (v) => setState(() => _selectedEntityType = v!),
                 ),
               ],
