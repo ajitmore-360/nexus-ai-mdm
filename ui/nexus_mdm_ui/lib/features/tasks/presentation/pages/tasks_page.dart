@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../../core/auth/auth_manager.dart';
 import '../../../../core/network/api_client.dart';
@@ -80,6 +82,20 @@ class _TaskFilter {
     this.status,
     this.priority,
     this.slaBreached = false,
+  });
+}
+
+// ── Entity suggestion (for search dropdown) ───────────────────────────────────
+
+class _EntitySuggestion {
+  final String entityId;
+  final String displayName;
+  final String entityType;
+
+  const _EntitySuggestion({
+    required this.entityId,
+    required this.displayName,
+    required this.entityType,
   });
 }
 
@@ -282,10 +298,10 @@ class _TasksPageState extends State<TasksPage> {
   void _showCreateTaskDialog() {
     final titleCtrl    = TextEditingController();
     final descCtrl     = TextEditingController();
-    final entityCtrl   = TextEditingController();
     final formKey      = GlobalKey<FormState>();
     String selectedPri = 'Medium';
     DateTime? dueAt;
+    String? selectedEntityId;
 
     showDialog(
       context: context,
@@ -306,7 +322,7 @@ class _TasksPageState extends State<TasksPage> {
                   _field(descCtrl, 'Description', maxLines: 3),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selectedPri,
+                    initialValue: selectedPri,
                     dropdownColor: AppColors.surface,
                     decoration: InputDecoration(
                       labelText: 'Priority',
@@ -319,7 +335,10 @@ class _TasksPageState extends State<TasksPage> {
                     onChanged: (v) => setDlg(() => selectedPri = v ?? 'Medium'),
                   ),
                   const SizedBox(height: 12),
-                  _field(entityCtrl, 'Entity ID (optional)'),
+                  _EntitySearchField(
+                    api: _api,
+                    onChanged: (s) => selectedEntityId = s?.entityId,
+                  ),
                   const SizedBox(height: 12),
                   InkWell(
                     onTap: () async {
@@ -382,7 +401,7 @@ class _TasksPageState extends State<TasksPage> {
                   title:       titleCtrl.text.trim(),
                   description: descCtrl.text.trim(),
                   priority:    selectedPri,
-                  entityId:    entityCtrl.text.trim().isEmpty ? null : entityCtrl.text.trim(),
+                  entityId:    selectedEntityId,
                   dueAt:       dueAt,
                 );
               },
@@ -507,7 +526,7 @@ class _TasksPageState extends State<TasksPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.task_outlined, size: 56, color: AppColors.mutedText),
+            const Icon(Icons.task_outlined, size: 56, color: AppColors.mutedText),
             const SizedBox(height: 16),
             Text('No tasks found', style: AppTextStyles.titleSmall.copyWith(color: AppColors.mutedText)),
             const SizedBox(height: 8),
@@ -726,6 +745,152 @@ class _TasksPageState extends State<TasksPage> {
         isDense: true,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
       ),
+    );
+  }
+}
+
+// ── Entity search field ───────────────────────────────────────────────────────
+
+class _EntitySearchField extends StatefulWidget {
+  final ApiClient api;
+  final void Function(_EntitySuggestion?) onChanged;
+
+  const _EntitySearchField({required this.api, required this.onChanged});
+
+  @override
+  State<_EntitySearchField> createState() => _EntitySearchFieldState();
+}
+
+class _EntitySearchFieldState extends State<_EntitySearchField> {
+  final _ctrl = TextEditingController();
+  Timer? _debounce;
+  List<_EntitySuggestion> _suggestions = [];
+  _EntitySuggestion? _selected;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _search(String query) async {
+    if (query.length < 2) {
+      if (mounted) setState(() => _suggestions = []);
+      return;
+    }
+    if (mounted) setState(() => _loading = true);
+    try {
+      final response = await widget.api.get<Map<String, dynamic>>(
+        '/v1/entities',
+        queryParameters: {'search': query, 'page_size': '10'},
+      );
+      if (!mounted) return;
+      final items = (response.data?['items'] as List<dynamic>?) ?? [];
+      setState(() {
+        _suggestions = items
+            .whereType<Map<String, dynamic>>()
+            .map((e) => _EntitySuggestion(
+                  entityId:    e['entity_id']?.toString() ?? '',
+                  displayName: e['display_name']?.toString() ??
+                      e['entity_type']?.toString() ?? 'Unknown',
+                  entityType:  e['entity_type']?.toString() ?? '',
+                ))
+            .where((s) => s.entityId.isNotEmpty)
+            .toList();
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() { _suggestions = []; _loading = false; });
+    }
+  }
+
+  void _select(_EntitySuggestion s) {
+    setState(() {
+      _selected = s;
+      _ctrl.text = s.displayName;
+      _suggestions = [];
+    });
+    widget.onChanged(s);
+  }
+
+  void _clear() {
+    setState(() {
+      _selected = null;
+      _ctrl.clear();
+      _suggestions = [];
+    });
+    widget.onChanged(null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextFormField(
+          controller: _ctrl,
+          readOnly: _selected != null,
+          style: AppTextStyles.bodyMedium,
+          decoration: InputDecoration(
+            labelText: 'Entity (optional)',
+            hintText: 'Type to search...',
+            isDense: true,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+            suffixIcon: _selected != null
+                ? IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: _clear,
+                  )
+                : _loading
+                    ? const SizedBox.square(
+                        dimension: 36,
+                        child: Padding(
+                          padding: EdgeInsets.all(10),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null,
+          ),
+          onChanged: (q) {
+            _debounce?.cancel();
+            _debounce = Timer(
+              const Duration(milliseconds: 300),
+              () => _search(q),
+            );
+          },
+        ),
+        if (_suggestions.isNotEmpty)
+          Container(
+            constraints: const BoxConstraints(maxHeight: 180),
+            margin: const EdgeInsets.only(top: 2),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              border: Border.all(color: AppColors.divider),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: _suggestions.length,
+              itemBuilder: (_, i) {
+                final s = _suggestions[i];
+                return ListTile(
+                  dense: true,
+                  title: Text(s.displayName, style: AppTextStyles.bodyMedium),
+                  subtitle: Text(
+                    s.entityType,
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.secondaryText),
+                  ),
+                  onTap: () => _select(s),
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 }
