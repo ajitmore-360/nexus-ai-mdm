@@ -173,7 +173,9 @@ class _AuthInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     if (err.response?.statusCode == 401) {
-      // Token expired — attempt silent refresh using secure-stored refresh token
+      // Token expired — attempt silent refresh using secure-stored refresh token.
+      // All failure paths (no token, refresh error, no new token) kick the user
+      // to the login screen rather than propagating a raw 401 to the UI.
       try {
         final refreshToken = await SecureStorage.read(AppConstants.storageRefreshToken);
         if (refreshToken != null && refreshToken.isNotEmpty) {
@@ -184,17 +186,16 @@ class _AuthInterceptor extends Interceptor {
           );
           final data = response.data['data'] as Map<String, dynamic>?
               ?? response.data as Map<String, dynamic>? ?? {};
-          final newToken    = data['access_token']  as String?;
-          final newRefresh  = data['refresh_token'] as String?;
-          if (newToken != null) {
+          final newToken   = data['access_token']  as String?;
+          final newRefresh = data['refresh_token'] as String?;
+          if (newToken != null && newToken.isNotEmpty) {
             await SecureStorage.write(AppConstants.storageAccessToken, newToken);
-            // Persist the rotated refresh token so the next silent refresh works.
             if (newRefresh != null && newRefresh.isNotEmpty) {
               await SecureStorage.write(AppConstants.storageRefreshToken, newRefresh);
             }
             err.requestOptions.headers[AppConstants.authHeaderKey] =
                 '${AppConstants.authHeaderPrefix}$newToken';
-            // Retry with new token — a 4xx here (e.g. 403) is a normal error,
+            // Retry with new token — a non-401 4xx here is a normal error,
             // not a session failure, so pass it through rather than logging out.
             try {
               final clonedRequest = await Dio().fetch(err.requestOptions);
@@ -203,13 +204,16 @@ class _AuthInterceptor extends Interceptor {
               return handler.next(retryErr);
             }
           }
+          // Refresh succeeded but returned no access_token — session is broken.
         }
+        // No refresh token in storage — session is gone.
       } catch (_) {
-        // Refresh request itself failed — clear all auth tokens then kick user to login.
-        await SecureStorage.clearAuth();
-        AuthManager.onUnauthorized?.call();
-        return; // don't propagate — the redirect will rebuild the widget tree
+        // Refresh request threw (network error, 401 on refresh, etc.).
       }
+      // All 401 failure paths land here: clear auth and redirect to login.
+      await SecureStorage.clearAuth();
+      AuthManager.onUnauthorized?.call();
+      return;
     }
     handler.next(err);
   }
