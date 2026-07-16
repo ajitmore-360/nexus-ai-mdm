@@ -168,6 +168,67 @@ fn pick_cb<'a>(state: &'a AppState, base_url: &str) -> &'a CircuitBreaker {
     &state.cb_mdm
 }
 
+/// Forward a POST to a service that validates the USER's JWT (e.g. ingest-service).
+/// Unlike `forward_post`, passes the caller's Authorization header through unchanged
+/// instead of replacing it with the service-to-service API_BEARER_TOKEN.
+async fn forward_post_ingest(
+    http:     &reqwest::Client,
+    base_url: &str,
+    path:     &str,
+    headers:  &HeaderMap,
+    body:     Value,
+) -> Response {
+    let url = format!("{}/{}", base_url.trim_end_matches('/'), path.trim_start_matches('/'));
+    let mut req = http.post(&url).json(&body);
+    for (k, v) in headers.iter() {
+        let key = k.as_str();
+        if matches!(key, "authorization" | "x-tenant-id" | "x-user-id" | "x-user-role"
+                       | "x-correlation-id" | "x-request-id" | "traceparent" | "tracestate") {
+            if let Ok(v) = v.to_str() { req = req.header(key, v); }
+        }
+    }
+    match req.send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            (status, Json(body)).into_response()
+        }
+        Err(e) => {
+            tracing::error!(error=%e, url=%url, "ingest-service POST failed");
+            (StatusCode::BAD_GATEWAY, Json(serde_json::json!({ "success": false, "error": "upstream unavailable" }))).into_response()
+        }
+    }
+}
+
+/// Forward a GET to a service that validates the USER's JWT (e.g. ingest-service).
+async fn forward_get_ingest(
+    http:     &reqwest::Client,
+    base_url: &str,
+    path:     &str,
+    headers:  &HeaderMap,
+) -> Response {
+    let url = format!("{}/{}", base_url.trim_end_matches('/'), path.trim_start_matches('/'));
+    let mut req = http.get(&url);
+    for (k, v) in headers.iter() {
+        let key = k.as_str();
+        if matches!(key, "authorization" | "x-tenant-id" | "x-user-id" | "x-user-role"
+                       | "x-correlation-id" | "x-request-id" | "traceparent" | "tracestate") {
+            if let Ok(v) = v.to_str() { req = req.header(key, v); }
+        }
+    }
+    match req.send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            let body: Value = resp.json().await.unwrap_or(Value::Null);
+            (status, Json(body)).into_response()
+        }
+        Err(e) => {
+            tracing::error!(error=%e, url=%url, "ingest-service GET failed");
+            (StatusCode::BAD_GATEWAY, Json(serde_json::json!({ "success": false, "error": "upstream unavailable" }))).into_response()
+        }
+    }
+}
+
 async fn forward_post(
     state:    &AppState,
     base_url: &str,
@@ -480,7 +541,7 @@ pub async fn ingest_batch(
     headers:      HeaderMap,
     Json(body):   Json<Value>,
 ) -> Response {
-    forward_post(&state, &state.settings.ingest_service_url, "/ingest/batch", &headers, body).await
+    forward_post_ingest(&state.services.http, &state.settings.ingest_service_url, "/ingest/batch", &headers, body).await
 }
 
 pub async fn ingest_entities(
@@ -488,7 +549,7 @@ pub async fn ingest_entities(
     headers:      HeaderMap,
     Json(body):   Json<Value>,
 ) -> Response {
-    forward_post(&state, &state.settings.ingest_service_url, "/ingest/entities", &headers, body).await
+    forward_post_ingest(&state.services.http, &state.settings.ingest_service_url, "/ingest/entities", &headers, body).await
 }
 
 pub async fn ingest_csv(
@@ -496,7 +557,7 @@ pub async fn ingest_csv(
     headers:      HeaderMap,
     Json(body):   Json<Value>,
 ) -> Response {
-    forward_post(&state, &state.settings.ingest_service_url, "/ingest/csv", &headers, body).await
+    forward_post_ingest(&state.services.http, &state.settings.ingest_service_url, "/ingest/csv", &headers, body).await
 }
 
 pub async fn list_ingest_jobs(
@@ -506,7 +567,7 @@ pub async fn list_ingest_jobs(
 ) -> Response {
     let qs = build_qs_map(&params);
     let path = format!("/ingest/jobs?{}", qs);
-    forward_get(&state.services.http, &state.settings.ingest_service_url, &path, &headers).await
+    forward_get_ingest(&state.services.http, &state.settings.ingest_service_url, &path, &headers).await
 }
 
 pub async fn get_ingest_job(
@@ -517,7 +578,7 @@ pub async fn get_ingest_job(
 ) -> Response {
     let qs = build_qs_map(&params);
     let path = format!("/ingest/jobs/{}?{}", job_id, qs);
-    forward_get(&state.services.http, &state.settings.ingest_service_url, &path, &headers).await
+    forward_get_ingest(&state.services.http, &state.settings.ingest_service_url, &path, &headers).await
 }
 
 // â"€â"€ Golden record routes (proxied to mdm-core) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
