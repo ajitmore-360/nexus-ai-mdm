@@ -1450,7 +1450,7 @@ impl EntityRepository {
     ) -> Result<bool> {
         set_tenant_ctx(tx, tenant_id).await?;
 
-        // Build a dynamic UPDATE â€" only touch columns that were supplied.
+        // Build a dynamic UPDATE — only touch columns that were supplied.
         let mut set_clauses: Vec<String> = vec!["updated_at = NOW()".to_string()];
         let mut param_index: i32 = 3; // $1=tenant_id, $2=entity_id already reserved
 
@@ -1483,7 +1483,7 @@ impl EntityRepository {
             return Ok(false);
         }
 
-        // Replace attributes when supplied â€" delete-then-insert is the MDM
+        // Replace attributes when supplied — delete-then-insert is the MDM
         // golden-record survivorship pattern for authority-authored records.
         if let Some(attrs) = attributes {
             sqlx::query(

@@ -1,5 +1,5 @@
 ﻿// ============================================================================
-// SSO Service â€" SAML 2.0 SP + SCIM token management
+// SSO Service — SAML 2.0 SP + SCIM token management
 //
 // Implements:
 //   - SAML 2.0 SP metadata XML generation
@@ -208,7 +208,7 @@ impl SsoService {
         )
     }
 
-    // â"€â"€ SAML AuthnRequest â€" redirect binding â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    // â"€â"€ SAML AuthnRequest — redirect binding â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
     /// Returns the full IdP SSO redirect URL (including SAMLRequest + RelayState).
     pub async fn build_authn_redirect(
@@ -263,7 +263,7 @@ impl SsoService {
         ))
     }
 
-    // â"€â"€ SAML ACS â€" parse response, verify, return claims â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    // â"€â"€ SAML ACS — parse response, verify, return claims â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
     pub async fn process_acs_response(
         &self,
@@ -304,10 +304,10 @@ impl SsoService {
                     }
                 }
             } else {
-                warn!("No IdP certificate configured â€" SAML signature NOT verified");
+                warn!("No IdP certificate configured — SAML signature NOT verified");
             }
         } else {
-            warn!("No IdP certificate configured â€" SAML signature NOT verified");
+            warn!("No IdP certificate configured — SAML signature NOT verified");
         }
 
         // 4. Parse claims from XML
@@ -321,7 +321,7 @@ impl SsoService {
 
     // â"€â"€ SCIM Token Management â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-    /// Creates a new SCIM token. Returns (row, raw_token) â€" raw token shown once only.
+    /// Creates a new SCIM token. Returns (row, raw_token) — raw token shown once only.
     pub async fn create_scim_token(
         &self,
         tenant_id: Uuid,
@@ -570,7 +570,7 @@ fn parse_saml_response_claims(xml: &str, cfg: &SsoConfig) -> Result<SamlClaims> 
         buf.clear();
     }
 
-    // Determine email â€" prefer NameID, fall back to attribute mapping
+    // Determine email — prefer NameID, fall back to attribute mapping
     let email = if name_id.contains('@') {
         name_id.clone()
     } else if let Some(vals) = attrs.get(email_attr) {
@@ -656,7 +656,7 @@ fn percent_encode_saml(input: &str) -> String {
     out
 }
 
-/// Strips XML namespace prefix â€" returns the local name.
+/// Strips XML namespace prefix — returns the local name.
 fn local_name(name: &[u8]) -> String {
     let s = std::str::from_utf8(name).unwrap_or("");
     let local = if let Some(pos) = s.rfind(':') { &s[pos + 1..] } else { s };

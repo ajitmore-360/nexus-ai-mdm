@@ -42,7 +42,7 @@ pub struct CreateAssignmentRequest {
     pub assignment_type:  String, // "owner" | "steward"
 }
 
-/// GET /governance/assignments â€" list all assignments for this tenant.
+/// GET /governance/assignments — list all assignments for this tenant.
 /// Required role: BusinessAdmin or Admin.
 pub async fn list_assignments(
     State(state):          State<Arc<AppState>>,
@@ -89,7 +89,7 @@ pub async fn list_assignments(
     }
 }
 
-/// GET /governance/assignments/my-types â€" list entity types the calling user is assigned to.
+/// GET /governance/assignments/my-types — list entity types the calling user is assigned to.
 /// Used by Steward-role users to know what they can access.
 pub async fn my_assigned_types(
     State(state):          State<Arc<AppState>>,
@@ -131,7 +131,7 @@ pub async fn my_assigned_types(
     }
 }
 
-/// POST /governance/assignments â€" create an entity-type assignment.
+/// POST /governance/assignments — create an entity-type assignment.
 /// Required role: BusinessAdmin or Admin.
 pub async fn create_assignment(
     State(state):          State<Arc<AppState>>,
@@ -175,7 +175,7 @@ pub async fn create_assignment(
             if msg.contains("entity_type_assignments_one_owner_idx") {
                 return err(
                     StatusCode::CONFLICT,
-                    "this entity type already has a Data Owner â€" remove the existing owner first",
+                    "this entity type already has a Data Owner — remove the existing owner first",
                 );
             }
             tracing::error!(error=?e, "create_assignment failed");
@@ -184,7 +184,7 @@ pub async fn create_assignment(
     }
 }
 
-/// DELETE /governance/assignments/:id â€" remove an assignment.
+/// DELETE /governance/assignments/:id — remove an assignment.
 /// Required role: BusinessAdmin or Admin.
 pub async fn delete_assignment(
     State(state):          State<Arc<AppState>>,
@@ -243,7 +243,7 @@ pub async fn submit_for_review(
         Err(_) => return err(StatusCode::UNAUTHORIZED, "invalid identity in token"),
     };
 
-    // Load entity â€" verify it belongs to this tenant
+    // Load entity — verify it belongs to this tenant
     let entity_row = sqlx::query(
         "SELECT entity_id, entity_type, status FROM core_mdm.entities WHERE entity_id = $1 AND tenant_id = $2",
     )
@@ -371,7 +371,7 @@ pub async fn submit_for_review(
     }))
 }
 
-/// GET /entities/pending-approvals â€" returns entities awaiting the caller's approval.
+/// GET /entities/pending-approvals — returns entities awaiting the caller's approval.
 /// Data Owners see entities of their owned type. Admins/BusinessAdmins see all pending.
 pub async fn list_pending_approvals(
     State(state):          State<Arc<AppState>>,
@@ -444,7 +444,7 @@ pub async fn list_pending_approvals(
     }
 }
 
-/// POST /entities/:id/approve â€" Data Owner approves an entity and publishes it.
+/// POST /entities/:id/approve — Data Owner approves an entity and publishes it.
 pub async fn approve_entity(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
@@ -495,7 +495,7 @@ pub async fn approve_entity(
         }
     }
 
-    // Both writes must succeed atomically â€" dropped txn auto-rolls-back on early return.
+    // Both writes must succeed atomically — dropped txn auto-rolls-back on early return.
     let mut txn = match state.db.begin().await {
         Ok(t)  => t,
         Err(e) => {
@@ -558,7 +558,7 @@ pub async fn approve_entity(
     ok(json!({ "entity_id": entity_id, "status": "Active" }))
 }
 
-/// POST /entities/:id/reject â€" Data Owner rejects a pending entity with notes.
+/// POST /entities/:id/reject — Data Owner rejects a pending entity with notes.
 pub async fn reject_entity(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
@@ -686,7 +686,7 @@ pub struct BulkEntityActionRequest {
     pub reviewer_notes: Option<String>,
 }
 
-/// POST /entities/bulk-approve â€" approve multiple pending entities in one call.
+/// POST /entities/bulk-approve — approve multiple pending entities in one call.
 ///
 /// Returns a summary with `succeeded`, `skipped` (no pending request, or
 /// caller lacks permission for that type), and `failed` (DB error) entity IDs.
@@ -832,7 +832,7 @@ pub async fn bulk_approve_entities(
     ok(json!({ "succeeded": succeeded, "skipped": skipped, "failed": failed }))
 }
 
-/// POST /entities/bulk-reject â€" reject multiple pending entities in one call.
+/// POST /entities/bulk-reject — reject multiple pending entities in one call.
 pub async fn bulk_reject_entities(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,

@@ -81,7 +81,7 @@ async fn main() {
     let port = settings.port;
 
     let jwt_config = JwtConfig::from_env()
-        .expect("JWT_SECRET must be set â€" ingest-service requires JWT authentication");
+        .expect("JWT_SECRET must be set — ingest-service requires JWT authentication");
 
     let db_config = DatabaseConfig { database_url: settings.database_url.clone() };
     let pool = create_pool(&db_config)

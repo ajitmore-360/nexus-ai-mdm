@@ -25,7 +25,7 @@ pub async fn ingest_batch(
     Extension(claims): Extension<Claims>,
     Json(mut batch):   Json<IngestBatch>,
 ) -> impl IntoResponse {
-    // Enforce tenant isolation â€" always use the JWT-authenticated tenant, ignoring any body value.
+    // Enforce tenant isolation — always use the JWT-authenticated tenant, ignoring any body value.
     batch.tenant_id = claims.nxs_tenant_id;
     if batch.records.is_empty() {
         return (
@@ -48,7 +48,7 @@ pub async fn ingest_batch(
             let job_id = match persist_job(&state.pool, &batch, &result).await {
                 Ok(id) => Some(id),
                 Err(e) => {
-                    tracing::warn!(error=%e, "failed to persist ingest job â€" result still returned");
+                    tracing::warn!(error=%e, "failed to persist ingest job — result still returned");
                     None
                 }
             };
@@ -112,7 +112,7 @@ pub async fn ingest_entities(
             let job_id = match persist_job(&state.pool, &batch, &result).await {
                 Ok(id) => Some(id),
                 Err(e) => {
-                    tracing::warn!(error=%e, "failed to persist ingest job â€" result still returned");
+                    tracing::warn!(error=%e, "failed to persist ingest job — result still returned");
                     None
                 }
             };
@@ -196,7 +196,7 @@ pub async fn ingest_csv(
             let job_id = match persist_job(&state.pool, &batch, &result).await {
                 Ok(id) => Some(id),
                 Err(e) => {
-                    tracing::warn!(error=%e, "failed to persist ingest job â€" result still returned");
+                    tracing::warn!(error=%e, "failed to persist ingest job — result still returned");
                     None
                 }
             };

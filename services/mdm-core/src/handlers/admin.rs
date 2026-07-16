@@ -18,7 +18,7 @@ use crate::AppState;
 // â"€â"€ POST /admin/embed-migration â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 //
 // Enqueues `entity.embed` tasks for every entity in the caller's tenant that
-// does not yet have a row in `ai.entity_embeddings`. Safe to call repeatedly â€"
+// does not yet have a row in `ai.entity_embeddings`. Safe to call repeatedly —
 // each entity is only queued once per invocation; the AI service is idempotent.
 
 pub async fn embed_migration(
@@ -32,7 +32,7 @@ pub async fn embed_migration(
             StatusCode::SERVICE_UNAVAILABLE,
             Json(json!({
                 "success": false,
-                "error":   "Task queue not configured â€" set REDIS_URL to enable embedding migration",
+                "error":   "Task queue not configured — set REDIS_URL to enable embedding migration",
             })),
         ).into_response();
     };

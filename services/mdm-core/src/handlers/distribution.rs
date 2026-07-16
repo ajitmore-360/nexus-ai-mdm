@@ -137,7 +137,7 @@ pub async fn get_distribution_job(
     }
 }
 
-// â"€â"€ POST /distribution/jobs/:id/queue â€" move draft â†’ queued â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// â"€â"€ POST /distribution/jobs/:id/queue — move draft â†’ queued â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 pub async fn queue_distribution_job(
     State(state):          State<Arc<AppState>>,
@@ -162,7 +162,7 @@ pub async fn queue_distribution_job(
     }
 }
 
-// â"€â"€ DELETE /distribution/jobs/:id â€" cancel a queued/draft job â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// â"€â"€ DELETE /distribution/jobs/:id — cancel a queued/draft job â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 pub async fn cancel_distribution_job(
     State(state):          State<Arc<AppState>>,

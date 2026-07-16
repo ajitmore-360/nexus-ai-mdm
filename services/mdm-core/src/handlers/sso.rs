@@ -1,5 +1,5 @@
 ﻿// ============================================================================
-// SSO Handlers â€" SAML 2.0 SP endpoints + SSO config CRUD + SCIM token mgmt
+// SSO Handlers — SAML 2.0 SP endpoints + SSO config CRUD + SCIM token mgmt
 //
 // Public SAML endpoints (no JWT auth, for browser redirect flow):
 //   GET  /saml/:tenant_id/metadata   â†’ SP XML metadata
@@ -112,7 +112,7 @@ pub async fn saml_init(
     }
 }
 
-// â"€â"€ SAML ACS â€" assertion consumer service â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// â"€â"€ SAML ACS — assertion consumer service â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 #[derive(Deserialize)]
 pub struct AcsForm {

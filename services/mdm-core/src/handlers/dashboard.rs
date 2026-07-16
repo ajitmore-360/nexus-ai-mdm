@@ -104,7 +104,7 @@ pub async fn get_dashboard_stats(
     .await
     .unwrap_or(0);
 
-    // Average AI confidence (0â€"1) scaled to 0â€"100
+    // Average AI confidence (0—1) scaled to 0—100
     let ai_match_score: f64 = sqlx::query_scalar(
         r#"SELECT COALESCE(AVG(ai_score) * 100.0, 0.0)::double precision
            FROM core_mdm.match_candidates
@@ -115,7 +115,7 @@ pub async fn get_dashboard_stats(
     .await
     .unwrap_or(0.0_f64);
 
-    // Average trust score as overall data quality proxy (0â€"1 â†’ 0â€"100)
+    // Average trust score as overall data quality proxy (0—1 â†’ 0—100)
     let overall_data_quality: f64 = sqlx::query_scalar(
         r#"SELECT COALESCE(AVG(trust_score::double precision) * 100.0, 0.0)::double precision
            FROM core_mdm.entities

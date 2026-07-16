@@ -355,22 +355,22 @@ pub struct AppState {
     pub enrichment_service:
         Arc<EnrichmentService>,
 
-    /// Live matching policy â€" can be updated at runtime via PATCH /policy/weights
+    /// Live matching policy — can be updated at runtime via PATCH /policy/weights
     /// without restarting the service.
     pub matching_policy: Arc<std::sync::RwLock<matching::MatchingPolicy>>,
 
     /// Optional Redis-backed rate limiter for brute-force protection on /auth/login.
     pub redis_rate_limiter: Option<Arc<azile_redis::RedisRateLimiter>>,
 
-    /// Optional Redis task queue â€" used for re-embedding on PATCH and other async work.
+    /// Optional Redis task queue — used for re-embedding on PATCH and other async work.
     pub task_queue: Option<Arc<azile_redis::TaskQueue>>,
 
-    /// Optional Redis pub/sub publisher â€" broadcasts real-time events to the API gateway
+    /// Optional Redis pub/sub publisher — broadcasts real-time events to the API gateway
     /// which fans them out to connected WebSocket clients on the `nexus:tenant:<id>` channel.
     pub pubsub: Option<Arc<azile_redis::PubSubClient>>,
 
     /// AES-256-GCM field-level encryption for PII attributes (email, phone, tax_id, etc.).
-    /// None when FIELD_ENCRYPTION_KEY is not set â€" PII stored plaintext (dev mode only).
+    /// None when FIELD_ENCRYPTION_KEY is not set — PII stored plaintext (dev mode only).
     pub field_encryption: Option<Arc<azile_security::encryption::field_encryption::FieldEncryptionService>>,
 }
 
@@ -588,7 +588,7 @@ fn build_router(
 ) -> Router {
 
     //
-    // CORS â€" env-driven, no wildcard in production
+    // CORS — env-driven, no wildcard in production
     //
 
     let allowed_origins: Vec<HeaderValue> = std::env::var("ALLOWED_ORIGINS")
@@ -617,17 +617,17 @@ fn build_router(
             .allow_credentials(true);
 
     let protected = Router::new()
-        // Hierarchy â€" static routes BEFORE /:id
+        // Hierarchy — static routes BEFORE /:id
         .route("/entities/hierarchy/roots",   get(get_hierarchy_roots))
-        // Bulk ingest â€" internal service-to-service endpoint, BEFORE /:id
+        // Bulk ingest — internal service-to-service endpoint, BEFORE /:id
         .route("/entities/ingest-bulk",       post(create_entities_bulk))
-        // Bulk operations â€" static routes BEFORE /:id to avoid route collision
+        // Bulk operations — static routes BEFORE /:id to avoid route collision
         .route("/entities/bulk/status",       post(bulk_update_entity_status))
         .route("/entities/bulk/export",       post(bulk_export_entities))
         .route("/entities/bulk/tag",          post(bulk_tag_entities))
-        // XRef lookup â€" static route BEFORE /:id
+        // XRef lookup — static route BEFORE /:id
         .route("/xrefs/lookup",               get(lookup_by_xref))
-        // Approval workflow â€" static routes BEFORE /:id to avoid Axum ambiguity
+        // Approval workflow — static routes BEFORE /:id to avoid Axum ambiguity
         .route("/entities/pending-approvals", get(list_pending_approvals))
         .route("/entities/bulk-approve",      post(bulk_approve_entities))
         .route("/entities/bulk-reject",       post(bulk_reject_entities))
@@ -651,7 +651,7 @@ fn build_router(
         .route("/match/:request_id/candidates/:candidate_id/defer", axum::routing::post(defer_match))
         .route("/match/review-queue/:review_id/assign", patch(assign_review))
         .route("/merge",                  post(execute_merge))
-        // Golden records â€" read + manual attribute override
+        // Golden records — read + manual attribute override
         .route("/golden-records",         get(list_golden_records))
         .route("/golden-records/:id",     get(get_golden_record))
         .route("/golden-records/:id/attributes", patch(patch_golden_record_attributes))
@@ -683,7 +683,7 @@ fn build_router(
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
 
-    // Public auth routes â€" no tenant/auth middleware
+    // Public auth routes — no tenant/auth middleware
     // NOTE: /auth/register intentionally omitted. Account creation requires an invite token
     // via /auth/accept-invite. Open self-registration is a security violation in a multi-tenant MDM.
     let auth_routes = Router::new()
@@ -768,7 +768,7 @@ fn build_router(
             get(get_distribution_job).delete(cancel_distribution_job))
         .route("/distribution/jobs/:id/queue",
             post(queue_distribution_job))
-        // â"€â"€ Submaster (reference data) management â€" Business Admin / Admin only â"€
+        // â"€â"€ Submaster (reference data) management — Business Admin / Admin only â"€
         .route("/submasters",
             get(list_submaster_types).post(create_submaster_type))
         .route("/submasters/:code",
@@ -777,7 +777,7 @@ fn build_router(
             get(list_submaster_values).post(create_submaster_value))
         .route("/submasters/:code/values/:value_id",
             patch(update_submaster_value).delete(delete_submaster_value))
-        // â"€â"€ Data Governance â€" assignment CRUD (BusinessAdmin/Admin only) â"€â"€â"€â"€â"€â"€
+        // â"€â"€ Data Governance — assignment CRUD (BusinessAdmin/Admin only) â"€â"€â"€â"€â"€â"€
         .route("/governance/assignments",
             get(list_assignments).post(create_assignment))
         .route("/governance/assignments/my-types",
@@ -896,7 +896,7 @@ fn build_router(
         .layer(axum_middleware::from_fn(tenant_middleware))
         .layer(axum_middleware::from_fn(auth_middleware));
 
-    // â"€â"€ SAML 2.0 public endpoints (no auth â€" browser redirect binding) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    // â"€â"€ SAML 2.0 public endpoints (no auth — browser redirect binding) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     // Note: ACS uses form encoding (application/x-www-form-urlencoded), not JSON.
     let saml_routes = Router::new()
         .route("/saml/:tenant_id/metadata", get(saml_metadata))
@@ -920,7 +920,7 @@ fn build_router(
                 .patch(scim_patch_group)
                 .delete(scim_delete_group));
 
-    // Internal no-auth route group â€" gateway-to-service only, not exposed publicly.
+    // Internal no-auth route group — gateway-to-service only, not exposed publicly.
     let internal_routes = Router::new()
         .route("/internal/license/:tenant_id", get(internal_get_license));
 
@@ -1087,7 +1087,7 @@ async fn main() {
     // ====================================
     // mdm-core is the schema owner: it runs all SQLx migrations
     // before any repositories or services are initialised.
-    // This is idempotent â€" already-applied migrations are skipped.
+    // This is idempotent — already-applied migrations are skipped.
     //
 
     info!("Running database migrations...");
@@ -1104,7 +1104,7 @@ async fn main() {
             {
                 tracing::error!(
                     error = %e,
-                    "Migration checksum mismatch â€" a migration file was modified after \
+                    "Migration checksum mismatch — a migration file was modified after \
                      it was applied to this database. Re-run migrations against a clean DB \
                      or update the checksum in _sqlx_migrations to resolve. Continuing \
                      because tables were pre-applied."
@@ -1165,12 +1165,12 @@ async fn main() {
     let matching_repository_arc =
         Arc::new(matching_repository.clone());
 
-    // Single live policy behind RwLock â€" shared by both Matcher (reads snapshots)
+    // Single live policy behind RwLock — shared by both Matcher (reads snapshots)
     // and AppState (PATCH /policy/weights updates it at runtime).
     // No frozen copy exists; every match execution reads the current weights.
     let live_policy = Arc::new(std::sync::RwLock::new(MatchingPolicy::default()));
 
-    // Optional SemanticClient â€" wired when AI_SERVICE_URL is set.
+    // Optional SemanticClient — wired when AI_SERVICE_URL is set.
     // Falls back gracefully when absent: grey-zone candidates stay in RequiresReview.
     let semantic_client = env::var("AI_SERVICE_URL").ok().map(|url| {
         let http = reqwest::Client::builder()
@@ -1186,11 +1186,11 @@ async fn main() {
     );
     let matcher = Arc::new(match semantic_client {
         Some(sc) => {
-            info!("SemanticClient enabled â€" LLM grey-zone resolution active");
+            info!("SemanticClient enabled — LLM grey-zone resolution active");
             matcher_base.with_semantic_client(sc)
         }
         None => {
-            warn!("AI_SERVICE_URL not set â€" semantic matching disabled");
+            warn!("AI_SERVICE_URL not set — semantic matching disabled");
             matcher_base
         }
     });
@@ -1204,7 +1204,7 @@ async fn main() {
     let relationship_service =
         Arc::new(RelationshipService::new(db.clone()));
 
-    // Redis â€" entity cache, task queue, login rate limiter, and pub/sub publisher (all optional)
+    // Redis — entity cache, task queue, login rate limiter, and pub/sub publisher (all optional)
     let (entity_cache, task_queue, login_rate_limiter, pubsub_client) = {
         use azile_redis::{create_pool, EntityCache, PubSubClient, RedisConfig, RedisRateLimiter, TaskQueue};
         let cfg = RedisConfig::from_env();
@@ -1215,11 +1215,11 @@ async fn main() {
                 let pubsub  = Arc::new(PubSubClient::new(pool.clone(), cfg.key_prefix.clone()));
                 // Login: max 10 attempts per 5-minute window per IP+email combo
                 let limiter = Arc::new(RedisRateLimiter::new(pool, cfg.key_prefix.clone(), 10, 300));
-                tracing::info!("Redis connected â€" entity cache, task queue, pub/sub, and login rate limiter enabled");
+                tracing::info!("Redis connected — entity cache, task queue, pub/sub, and login rate limiter enabled");
                 (Some(cache), Some(queue), Some(limiter), Some(pubsub))
             }
             Err(e) => {
-                tracing::warn!(error=%e, "Redis unavailable â€" login rate limiting disabled");
+                tracing::warn!(error=%e, "Redis unavailable — login rate limiting disabled");
                 (None, None, None, None)
             }
         }
@@ -1229,7 +1229,7 @@ async fn main() {
 
     // â"€â"€ Field-level encryption â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     // FIELD_ENCRYPTION_KEY must be exactly 32 bytes (256-bit), hex-encoded (64 chars).
-    // If absent, PII attributes are stored plaintext â€" acceptable only in development.
+    // If absent, PII attributes are stored plaintext — acceptable only in development.
     let field_encryption = match env::var("FIELD_ENCRYPTION_KEY") {
         Ok(hex_key) => {
             match hex::decode(&hex_key) {
@@ -1239,17 +1239,17 @@ async fn main() {
                     Some(Arc::new(azile_security::encryption::field_encryption::FieldEncryptionService::new(&key)))
                 }
                 Ok(_) => {
-                    warn!("FIELD_ENCRYPTION_KEY must be 64 hex chars (32 bytes) â€" encryption disabled");
+                    warn!("FIELD_ENCRYPTION_KEY must be 64 hex chars (32 bytes) — encryption disabled");
                     None
                 }
                 Err(e) => {
-                    warn!(error=%e, "FIELD_ENCRYPTION_KEY is not valid hex â€" encryption disabled");
+                    warn!(error=%e, "FIELD_ENCRYPTION_KEY is not valid hex — encryption disabled");
                     None
                 }
             }
         }
         Err(_) => {
-            warn!("FIELD_ENCRYPTION_KEY not set â€" PII attributes stored plaintext. Set in production.");
+            warn!("FIELD_ENCRYPTION_KEY not set — PII attributes stored plaintext. Set in production.");
             None
         }
     };

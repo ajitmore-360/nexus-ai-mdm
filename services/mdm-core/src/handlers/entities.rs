@@ -20,7 +20,7 @@ use crate::middleware::tenant::TenantContext;
 use crate::services::audit_service::AuditEvent;
 use crate::AppState;
 
-// azile_auth::Claims is used by gdpr_erase_entity â€" referenced via full path below.
+// azile_auth::Claims is used by gdpr_erase_entity — referenced via full path below.
 
 // â"€â"€ Query params for GET /entities â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
@@ -62,9 +62,9 @@ pub async fn create_entity(
             );
         }
         Err(e) => {
-            // Quota service unavailable â€" log and continue (fail open to avoid
+            // Quota service unavailable — log and continue (fail open to avoid
             // blocking legitimate creates when the license table is unreachable).
-            error!(error=?e, "record quota check failed â€" proceeding without enforcement");
+            error!(error=?e, "record quota check failed — proceeding without enforcement");
         }
         Ok(quota) => {
             // Fire quota-proximity notification (debounced to once per 24 h).
@@ -358,7 +358,7 @@ pub(crate) fn extract_request_context(
     RequestContext::new(tenant_ctx.tenant_id, user_id, trace_id)
 }
 
-// â"€â"€ GET /entities â€" paginated list â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// â"€â"€ GET /entities — paginated list â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 pub async fn list_entities(
     State(state):          State<Arc<AppState>>,
@@ -443,7 +443,7 @@ pub async fn list_entities(
     }
 }
 
-// â"€â"€ GET /entities/:id â€" single entity â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// â"€â"€ GET /entities/:id — single entity â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 pub async fn get_entity_by_id(
     State(state):          State<Arc<AppState>>,
@@ -609,7 +609,7 @@ pub async fn get_entity_by_id(
     }
 }
 
-// â"€â"€ PATCH /entities/:id â€" partial entity update â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// â"€â"€ PATCH /entities/:id — partial entity update â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 #[derive(serde::Deserialize)]
 pub struct PatchEntityRequest {
@@ -741,7 +741,7 @@ pub async fn patch_entity(
     }
 }
 
-// â"€â"€ DELETE /entities/:id/gdpr-erase â€" permanent GDPR Art. 17 erasure â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// â"€â"€ DELETE /entities/:id/gdpr-erase — permanent GDPR Art. 17 erasure â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 /// Hard-deletes an entity and all its personal data.
 ///
@@ -778,7 +778,7 @@ pub async fn gdpr_erase_entity(
 
     let tenant_id = tenant_ctx.tenant_id;
 
-    // Call stored procedure â€" runs all deletes in FK-safe order atomically.
+    // Call stored procedure — runs all deletes in FK-safe order atomically.
     let deleted: i32 = match sqlx::query_scalar(
         "SELECT core_mdm.gdpr_erase_entity($1, $2)",
     )
@@ -894,7 +894,7 @@ pub(crate) fn validate_entity_attributes(
                 &attr.key[..32.min(attr.key.len())],
             ));
         }
-        // Validate string values only â€" numbers/bools/arrays are fine at any size.
+        // Validate string values only — numbers/bools/arrays are fine at any size.
         if let serde_json::Value::String(s) = &attr.value {
             if s.len() > MAX_ATTR_VALUE_LEN {
                 return Some(format!(
