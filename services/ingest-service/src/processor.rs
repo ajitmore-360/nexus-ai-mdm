@@ -174,7 +174,6 @@ impl IngestProcessor {
 
         Ok(result)
     }
-}
 
     /// Process a batch using a single bulk HTTP call to mdm-core.
     ///

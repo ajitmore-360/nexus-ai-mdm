@@ -248,7 +248,7 @@ pub async fn create_entities_bulk(
     let mut errors     = Vec::new();
 
     // One transaction for the whole chunk — the key performance lever.
-    let mut tx = match state.pool.begin().await {
+    let mut tx = match state.db.begin().await {
         Ok(t)  => t,
         Err(e) => {
             tracing::error!(error=%e, "failed to begin bulk-ingest transaction");

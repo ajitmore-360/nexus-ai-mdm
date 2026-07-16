@@ -247,7 +247,7 @@ pub async fn create_source_system(
     let trust_weight = body.trust_weight.unwrap_or(1.0);
     let priority     = body.priority.unwrap_or(100);
     let entity_types = body.entity_types.as_deref().unwrap_or(&[]);
-    let icon         = body.icon.as_deref().unwrap_or("ðŸ"Œ");
+    let icon         = body.icon.as_deref().unwrap_or("🔌");
 
     let raw_config    = body.connection_config.unwrap_or_else(|| serde_json::json!({}));
     let stored_config = encrypt_config(&raw_config);
