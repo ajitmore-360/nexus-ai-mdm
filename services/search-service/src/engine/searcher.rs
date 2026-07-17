@@ -141,12 +141,8 @@ impl SearchEngine {
                 GREATEST(
                     ts_rank(to_tsvector('english', e.metadata::text),
                             websearch_to_tsquery('english', $5)),
-                    COALESCE((
-                        SELECT MAX(ts_rank(to_tsvector('english', a.attribute_value::text),
-                                          websearch_to_tsquery('english', $5)))
-                        FROM core_mdm.entity_attributes a
-                        WHERE a.entity_id = e.entity_id AND a.tenant_id = e.tenant_id
-                    ), 0)
+                    ts_rank(to_tsvector('english', coalesce(e.current_attributes::text, '{}')),
+                            websearch_to_tsquery('english', $5))
                 ) AS fts_rank,
                 e.source_system
             FROM core_mdm.entities e
@@ -158,13 +154,8 @@ impl SearchEngine {
               AND (
                 to_tsvector('english', e.metadata::text)
                     @@ websearch_to_tsquery('english', $5)
-                OR EXISTS (
-                    SELECT 1 FROM core_mdm.entity_attributes a
-                    WHERE a.entity_id = e.entity_id
-                      AND a.tenant_id = e.tenant_id
-                      AND to_tsvector('english', a.attribute_value::text)
-                          @@ websearch_to_tsquery('english', $5)
-                )
+                OR to_tsvector('english', coalesce(e.current_attributes::text, '{}'))
+                    @@ websearch_to_tsquery('english', $5)
               )
             ORDER BY fts_rank DESC
             LIMIT $6 OFFSET $7
@@ -377,7 +368,7 @@ impl SearchEngine {
         let pattern = format!("{}%", prefix.to_lowercase());
         let rows = sqlx::query(
             r#"
-            SELECT DISTINCT ea.attribute_value #>> '{}' AS name
+            SELECT DISTINCT ea.attribute_value_text AS name
             FROM core_mdm.entity_attributes ea
             WHERE ea.tenant_id = $1
               AND lower(ea.attribute_key) IN (
@@ -385,7 +376,7 @@ impl SearchEngine {
                   'business_name', 'display_name', 'organization_name',
                   'organisation_name', 'customer_name', 'vendor_name', 'product_name'
               )
-              AND lower(ea.attribute_value #>> '{}') LIKE $2
+              AND lower(ea.attribute_value_text) LIKE $2
             LIMIT 10
             "#,
         )

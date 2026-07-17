@@ -516,7 +516,7 @@ impl MatchingRepository {
                 FROM core_mdm.entity_attributes ea
                 JOIN UNNEST($2::text[], $3::text[]) AS lookup(attr_key, attr_val)
                   ON ea.attribute_key = lookup.attr_key
-                 AND lower(trim(both '"' from ea.attribute_value::text)) = lookup.attr_val
+                 AND lower(ea.attribute_value_text) = lookup.attr_val
                 WHERE ea.tenant_id = $1
                 LIMIT $4
                 "#,

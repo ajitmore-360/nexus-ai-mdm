@@ -109,6 +109,12 @@ impl EntityRepository {
         // ====================================
         //
 
+        let current_attributes = serde_json::Value::Object(
+            entity.attributes.iter()
+                .map(|a| (a.key.clone(), a.value.clone()))
+                .collect()
+        );
+
         sqlx::query(
             r#"
             INSERT INTO core_mdm.entities (
@@ -125,14 +131,15 @@ impl EntityRepository {
                 valid_from,
                 valid_to,
                 created_at,
-                updated_at
+                updated_at,
+                current_attributes
             )
             VALUES (
                 $1,$2,$3,$4,$5,$6,$7,
                 $8,$9,$10,
                 COALESCE($11, NOW()),
                 COALESCE($12, 'infinity'::timestamptz),
-                $13,$14
+                $13,$14,$15
             )
             "#
         )
@@ -158,6 +165,7 @@ impl EntityRepository {
         .bind(entity.valid_to)
         .bind(entity.audit.created_at)
         .bind(entity.audit.updated_at)
+        .bind(sqlx::types::Json(&current_attributes))
         .execute(&mut **tx)
         .await?;
 
@@ -175,6 +183,7 @@ impl EntityRepository {
                     attribute_id,
                     tenant_id,
                     entity_id,
+                    entity_type,
                     attribute_key,
                     attribute_value,
                     data_type,
@@ -182,12 +191,13 @@ impl EntityRepository {
                     source_system,
                     is_masked
                 )
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                 "#
             )
             .bind(attribute.attribute_id)
             .bind(entity.tenant_id)
             .bind(entity.entity_id)
+            .bind(entity.entity_type.to_string())
             .bind(&attribute.key)
             .bind(sqlx::types::Json(&attribute.value))
             .bind(attribute.data_type.as_str())
@@ -1498,11 +1508,14 @@ impl EntityRepository {
                 sqlx::query(
                     r#"
                     INSERT INTO core_mdm.entity_attributes (
-                        attribute_id, tenant_id, entity_id,
+                        attribute_id, tenant_id, entity_id, entity_type,
                         attribute_key, attribute_value, data_type,
                         confidence, source_system, is_masked
                     )
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                    VALUES ($1, $2, $3,
+                        (SELECT entity_type FROM core_mdm.entities
+                         WHERE entity_id = $3 AND tenant_id = $2),
+                        $4, $5, $6, $7, $8, $9)
                     "#
                 )
                 .bind(attribute.attribute_id)
@@ -1544,6 +1557,23 @@ impl EntityRepository {
                     .await?;
                 }
             }
+
+            // Keep denormalised cache in sync after attribute replacement
+            sqlx::query(
+                r#"
+                UPDATE core_mdm.entities
+                SET current_attributes = (
+                    SELECT COALESCE(jsonb_object_agg(attribute_key, attribute_value), '{}')
+                    FROM core_mdm.entity_attributes
+                    WHERE tenant_id = $1 AND entity_id = $2
+                )
+                WHERE tenant_id = $1 AND entity_id = $2
+                "#
+            )
+            .bind(tenant_id)
+            .bind(entity_id)
+            .execute(&mut **tx)
+            .await?;
         }
 
         Ok(true)
