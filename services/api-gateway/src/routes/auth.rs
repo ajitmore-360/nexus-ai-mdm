@@ -76,6 +76,10 @@ pub async fn login(
             ).into_response(),
         };
 
+        // Return the same shape as mdm-core's production login response so
+        // the Flutter client does not need a special case for dev mode.
+        let display_name = req.email.trim()
+            .split('@').next().unwrap_or("Admin").to_string();
         return (StatusCode::OK, Json(json!({
             "success": true,
             "data": {
@@ -83,8 +87,15 @@ pub async fn login(
                 "refresh_token": pair.refresh_token,
                 "token_type":    pair.token_type,
                 "expires_in":    pair.expires_in,
-                "tenant_id":     tenant_id,
-                "mode":          "dev_bypass",
+                "user": {
+                    "user_id":               Uuid::new_v4(),
+                    "tenant_id":             tenant_id,
+                    "tenant_name":           "Development Tenant",
+                    "email":                 req.email.trim(),
+                    "display_name":          display_name,
+                    "role":                  "admin",
+                    "assigned_entity_types": [],
+                }
             }
         }))).into_response();
     }

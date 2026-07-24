@@ -179,8 +179,14 @@ class _AuthInterceptor extends Interceptor {
       try {
         final refreshToken = await SecureStorage.read(AppConstants.storageRefreshToken);
         if (refreshToken != null && refreshToken.isNotEmpty) {
-          final dio = Dio(BaseOptions(baseUrl: AppConstants.baseUrl));
-          final response = await dio.post(
+          // Use a dedicated Dio instance with explicit timeouts so the refresh
+          // request itself cannot hang indefinitely.
+          final refreshDio = Dio(BaseOptions(
+            baseUrl:        AppConstants.baseUrl,
+            connectTimeout: const Duration(milliseconds: AppConstants.connectTimeout),
+            receiveTimeout: const Duration(milliseconds: AppConstants.receiveTimeout),
+          ));
+          final response = await refreshDio.post(
             AppConstants.refreshTokenPath,
             data: {'refresh_token': refreshToken},
           );
@@ -198,7 +204,12 @@ class _AuthInterceptor extends Interceptor {
             // Retry with new token — a non-401 4xx here is a normal error,
             // not a session failure, so pass it through rather than logging out.
             try {
-              final clonedRequest = await Dio().fetch(err.requestOptions);
+              final retryDio = Dio(BaseOptions(
+                baseUrl:        AppConstants.baseUrl,
+                connectTimeout: const Duration(milliseconds: AppConstants.connectTimeout),
+                receiveTimeout: const Duration(milliseconds: AppConstants.receiveTimeout),
+              ));
+              final clonedRequest = await retryDio.fetch(err.requestOptions);
               return handler.resolve(clonedRequest);
             } on DioException catch (retryErr) {
               return handler.next(retryErr);
@@ -211,8 +222,11 @@ class _AuthInterceptor extends Interceptor {
         // Refresh request threw (network error, 401 on refresh, etc.).
       }
       // All 401 failure paths land here: clear auth and redirect to login.
+      // IMPORTANT: handler.reject must be called — not calling it leaves the
+      // Dio Future pending forever (indefinite spinner in the UI).
       await SecureStorage.clearAuth();
       AuthManager.onUnauthorized?.call();
+      handler.reject(err);
       return;
     }
     handler.next(err);
