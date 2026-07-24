@@ -19,6 +19,8 @@ class _ApprovalQueuePageState extends State<ApprovalQueuePage> {
   bool _loading = true;
   String? _error;
   List<PendingApproval> _items = [];
+  Set<String> _selectedIds = {};
+  bool _selectAll = false;
 
   @override
   void initState() {
@@ -120,16 +122,106 @@ class _ApprovalQueuePageState extends State<ApprovalQueuePage> {
     );
   }
 
+  Future<void> _bulkApprove() async {
+    final ids = List<String>.from(_selectedIds);
+    for (final id in ids) {
+      final item = _items.firstWhere((i) => i.entityId == id);
+      await _approve(item);
+    }
+    setState(() {
+      _selectedIds.clear();
+      _selectAll = false;
+    });
+  }
+
+  Future<void> _bulkReject() async {
+    final ids = List<String>.from(_selectedIds);
+    for (final id in ids) {
+      final item = _items.firstWhere((i) => i.entityId == id);
+      await _showRejectDialog(item);
+    }
+    setState(() {
+      _selectedIds.clear();
+      _selectAll = false;
+    });
+  }
+
   Widget _buildList() {
-    return ListView.separated(
-      padding: const EdgeInsets.all(24),
-      itemCount: _items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, i) => _ApprovalCard(
-        item: _items[i],
-        onApprove: () => _approve(_items[i]),
-        onReject: () => _showRejectDialog(_items[i]),
-      ),
+    return Column(
+      children: [
+        // Select All row
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+          child: Row(
+            children: [
+              Checkbox(
+                value: _selectAll,
+                onChanged: (v) => setState(() {
+                  _selectAll = v == true;
+                  if (_selectAll) {
+                    _selectedIds = _items.map((i) => i.entityId).toSet();
+                  } else {
+                    _selectedIds.clear();
+                  }
+                }),
+              ),
+              const SizedBox(width: 4),
+              Text('Select All',
+                  style: AppTextStyles.labelSmall
+                      .copyWith(color: AppColors.secondaryText)),
+            ],
+          ),
+        ),
+        // Bulk action bar
+        if (_selectedIds.isNotEmpty)
+          Container(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Text(
+                  '${_selectedIds.length} selected',
+                  style: AppTextStyles.labelMedium
+                      .copyWith(color: AppColors.primary),
+                ),
+                const Spacer(),
+                OutlinedButton(
+                  onPressed: _bulkReject,
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: const BorderSide(color: AppColors.error)),
+                  child: const Text('Reject Selected'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _bulkApprove,
+                  child: const Text('Approve Selected'),
+                ),
+              ],
+            ),
+          ),
+        // List
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.all(24),
+            itemCount: _items.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, i) => _ApprovalCard(
+              item: _items[i],
+              isSelected: _selectedIds.contains(_items[i].entityId),
+              onSelectionChanged: (v) => setState(() {
+                if (v == true) {
+                  _selectedIds.add(_items[i].entityId);
+                } else {
+                  _selectedIds.remove(_items[i].entityId);
+                }
+              }),
+              onApprove: () => _approve(_items[i]),
+              onReject: () => _showRejectDialog(_items[i]),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -223,11 +315,15 @@ class _ApprovalCard extends StatelessWidget {
   final PendingApproval item;
   final VoidCallback onApprove;
   final VoidCallback onReject;
+  final bool isSelected;
+  final ValueChanged<bool?> onSelectionChanged;
 
   const _ApprovalCard({
     required this.item,
     required this.onApprove,
     required this.onReject,
+    required this.isSelected,
+    required this.onSelectionChanged,
   });
 
   @override
@@ -247,6 +343,11 @@ class _ApprovalCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
+              Checkbox(
+                value: isSelected,
+                onChanged: onSelectionChanged,
+              ),
+              const SizedBox(width: 4),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

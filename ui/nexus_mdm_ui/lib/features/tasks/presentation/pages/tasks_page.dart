@@ -208,6 +208,7 @@ class _TasksPageState extends State<TasksPage> {
     required String priority,
     String? entityId,
     DateTime? dueAt,
+    String? assigneeId,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -217,6 +218,7 @@ class _TasksPageState extends State<TasksPage> {
       };
       if (entityId != null && entityId.isNotEmpty) body['entity_id'] = entityId;
       if (dueAt != null) body['due_at'] = dueAt.toIso8601String();
+      if (assigneeId != null && assigneeId.isNotEmpty) body['assignee_id'] = assigneeId;
 
       await _api.post<dynamic>('/v1/tasks', data: body);
       if (!mounted) return;
@@ -302,11 +304,39 @@ class _TasksPageState extends State<TasksPage> {
     String selectedPri = 'Medium';
     DateTime? dueAt;
     String? selectedEntityId;
+    String? selectedAssigneeId;
+    List<Map<String, String>> assignableUsers = [];
+    bool usersLoading = false;
+    bool dialogInitialized = false;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlg) => AlertDialog(
+        builder: (ctx, setDlg) {
+          if (!dialogInitialized) {
+            dialogInitialized = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              if (!ctx.mounted) return;
+              setDlg(() => usersLoading = true);
+              try {
+                final resp = await _api.get<Map<String, dynamic>>('/v1/users?page_size=100');
+                final data = resp.data;
+                final items = data?['data'] as List? ?? data?['items'] as List? ?? [];
+                if (ctx.mounted) {
+                  setDlg(() {
+                    assignableUsers = items.map<Map<String, String>>((u) => {
+                      'id': u['user_id']?.toString() ?? u['id']?.toString() ?? '',
+                      'name': u['name']?.toString() ?? u['email']?.toString() ?? 'Unknown',
+                    }).toList();
+                    usersLoading = false;
+                  });
+                }
+              } catch (_) {
+                if (ctx.mounted) setDlg(() => usersLoading = false);
+              }
+            });
+          }
+          return AlertDialog(
           backgroundColor: AppColors.surface,
           title: Text('New Task', style: AppTextStyles.titleMedium),
           content: SizedBox(
@@ -333,6 +363,27 @@ class _TasksPageState extends State<TasksPage> {
                         .map((p) => DropdownMenuItem(value: p, child: Text(p)))
                         .toList(),
                     onChanged: (v) => setDlg(() => selectedPri = v ?? 'Medium'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String?>(
+                    decoration: const InputDecoration(
+                      labelText: 'Assign To (optional)',
+                      prefixIcon: Icon(Icons.person_outline, size: 18),
+                    ),
+                    dropdownColor: AppColors.surface,
+                    value: selectedAssigneeId,
+                    items: usersLoading
+                        ? [const DropdownMenuItem<String?>(value: null, child: Text('Loading...'))]
+                        : [
+                            const DropdownMenuItem<String?>(value: null, child: Text('Unassigned')),
+                            ...assignableUsers.map((u) => DropdownMenuItem<String?>(
+                                  value: u['id'],
+                                  child: Text(u['name'] ?? ''),
+                                )),
+                          ],
+                    onChanged: (v) => setDlg(() {
+                      selectedAssigneeId = v;
+                    }),
                   ),
                   const SizedBox(height: 12),
                   _EntitySearchField(
@@ -403,12 +454,14 @@ class _TasksPageState extends State<TasksPage> {
                   priority:    selectedPri,
                   entityId:    selectedEntityId,
                   dueAt:       dueAt,
+                  assigneeId:  selectedAssigneeId,
                 );
               },
               child: const Text('Create'),
             ),
           ],
-        ),
+          );
+        },
       ),
     );
   }

@@ -263,6 +263,14 @@ class AppRouter {
             ],
           ),
           GoRoute(
+            path: '/dashboard/merge-studio',
+            name: 'merge-studio',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const MatchQueuePage(),
+            ),
+          ),
+          GoRoute(
             path: '/dashboard/merge/:sourceId/:candidateId',
             name: 'merge',
             pageBuilder: (context, state) => _buildFadePage(
@@ -310,7 +318,9 @@ class AppRouter {
             name: 'lineage',
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
-              child: const LineagePage(),
+              child: LineagePage(
+                entityId: state.uri.queryParameters['entity_id'],
+              ),
             ),
           ),
           GoRoute(
@@ -318,7 +328,10 @@ class AppRouter {
             name: 'governance',
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
-              child: const GovernancePage(),
+              child: GovernancePage(
+                initialTab: int.tryParse(
+                    state.uri.queryParameters['tab'] ?? '') ?? 0,
+              ),
             ),
           ),
           GoRoute(

@@ -163,7 +163,8 @@ class GdprRequest {
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class GovernancePage extends StatefulWidget {
-  const GovernancePage({super.key});
+  final int initialTab;
+  const GovernancePage({super.key, this.initialTab = 0});
 
   @override
   State<GovernancePage> createState() => _GovernancePageState();
@@ -181,7 +182,7 @@ class _GovernancePageState extends State<GovernancePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 4, vsync: this, initialIndex: widget.initialTab.clamp(0, 3));
     _loadAll();
   }
 
@@ -304,11 +305,14 @@ class _GovernancePageState extends State<GovernancePage>
       ),
       child: TabBar(
         controller: _tabController,
-        tabs: const [
-          Tab(text: 'Rules'),
-          Tab(text: 'Survivorship'),
-          Tab(text: 'Policies'),
-          Tab(text: 'GDPR'),
+        tabs: [
+          const Tab(text: 'Rules'),
+          const Tooltip(
+            message: 'Survivorship: The process of selecting the best value for each field when multiple source systems provide conflicting data.',
+            child: Tab(text: 'Survivorship'),
+          ),
+          const Tab(text: 'Policies'),
+          const Tab(text: 'GDPR'),
         ],
         labelStyle: AppTextStyles.titleSmall,
         unselectedLabelStyle: AppTextStyles.bodyMedium,

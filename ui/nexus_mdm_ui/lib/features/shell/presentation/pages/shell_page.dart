@@ -104,7 +104,7 @@ class _ShellPageState extends State<ShellPage> {
   // â”€â”€ Grouped nav definition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static const _navGroups = [
-    // â”€â”€ Super Admin (productAdmin) only â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- Platform Admin (productAdmin only) -------------------------------------------
     _NavGroup(
       label: 'PLATFORM ADMIN',
       visibleTo: [UserRole.productAdmin],
@@ -115,7 +115,7 @@ class _ShellPageState extends State<ShellPage> {
       ],
     ),
 
-    // â”€â”€ All authenticated roles see their role-specific dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- Overview ---------------------------------------------------------------------
     _NavGroup(
       label: 'OVERVIEW',
       visibleTo: [UserRole.productAdmin, UserRole.admin, UserRole.businessAdmin, UserRole.steward, UserRole.viewer],
@@ -124,11 +124,9 @@ class _ShellPageState extends State<ShellPage> {
       ],
     ),
 
-    // â”€â”€ Org configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // ITAdmin (productAdmin) can only manage users â€” not tenant data config.
-    // BusinessAdmin has access to all items in this group.
+    // -- 1. Setup (configure once) ----------------------------------------------------
     _NavGroup(
-      label: 'ORG SETUP',
+      label: 'SETUP',
       visibleTo: [UserRole.productAdmin, UserRole.admin, UserRole.businessAdmin],
       items: [
         _NavItem(icon: Icons.people_outlined,               label: 'Users & Roles',   route: '/dashboard/org/users'),
@@ -137,8 +135,6 @@ class _ShellPageState extends State<ShellPage> {
         _NavItem(icon: Icons.tune_outlined,                 label: 'Attributes',      route: '/dashboard/org/attributes',
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
         _NavItem(icon: Icons.electrical_services_outlined,  label: 'Source Systems',  route: '/dashboard/org/sources',
-            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
-        _NavItem(icon: Icons.admin_panel_settings_outlined, label: 'Data Governance', route: '/dashboard/org/data-governance',
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
         _NavItem(icon: Icons.list_alt_outlined,             label: 'Reference Data',  route: '/dashboard/org/reference-data',
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
@@ -157,72 +153,95 @@ class _ShellPageState extends State<ShellPage> {
       ],
     ),
 
-    // â”€â”€ Data access: stewards and viewers only â€” Admins/BusinessAdmins manage
-    // the schema (entity types, attributes) but do not access entity records.
+    // -- 2. Data In -------------------------------------------------------------------
     _NavGroup(
-      label: 'ENTITIES',
-      visibleTo: [UserRole.steward, UserRole.viewer],
+      label: 'DATA IN',
+      visibleTo: [UserRole.admin, UserRole.steward, UserRole.viewer],
       items: [
-        _NavItem(icon: Icons.search_outlined,    label: 'Browse & Search', route: '/dashboard/entities'),
-        _NavItem(icon: Icons.add_circle_outline, label: 'Create Entity',   route: '/dashboard/entities/create',
-            visibleTo: [UserRole.steward]),
-        _NavItem(icon: Icons.upload_outlined,    label: 'Ingest Data',     route: '/dashboard/entities/ingest',
-            visibleTo: [UserRole.steward]),
-      ],
-    ),
-    _NavGroup(
-      label: 'MDM WORKFLOW',
-      visibleTo: [UserRole.admin, UserRole.steward],
-      items: [
-        _NavItem(icon: Icons.gps_fixed_outlined,      label: 'Match Queue',       route: '/dashboard/match-queue'),
-        _NavItem(icon: Icons.merge_outlined,           label: 'Merge Studio',      route: '/dashboard/match-queue'),
-        _NavItem(icon: Icons.star_outline,             label: 'Golden Records',    route: '/dashboard/golden-records'),
-        _NavItem(icon: Icons.tune_outlined,            label: 'Matching Rules',    route: '/dashboard/matching-rules',
-            visibleTo: [UserRole.admin]),
-        _NavItem(icon: Icons.satellite_alt_outlined,   label: 'Distribution',      route: '/dashboard/distribution',
-            module: LicensedModule.distribution,
-            visibleTo: [UserRole.admin]),
-        _NavItem(icon: Icons.pending_actions_outlined, label: 'Pending Approvals', route: '/dashboard/pending-approvals'),
-        _NavItem(icon: Icons.notifications_outlined,   label: 'Notifications',     route: '/dashboard/notifications'),
-        _NavItem(icon: Icons.task_alt_outlined,        label: 'Tasks',             route: '/dashboard/tasks'),
-        _NavItem(icon: Icons.layers_outlined,          label: 'Bulk Operations',   route: '/dashboard/entities/bulk',
+        _NavItem(icon: Icons.search_outlined,    label: 'Browse Entities',  route: '/dashboard/entities'),
+        _NavItem(icon: Icons.add_circle_outline, label: 'Create Entity',    route: '/dashboard/entities/create',
+            visibleTo: [UserRole.admin, UserRole.steward]),
+        _NavItem(icon: Icons.upload_outlined,    label: 'Ingest Data',      route: '/dashboard/entities/ingest',
+            visibleTo: [UserRole.admin, UserRole.steward]),
+        _NavItem(icon: Icons.layers_outlined,    label: 'Bulk Operations',  route: '/dashboard/entities/bulk',
             visibleTo: [UserRole.admin, UserRole.steward]),
       ],
     ),
+
+    // -- 3. Review & Quality ----------------------------------------------------------
     _NavGroup(
-      label: 'AI & INSIGHTS',
+      label: 'REVIEW & QUALITY',
       visibleTo: [UserRole.admin, UserRole.steward, UserRole.viewer],
       items: [
-        _NavItem(icon: Icons.auto_awesome_outlined, label: 'AI Prism',   route: '/dashboard/ai-prism', isAi: true,
-            module: LicensedModule.aiPrism),
-        _NavItem(icon: Icons.verified_outlined,     label: 'Data Quality', route: '/dashboard/data-quality',
+        _NavItem(icon: Icons.verified_outlined,     label: 'Data Quality',    route: '/dashboard/data-quality',
             module: LicensedModule.dataQuality),
-        _NavItem(icon: Icons.bar_chart_outlined,    label: 'Data Profiling', route: '/dashboard/data-profiling',
+        _NavItem(icon: Icons.bar_chart_outlined,    label: 'Data Profiling',  route: '/dashboard/data-profiling',
             module: LicensedModule.dataQuality),
-        _NavItem(icon: Icons.account_tree_outlined, label: 'Lineage',      route: '/dashboard/lineage',
+        _NavItem(icon: Icons.admin_panel_settings_outlined, label: 'Data Governance', route: '/dashboard/org/data-governance',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+      ],
+    ),
+
+    // -- 4. Match & Merge -------------------------------------------------------------
+    _NavGroup(
+      label: 'MATCH & MERGE',
+      visibleTo: [UserRole.admin, UserRole.steward],
+      items: [
+        _NavItem(icon: Icons.gps_fixed_outlined,   label: 'Match Queue',     route: '/dashboard/match-queue'),
+        _NavItem(icon: Icons.merge_outlined,        label: 'Merge Studio',    route: '/dashboard/merge-studio'),
+        _NavItem(icon: Icons.star_outline,          label: 'Golden Records',  route: '/dashboard/golden-records'),
+        _NavItem(icon: Icons.tune_outlined,         label: 'Matching Rules',  route: '/dashboard/matching-rules',
+            visibleTo: [UserRole.admin]),
+      ],
+    ),
+
+    // -- 5. Govern & Approve ----------------------------------------------------------
+    _NavGroup(
+      label: 'GOVERN & APPROVE',
+      visibleTo: [UserRole.admin, UserRole.steward],
+      items: [
+        _NavItem(icon: Icons.pending_actions_outlined, label: 'Pending Approvals', route: '/dashboard/pending-approvals'),
+        _NavItem(icon: Icons.task_alt_outlined,        label: 'Tasks',             route: '/dashboard/tasks'),
+        _NavItem(icon: Icons.shield_outlined,          label: 'Policy Rules',      route: '/dashboard/governance?tab=0',
+            module: LicensedModule.governance,
+            visibleTo: [UserRole.admin]),
+        _NavItem(icon: Icons.merge_type_outlined,      label: 'Survivorship',      route: '/dashboard/governance?tab=1',
+            module: LicensedModule.governance,
+            visibleTo: [UserRole.admin]),
+        _NavItem(icon: Icons.gpp_good_outlined,        label: 'GDPR / Consent',    route: '/dashboard/governance?tab=3',
+            module: LicensedModule.governance,
+            visibleTo: [UserRole.admin]),
+        _NavItem(icon: Icons.notifications_outlined,   label: 'Notifications',     route: '/dashboard/notifications'),
+      ],
+    ),
+
+    // -- 6. Data Out ------------------------------------------------------------------
+    _NavGroup(
+      label: 'DATA OUT',
+      visibleTo: [UserRole.admin, UserRole.steward, UserRole.viewer],
+      items: [
+        _NavItem(icon: Icons.satellite_alt_outlined,  label: 'Distribution',    route: '/dashboard/distribution',
+            module: LicensedModule.distribution,
+            visibleTo: [UserRole.admin]),
+        _NavItem(icon: Icons.account_tree_outlined,   label: 'Lineage',         route: '/dashboard/lineage',
             module: LicensedModule.lineage),
-        _NavItem(icon: Icons.analytics_outlined,    label: 'Analytics',    route: '/dashboard/analytics',
+      ],
+    ),
+
+    // -- 7. Measure -------------------------------------------------------------------
+    _NavGroup(
+      label: 'MEASURE',
+      visibleTo: [UserRole.admin, UserRole.steward, UserRole.viewer],
+      items: [
+        _NavItem(icon: Icons.analytics_outlined,    label: 'Analytics',         route: '/dashboard/analytics',
             module: LicensedModule.analytics),
         _NavItem(icon: Icons.score_outlined,        label: 'Quality Analytics', route: '/dashboard/quality-analytics',
             module: LicensedModule.analytics),
-      ],
-    ),
-
-    // â”€â”€ Governance policy config: admin only â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    _NavGroup(
-      label: 'GOVERNANCE',
-      visibleTo: [UserRole.admin],
-      items: [
-        _NavItem(icon: Icons.shield_outlined,     label: 'Policy Rules',   route: '/dashboard/governance',
-            module: LicensedModule.governance),
-        _NavItem(icon: Icons.merge_type_outlined, label: 'Survivorship',   route: '/dashboard/governance',
-            module: LicensedModule.governance),
-        _NavItem(icon: Icons.gpp_good_outlined,   label: 'GDPR / Consent', route: '/dashboard/governance',
-            module: LicensedModule.governance),
+        _NavItem(icon: Icons.auto_awesome_outlined, label: 'AI Prism',          route: '/dashboard/ai-prism', isAi: true,
+            module: LicensedModule.aiPrism),
       ],
     ),
   ];
-
   List<_NavItem> get _bottomNavItems => [
     const _NavItem(icon: Icons.home_outlined, label: 'Dashboard', route: '/dashboard'),
     const _NavItem(icon: Icons.search_outlined, label: 'Explorer', route: '/dashboard/entities'),
@@ -540,7 +559,9 @@ class _ShellPageState extends State<ShellPage> {
 
   bool _isRouteActive(String location, String route) {
     if (route == '/dashboard') return location == '/dashboard';
-    return location.startsWith(route);
+    // Strip query parameters from the nav route before matching
+    final routePath = route.contains('?') ? route.split('?').first : route;
+    return location.startsWith(routePath);
   }
 
   Widget _buildNavItemWidget(
@@ -553,7 +574,20 @@ class _ShellPageState extends State<ShellPage> {
           if (item.route == '/dashboard/notifications') {
             _showNotificationsPanel();
           } else {
-            context.go(item.route);
+            // Parse query parameters from the route definition and pass them through
+            final routeParts = item.route.split('?');
+            if (routeParts.length > 1) {
+              final queryString = routeParts[1];
+              final params = Map.fromEntries(
+                queryString.split('&').map((kv) {
+                  final parts = kv.split('=');
+                  return MapEntry(parts[0], parts.length > 1 ? parts[1] : '');
+                }),
+              );
+              context.go(routeParts[0], extra: params);
+            } else {
+              context.go(item.route);
+            }
           }
         },
         borderRadius: BorderRadius.circular(8),
@@ -993,6 +1027,7 @@ class _ShellPageState extends State<ShellPage> {
     if (location.startsWith('/dashboard/entities/ingest')) return 'Ingest Data';
     if (location.startsWith('/dashboard/entities')) return 'Entity Explorer';
     if (location.startsWith('/dashboard/match-queue')) return 'Match Queue';
+    if (location.startsWith('/dashboard/merge-studio')) return 'Merge Studio';
     if (location.startsWith('/dashboard/matching-rules')) return 'Matching Rules';
     if (location.startsWith('/dashboard/merge')) return 'Merge Studio';
     if (location.startsWith('/dashboard/golden-records')) return 'Golden Records';

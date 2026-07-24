@@ -354,14 +354,36 @@ class _AiConfigTabState extends State<_AiConfigTab> {
     }
   }
 
-  void _saveThresholds() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Matching thresholds saved successfully'),
-        backgroundColor: AppColors.cardSurface,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  Future<void> _saveThresholds() async {
+    try {
+      await ApiClient().patch(
+        '/v1/matching/policy',
+        data: {
+          'auto_merge_threshold': _autoMergeThreshold,
+          'review_threshold': _reviewThreshold,
+          'ambiguity_delta': _ambiguityDelta,
+        },
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Matching thresholds saved'),
+            backgroundColor: AppColors.cardSurface,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to save thresholds'),
+            backgroundColor: AppColors.cardSurface,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -488,11 +510,15 @@ class _AiConfigTabState extends State<_AiConfigTab> {
                   _AiFeatureSwitch(
                     title: 'AI Match Assist',
                     subtitle:
-                        'Llama resolves ambiguous matches (0.75â€“0.95 score)',
+                        'Llama resolves ambiguous matches (0.75â€”0.95 score)',
                     value: _aiMatchAssist,
                     icon: Icons.auto_awesome_rounded,
-                    onChanged: (v) =>
-                        setState(() => _aiMatchAssist = v),
+                    onChanged: (v) async {
+                      setState(() => _aiMatchAssist = v);
+                      try {
+                        await ApiClient().patch('/v1/settings/ai-features', data: {'ai_match_assist': v});
+                      } catch (_) {}
+                    },
                   ),
                   _AiFeatureSwitch(
                     title: 'RAG Prism',
@@ -500,7 +526,12 @@ class _AiConfigTabState extends State<_AiConfigTab> {
                         'Knowledge-grounded natural language Q&A',
                     value: _ragPrism,
                     icon: Icons.chat_rounded,
-                    onChanged: (v) => setState(() => _ragPrism = v),
+                    onChanged: (v) async {
+                      setState(() => _ragPrism = v);
+                      try {
+                        await ApiClient().patch('/v1/settings/ai-features', data: {'rag_prism': v});
+                      } catch (_) {}
+                    },
                   ),
                   _AiFeatureSwitch(
                     title: 'Auto Survivorship',
@@ -508,8 +539,12 @@ class _AiConfigTabState extends State<_AiConfigTab> {
                         'AI suggests survivorship rule winners',
                     value: _autoSurvivorship,
                     icon: Icons.mediation_rounded,
-                    onChanged: (v) =>
-                        setState(() => _autoSurvivorship = v),
+                    onChanged: (v) async {
+                      setState(() => _autoSurvivorship = v);
+                      try {
+                        await ApiClient().patch('/v1/settings/ai-features', data: {'auto_survivorship': v});
+                      } catch (_) {}
+                    },
                   ),
                   _AiFeatureSwitch(
                     title: 'Anomaly Detection',
@@ -517,8 +552,12 @@ class _AiConfigTabState extends State<_AiConfigTab> {
                         'Detects data quality issues proactively',
                     value: _anomalyDetection,
                     icon: Icons.troubleshoot_rounded,
-                    onChanged: (v) =>
-                        setState(() => _anomalyDetection = v),
+                    onChanged: (v) async {
+                      setState(() => _anomalyDetection = v);
+                      try {
+                        await ApiClient().patch('/v1/settings/ai-features', data: {'anomaly_detection': v});
+                      } catch (_) {}
+                    },
                   ),
                   _AiFeatureSwitch(
                     title: 'Adaptive Weights',
@@ -526,8 +565,12 @@ class _AiConfigTabState extends State<_AiConfigTab> {
                         'Learn scoring weights from steward decisions',
                     value: _adaptiveWeights,
                     icon: Icons.tune_rounded,
-                    onChanged: (v) =>
-                        setState(() => _adaptiveWeights = v),
+                    onChanged: (v) async {
+                      setState(() => _adaptiveWeights = v);
+                      try {
+                        await ApiClient().patch('/v1/settings/ai-features', data: {'adaptive_weights': v});
+                      } catch (_) {}
+                    },
                     isLast: true,
                   ),
                 ],

@@ -642,38 +642,44 @@ class _MatchQueuePageState extends State<MatchQueuePage>
                             const SizedBox(width: 8),
                             // SLA breach badge
                             if (slaBreached)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.error
-                                      .withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
+                              Tooltip(
+                                message: 'SLA Breached: This match review is overdue. It has been waiting longer than the agreed review time limit.',
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
                                     color: AppColors.error
-                                        .withValues(alpha: 0.5),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.warning_amber_rounded,
-                                        size: 10, color: AppColors.error),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      'SLA',
-                                      style: AppTextStyles.badgeLabel
-                                          .copyWith(color: AppColors.error),
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: AppColors.error
+                                          .withValues(alpha: 0.5),
                                     ),
-                                  ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.warning_amber_rounded,
+                                          size: 10, color: AppColors.error),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        'SLA',
+                                        style: AppTextStyles.badgeLabel
+                                            .copyWith(color: AppColors.error),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             if (item.aiExplanation != null) ...[
                               const SizedBox(width: 8),
-                              AiBadge(
-                                label: 'AI',
-                                confidence: item.overallScore,
-                                compact: false,
+                              Tooltip(
+                                message: 'AI Confidence: How likely these two records represent the same real-world entity, calculated by comparing field values and phonetic similarity.',
+                                child: AiBadge(
+                                  label: 'AI',
+                                  confidence: item.overallScore,
+                                  compact: false,
+                                ),
                               ),
                             ],
                             const Spacer(),
@@ -1202,7 +1208,11 @@ class _MatchQueuePageState extends State<MatchQueuePage>
   void _showMatchDetail(ReviewItem item) {
     showDialog(
       context: context,
-      builder: (context) => _ReviewItemDetailDialog(item: item),
+      builder: (context) => _ReviewItemDetailDialog(
+        item: item,
+        onApprove: () => _approveItem(item),
+        onReject: () => _rejectItem(item),
+      ),
     );
   }
 
@@ -1226,8 +1236,14 @@ class _MatchQueuePageState extends State<MatchQueuePage>
 
 class _ReviewItemDetailDialog extends StatelessWidget {
   final ReviewItem item;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
 
-  const _ReviewItemDetailDialog({required this.item});
+  const _ReviewItemDetailDialog({
+    required this.item,
+    required this.onApprove,
+    required this.onReject,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1357,7 +1373,10 @@ class _ReviewItemDetailDialog extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onReject();
+                    },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
                       side:
@@ -1367,7 +1386,10 @@ class _ReviewItemDetailDialog extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onApprove();
+                    },
                     icon: const Icon(Icons.merge_type_rounded,
                         size: 16),
                     label: const Text('Confirm Merge'),

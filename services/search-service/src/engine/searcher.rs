@@ -306,13 +306,8 @@ impl SearchEngine {
               AND (
                 to_tsvector('english', e.metadata::text)
                     @@ websearch_to_tsquery('english', $5)
-                OR EXISTS (
-                    SELECT 1 FROM core_mdm.entity_attributes a
-                    WHERE a.entity_id = e.entity_id
-                      AND a.tenant_id = e.tenant_id
-                      AND to_tsvector('english', a.attribute_value::text)
-                          @@ websearch_to_tsquery('english', $5)
-                )
+                OR to_tsvector('english', coalesce(e.current_attributes::text, '{}'))
+                    @@ websearch_to_tsquery('english', $5)
               )
             "#,
         )

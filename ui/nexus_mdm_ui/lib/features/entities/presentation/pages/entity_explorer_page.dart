@@ -624,7 +624,51 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
           if (_colVisible('status'))
             _sortHeader('STATUS', 'status'),
           if (_colVisible('trust'))
-            _sortHeader('TRUST SCORE', 'trust_score', flex: 3),
+            Expanded(
+              flex: 3,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    if (_sortBy == 'trust_score') {
+                      _sortAsc = !_sortAsc;
+                    } else {
+                      _sortBy  = 'trust_score';
+                      _sortAsc = false;
+                    }
+                  });
+                  _loadEntities();
+                },
+                borderRadius: BorderRadius.circular(4),
+                child: Tooltip(
+                  message: 'Trust Score: How reliable this entity\'s data is, based on source system quality and consistency. 0% = unreliable, 100% = fully trusted.',
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'TRUST SCORE',
+                        style: AppTextStyles.tableHeader.copyWith(
+                          color: _sortBy == 'trust_score' ? AppColors.primary : null,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.info_outline, size: 12, color: AppColors.mutedText),
+                      const SizedBox(width: 4),
+                      Icon(
+                        _sortBy == 'trust_score'
+                            ? (_sortAsc
+                                ? Icons.arrow_upward_rounded
+                                : Icons.arrow_downward_rounded)
+                            : Icons.unfold_more_rounded,
+                        size: 14,
+                        color: _sortBy == 'trust_score'
+                            ? AppColors.primary
+                            : AppColors.secondaryText,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           if (_colVisible('source'))
             _sortHeader('SOURCE', null), // source_system not in allowlist
           if (_colVisible('updated'))
@@ -900,7 +944,7 @@ class _EntityExplorerPageState extends State<EntityExplorerPage> {
         context.go('/dashboard/entities/${entity.id}');
         break;
       case 'lineage':
-        context.go('/dashboard/lineage/${entity.id}');
+        context.go('/dashboard/lineage?entity_id=${entity.id}');
         break;
       case 'match':
         context.go('/dashboard/match-queue');

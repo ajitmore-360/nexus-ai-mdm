@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/models/golden_record.dart';
@@ -256,184 +257,229 @@ class _GoldenRecordsPageState extends State<GoldenRecordsPage> {
   }
 
   Widget _buildCard(GoldenRecord record, int index) {
-    return GestureDetector(
-      onTap: () => context.go('/dashboard/entities/${record.entityId}'),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.cardSurface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: record.isVerified
-                ? AppColors.statusGolden.withValues(alpha: 0.25)
-                : AppColors.divider,
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Avatar
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: record.isVerified
-                    ? const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
-                      )
-                    : AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                _entityTypeIcon(record.entityType),
-                color: Colors.white,
-                size: 22,
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: () => context.go('/dashboard/entities/${record.entityId}'),
+          child: Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.cardSurface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: record.isVerified
+                    ? AppColors.statusGolden.withValues(alpha: 0.25)
+                    : AppColors.divider,
               ),
             ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Avatar
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: record.isVerified
+                        ? const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+                          )
+                        : AppColors.primaryGradient,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    _entityTypeIcon(record.entityType),
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
 
-            const SizedBox(width: 14),
+                const SizedBox(width: 14),
 
-            // Main content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Name row
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                // Main content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(record.displayName, style: AppTextStyles.titleSmall),
-                      const SizedBox(width: 8),
-                      _EntityTypeChip(type: record.entityType),
-                      const SizedBox(width: 8),
-                      if (record.isVerified)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.statusGolden.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: AppColors.statusGolden.withValues(alpha: 0.4),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.verified_rounded, size: 11, color: AppColors.statusGolden),
-                              const SizedBox(width: 4),
-                              Text(
-                                'VERIFIED',
-                                style: AppTextStyles.badgeLabel.copyWith(
-                                  color: AppColors.statusGolden,
-                                  fontSize: 9,
+                      // Name row
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(record.displayName, style: AppTextStyles.titleSmall),
+                          const SizedBox(width: 8),
+                          _EntityTypeChip(type: record.entityType),
+                          const SizedBox(width: 8),
+                          if (record.isVerified)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.statusGolden.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: AppColors.statusGolden.withValues(alpha: 0.4),
                                 ),
                               ),
-                            ],
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.verified_rounded, size: 11, color: AppColors.statusGolden),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'VERIFIED',
+                                    style: AppTextStyles.badgeLabel.copyWith(
+                                      color: AppColors.statusGolden,
+                                      fontSize: 9,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          const Spacer(),
+                          Text(
+                            record.id,
+                            style: AppTextStyles.timestamp.copyWith(color: AppColors.mutedText),
                           ),
-                        ),
-                      const Spacer(),
-                      Text(
-                        record.id,
-                        style: AppTextStyles.timestamp.copyWith(color: AppColors.mutedText),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
+                      const SizedBox(height: 10),
 
-                  // Quality scores row
-                  Row(
-                    children: [
-                      _QualityBar(label: 'Completeness', value: record.completenessScore, color: AppColors.primary),
-                      const SizedBox(width: 16),
-                      _QualityBar(label: 'Consistency', value: record.consistencyScore, color: AppColors.info),
-                      const SizedBox(width: 16),
-                      _QualityBar(label: 'Accuracy', value: record.accuracyScore, color: AppColors.aiPurple),
-                      const SizedBox(width: 20),
-                      // Trust score circle
-                      _TrustCircle(score: record.trustScore),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
+                      // Quality scores row
+                      Row(
+                        children: [
+                          Tooltip(
+                            message: 'Completeness: What percentage of expected fields have a value.',
+                            child: _QualityBar(label: 'Completeness', value: record.completenessScore, color: AppColors.primary),
+                          ),
+                          const SizedBox(width: 16),
+                          Tooltip(
+                            message: 'Consistency: How well this record\'s values agree across contributing source systems.',
+                            child: _QualityBar(label: 'Consistency', value: record.consistencyScore, color: AppColors.info),
+                          ),
+                          const SizedBox(width: 16),
+                          Tooltip(
+                            message: 'Accuracy: Confidence that the field values are correct, based on source system trust scores.',
+                            child: _QualityBar(label: 'Accuracy', value: record.accuracyScore, color: AppColors.aiPurple),
+                          ),
+                          const SizedBox(width: 20),
+                          // Trust score circle
+                          _TrustCircle(score: record.trustScore),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
 
-                  // Sources + tags row
-                  Row(
-                    children: [
-                      const Icon(Icons.storage_rounded, size: 12, color: AppColors.mutedText),
-                      const SizedBox(width: 4),
-                      ...record.contributingSources.take(3).map((src) => Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      // Sources + tags row
+                      Row(
+                        children: [
+                          const Icon(Icons.storage_rounded, size: 12, color: AppColors.mutedText),
+                          const SizedBox(width: 4),
+                          ...record.contributingSources.take(3).map((src) => Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.elevatedCard,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: AppColors.divider),
+                                  ),
+                                  child: Text(src, style: AppTextStyles.labelSmall.copyWith(fontSize: 10)),
+                                ),
+                              )),
+                          if (record.contributingSourceCount > 3)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                               decoration: BoxDecoration(
                                 color: AppColors.elevatedCard,
                                 borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: AppColors.divider),
-                              ),
-                              child: Text(src, style: AppTextStyles.labelSmall.copyWith(fontSize: 10)),
-                            ),
-                          )),
-                      if (record.contributingSourceCount > 3)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.elevatedCard,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '+${record.contributingSourceCount - 3}',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.mutedText,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
-                      const Spacer(),
-                      // Merged count
-                      if (record.mergedEntityCount > 1)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.merge_rounded, size: 12, color: AppColors.statusMerged),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${record.mergedEntityCount} merged',
-                              style: AppTextStyles.labelSmall.copyWith(color: AppColors.statusMerged),
-                            ),
-                          ],
-                        ),
-                      const SizedBox(width: 12),
-                      // Tags
-                      ...record.tags.take(2).map((tag) => Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                tag,
-                                style: AppTextStyles.badgeLabel.copyWith(
-                                  color: AppColors.primary,
-                                  fontSize: 9,
+                                '+${record.contributingSourceCount - 3}',
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.mutedText,
+                                  fontSize: 10,
                                 ),
                               ),
                             ),
-                          )),
+                          const Spacer(),
+                          // Merged count
+                          if (record.mergedEntityCount > 1)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.merge_rounded, size: 12, color: AppColors.statusMerged),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${record.mergedEntityCount} merged',
+                                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.statusMerged),
+                                ),
+                              ],
+                            ),
+                          const SizedBox(width: 12),
+                          // Tags
+                          ...record.tags.take(2).map((tag) => Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    tag,
+                                    style: AppTextStyles.badgeLabel.copyWith(
+                                      color: AppColors.primary,
+                                      fontSize: 9,
+                                    ),
+                                  ),
+                                ),
+                              )),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
+        )
+            .animate(delay: (index * 60).ms)
+            .fadeIn(duration: 350.ms)
+            .slideY(begin: 0.04, end: 0, duration: 350.ms),
+        Positioned(
+          top: 8,
+          right: 8,
+          child: PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, size: 18, color: AppColors.secondaryText),
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'view', child: Row(children: [Icon(Icons.open_in_new, size: 16), SizedBox(width: 8), Text('View Entity')])),
+              const PopupMenuItem(value: 'unmerge', child: Row(children: [Icon(Icons.call_split, size: 16), SizedBox(width: 8), Text('Unmerge')])),
+              const PopupMenuItem(value: 'export', child: Row(children: [Icon(Icons.download_outlined, size: 16), SizedBox(width: 8), Text('Export')])),
+            ],
+            onSelected: (v) async {
+              if (v == 'view') context.go('/dashboard/entities/${record.entityId}');
+              if (v == 'unmerge') context.go('/dashboard/entities/${record.entityId}/unmerge');
+              if (v == 'export') {
+                try {
+                  await ApiClient().post('/v1/entities/${record.entityId}/export', data: {});
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Export queued — check notification center')),
+                    );
+                  }
+                } catch (_) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Export failed')),
+                    );
+                  }
+                }
+              }
+            },
+          ),
         ),
-      ),
-    )
-        .animate(delay: (index * 60).ms)
-        .fadeIn(duration: 350.ms)
-        .slideY(begin: 0.04, end: 0, duration: 350.ms);
+      ],
+    );
   }
 
   Widget _buildShimmer() {

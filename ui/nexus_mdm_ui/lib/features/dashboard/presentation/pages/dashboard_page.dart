@@ -129,64 +129,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildPlaceholderSection() {
-    final sectionMap = {
-      'golden': ('Golden Records', Icons.stars_rounded, 'View and manage all golden master records'),
-      'quality': ('Data Quality', Icons.health_and_safety_rounded, 'Monitor and improve your data quality metrics'),
-      'governance': ('Governance', Icons.policy_rounded, 'Configure data governance rules and policies'),
-      'analytics': ('Analytics', Icons.analytics_rounded, 'Deep insights into your MDM performance'),
-      'settings': ('Settings', Icons.settings_rounded, 'Configure your Azile AI MDM platform'),
-    };
-
-    final config = sectionMap[widget.section] ??
-        ('Dashboard', Icons.dashboard_rounded, '');
-
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(config.$2, color: AppColors.navyBackground, size: 40),
-          ).animate().fadeIn().scaleXY(begin: 0.8, end: 1.0),
-          const SizedBox(height: 24),
-          Text(config.$1, style: AppTextStyles.headlineSmall).animate(delay: 100.ms).fadeIn(),
-          const SizedBox(height: 8),
-          Text(
-            config.$3,
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.secondaryText),
-            textAlign: TextAlign.center,
-          ).animate(delay: 200.ms).fadeIn(),
-          const SizedBox(height: 32),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.cardSurface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.divider),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.construction_rounded,
-                    color: AppColors.warning, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'Coming in next sprint',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.warning,
-                  ),
-                ),
-              ],
-            ),
-          ).animate(delay: 300.ms).fadeIn(),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildMainDashboard() {

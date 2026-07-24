@@ -472,6 +472,14 @@ class _MatchReviewPageState extends State<MatchReviewPage>
     );
   }
 
+  String _humanizeFieldName(String key) {
+    return key
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+        .join(' ');
+  }
+
   Widget _buildFieldRow(_FieldComparison field, int index) {
     final color = _scoreColor(field.score);
 
@@ -490,13 +498,18 @@ class _MatchReviewPageState extends State<MatchReviewPage>
                   topLeft: Radius.circular(8),
                   bottomLeft: Radius.circular(8),
                 ),
-                border: Border.all(color: AppColors.divider),
+                border: Border(
+                  top: BorderSide(color: field.matchType == _MatchType.conflict ? AppColors.error.withValues(alpha: 0.4) : AppColors.divider),
+                  bottom: BorderSide(color: field.matchType == _MatchType.conflict ? AppColors.error.withValues(alpha: 0.4) : AppColors.divider),
+                  left: BorderSide(color: field.matchType == _MatchType.conflict ? AppColors.error : AppColors.divider, width: field.matchType == _MatchType.conflict ? 3 : 1),
+                  right: BorderSide(color: AppColors.divider),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    field.fieldName.toUpperCase(),
+                    _humanizeFieldName(field.fieldName),
                     style: AppTextStyles.tableHeader,
                   ),
                   const SizedBox(height: 4),
@@ -546,9 +559,34 @@ class _MatchReviewPageState extends State<MatchReviewPage>
                   ],
                 ),
                 const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '${(field.score * 100).round()}%',
+                    style: AppTextStyles.badgeLabel.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
                 Text(
-                  '${(field.score * 100).round()}%',
-                  style: AppTextStyles.badgeLabel.copyWith(color: color),
+                  field.matchType == _MatchType.exact
+                      ? 'Exact match'
+                      : field.matchType == _MatchType.fuzzy
+                          ? 'Similar'
+                          : 'Conflict',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: field.matchType == _MatchType.conflict
+                        ? AppColors.error
+                        : AppColors.secondaryText,
+                    fontSize: 9,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -574,7 +612,7 @@ class _MatchReviewPageState extends State<MatchReviewPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    field.fieldName.toUpperCase(),
+                    _humanizeFieldName(field.fieldName),
                     style: AppTextStyles.tableHeader,
                   ),
                   const SizedBox(height: 4),

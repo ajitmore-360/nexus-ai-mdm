@@ -376,28 +376,31 @@ class _EntityDetailPageState extends State<EntityDetailPage>
                             .animate(delay: 100.ms).fadeIn(),
                         if (entity.isGolden) ...[
                           const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.statusGolden.withValues(alpha:0.1),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                  color: AppColors.statusGolden.withValues(alpha:0.4)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.stars_rounded,
-                                    color: AppColors.statusGolden, size: 12),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'GOLDEN RECORD',
-                                  style: AppTextStyles.badgeLabel.copyWith(
-                                    color: AppColors.statusGolden,
+                          Tooltip(
+                            message: 'Golden Record: The single best version of this entity, created by merging data from multiple source systems using survivorship rules.',
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.statusGolden.withValues(alpha:0.1),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                    color: AppColors.statusGolden.withValues(alpha:0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.stars_rounded,
+                                      color: AppColors.statusGolden, size: 12),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'GOLDEN RECORD',
+                                    style: AppTextStyles.badgeLabel.copyWith(
+                                      color: AppColors.statusGolden,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ).animate(delay: 150.ms).fadeIn(),
                         ],
@@ -429,8 +432,11 @@ class _EntityDetailPageState extends State<EntityDetailPage>
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        _buildScoreChip('Trust', entity.trustScore,
-                            AppColors.primary),
+                        Tooltip(
+                          message: 'Trust Score measures data reliability based on source quality, consistency across systems, and match confidence.',
+                          child: _buildScoreChip('Trust', entity.trustScore,
+                              AppColors.primary),
+                        ),
                         const SizedBox(width: 12),
                         _buildScoreChip('Quality', entity.qualityScore,
                             AppColors.info),
@@ -466,7 +472,7 @@ class _EntityDetailPageState extends State<EntityDetailPage>
                 children: [
                   OutlinedButton.icon(
                     onPressed: () =>
-                        context.go('/dashboard/lineage/${entity.id}'),
+                        context.go('/dashboard/lineage?entity_id=${entity.id}'),
                     icon: const Icon(Icons.account_tree_outlined, size: 16),
                     label: const Text('Lineage'),
                   ),

@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
@@ -857,37 +858,57 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         _ExportButton(
           icon: Icons.picture_as_pdf_outlined,
           label: 'Export PDF',
-          onTap: () => _showExportSnackBar('PDF'),
+          onTap: () { _triggerExport('pdf'); },
         ),
         const SizedBox(width: 12),
         _ExportButton(
           icon: Icons.table_chart_outlined,
           label: 'Export Excel',
-          onTap: () => _showExportSnackBar('Excel'),
+          onTap: () { _triggerExport('excel'); },
         ),
         const SizedBox(width: 12),
         _ExportButton(
           icon: Icons.share_outlined,
           label: 'Share',
-          onTap: () => _showExportSnackBar('share link'),
+          onTap: () { _triggerExport('share'); },
         ),
       ],
     ).animate(delay: 320.ms).fadeIn(duration: 400.ms);
   }
 
-  void _showExportSnackBar(String type) {
+  Future<void> _triggerExport(String format) async {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Generating $type report...'),
+      const SnackBar(
+        content: Text('Preparing export...'),
         backgroundColor: AppColors.cardSurface,
         behavior: SnackBarBehavior.floating,
-        action: SnackBarAction(
-          label: 'Dismiss',
-          textColor: AppColors.primary,
-          onPressed: () {},
-        ),
       ),
     );
+    try {
+      await ApiClient().post(
+        '/v1/analytics/export',
+        data: {'format': format, 'period': _period},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Report queued — check your email or notification center'),
+            backgroundColor: AppColors.cardSurface,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Export not available yet'),
+            backgroundColor: AppColors.cardSurface,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 }
 
