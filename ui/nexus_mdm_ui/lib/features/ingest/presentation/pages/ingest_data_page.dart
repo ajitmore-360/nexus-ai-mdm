@@ -169,12 +169,17 @@ class _IngestDataPageState extends State<IngestDataPage>
     if (ok) {
       final processed = result['processed'] as int? ?? 0;
       final failed    = result['failed']    as int? ?? 0;
-      _setResult(
-        'Imported $processed record${processed == 1 ? '' : 's'}'
-        '${failed > 0 ? ' ($failed failed)' : ''}.'
-        '${jobId != null ? '  Job: ${jobId.substring(0, 8)}…' : ''}',
-        isError: false,
-      );
+      final errors    = (result['errors'] as List<dynamic>? ?? [])
+          .whereType<String>()
+          .toList();
+      final allFailed = processed == 0 && failed > 0;
+      final msg = allFailed
+          ? 'Import failed — 0 of $failed record${failed == 1 ? '' : 's'} saved.'
+            '${errors.isNotEmpty ? '\n${errors.first}' : ''}'
+          : 'Imported $processed record${processed == 1 ? '' : 's'}'
+            '${failed > 0 ? ' ($failed failed)' : ''}.'
+            '${jobId != null ? '  Job: ${jobId.substring(0, 8)}…' : ''}';
+      _setResult(msg, isError: allFailed);
       _loadRecentJobs();
     } else {
       _setResult(data?['error']?.toString() ?? 'Import failed.', isError: true);

@@ -47,7 +47,7 @@ use routes::{
         enqueue_distribution, evaluate_policy, execute_merge, gdpr_access, gdpr_erasure,
         get_distribution_job, get_entity_by_id, get_entity_lineage,
         get_match_review_queue, get_policy_weights,
-        ingest_batch, ingest_csv, ingest_entities, list_ingest_jobs, get_ingest_job,
+        ingest_batch, ingest_csv, ingest_csv_upload, ingest_entities, list_ingest_jobs, get_ingest_job,
         // golden records
         list_golden_records, get_golden_record, patch_golden_record_attributes,
         // notification webhooks
@@ -484,6 +484,7 @@ async fn main() {
             .route("/ingest/batch",                      post(ingest_batch))
             .route("/ingest/entities",                   post(ingest_entities))
             .route("/ingest/csv",                        post(ingest_csv))
+            .route("/ingest/csv/upload",                 post(ingest_csv_upload))
             .route("/golden-records/:id/attributes",     patch(patch_golden_record_attributes))
             .route("/policy/consent",                    post(record_consent))
             .route("/policy/consent/:id/withdraw",       post(withdraw_consent))

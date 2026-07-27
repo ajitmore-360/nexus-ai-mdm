@@ -37,6 +37,7 @@ impl AppState {
         let processor = Arc::new(IngestProcessor::new(
             http.clone(),
             settings.mdm_core_url.clone(),
+            settings.mdm_core_api_token.clone(),
         ));
 
         Self {

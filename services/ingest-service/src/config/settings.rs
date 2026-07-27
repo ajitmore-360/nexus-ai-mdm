@@ -42,6 +42,10 @@ pub struct IngestSettings {
 
     /// Number of parallel worker tasks consuming the ingest.batch queue.
     pub worker_concurrency: usize,
+
+    /// Service-to-service bearer token sent to MDM-Core on every entity write.
+    /// Must match the API_BEARER_TOKEN configured on mdm-core.
+    pub mdm_core_api_token: Option<String>,
 }
 
 impl IngestSettings {
@@ -101,6 +105,10 @@ impl IngestSettings {
                 .unwrap_or_else(|_| "4".to_string())
                 .parse::<usize>()
                 .context("INGEST_WORKER_CONCURRENCY must be a positive integer")?,
+
+            mdm_core_api_token: std::env::var("API_BEARER_TOKEN")
+                .ok()
+                .filter(|s| !s.is_empty()),
         })
     }
 }

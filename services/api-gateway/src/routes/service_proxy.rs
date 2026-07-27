@@ -560,6 +560,50 @@ pub async fn ingest_csv(
     forward_post_ingest(&state.services.http, &state.settings.ingest_service_url, "/ingest/csv", &headers, body).await
 }
 
+/// POST /ingest/csv/upload — multipart/form-data file upload.
+///
+/// Forwards the raw multipart body to the ingest service unchanged.
+/// Content-Type (including boundary) is preserved so the ingest service
+/// can parse the fields and file.
+pub async fn ingest_csv_upload(
+    State(state): State<AppState>,
+    headers:      HeaderMap,
+    body:         Bytes,
+) -> Response {
+    let url = format!("{}/ingest/csv/upload", state.settings.ingest_service_url.trim_end_matches('/'));
+
+    let content_type = headers
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("multipart/form-data")
+        .to_owned();
+
+    let mut req = state.services.http
+        .post(&url)
+        .header("content-type", content_type)
+        .body(body.to_vec());
+
+    for (k, v) in headers.iter() {
+        let key = k.as_str();
+        if matches!(key, "authorization" | "x-tenant-id" | "x-user-id" | "x-user-role"
+                       | "x-correlation-id" | "x-request-id" | "traceparent" | "tracestate") {
+            if let Ok(v) = v.to_str() { req = req.header(key, v); }
+        }
+    }
+
+    match req.send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            let b: Value = resp.json().await.unwrap_or(Value::Null);
+            (status, Json(b)).into_response()
+        }
+        Err(e) => {
+            tracing::error!(error=%e, url=%url, "ingest-service csv upload failed");
+            (StatusCode::BAD_GATEWAY, Json(json!({ "success": false, "error": "upstream unavailable" }))).into_response()
+        }
+    }
+}
+
 pub async fn list_ingest_jobs(
     State(state): State<AppState>,
     headers:      HeaderMap,

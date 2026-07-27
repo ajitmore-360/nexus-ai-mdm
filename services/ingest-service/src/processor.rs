@@ -46,16 +46,18 @@ const INTERNAL_FIELDS: &[&str] = &[
 /// 3. Entity building  — convert mapped fields → `CanonicalEntity`
 /// 4. MDM-Core write   — POST /entities to persist and trigger matching
 pub struct IngestProcessor {
-    http:         Client,
-    mdm_core_url: String,
-    normalizer:   Normalizer,
+    http:               Client,
+    mdm_core_url:       String,
+    mdm_core_api_token: Option<String>,
+    normalizer:         Normalizer,
 }
 
 impl IngestProcessor {
-    pub fn new(http: Client, mdm_core_url: String) -> Self {
+    pub fn new(http: Client, mdm_core_url: String, mdm_core_api_token: Option<String>) -> Self {
         Self {
             http,
             mdm_core_url,
+            mdm_core_api_token,
             normalizer: Normalizer::new(),
         }
     }
@@ -112,13 +114,15 @@ impl IngestProcessor {
 
             let url = format!("{}/entities", self.mdm_core_url.trim_end_matches('/'));
 
-            match self.http
+            let mut mdm_req = self.http
                 .post(&url)
                 .header("x-tenant-id", batch.tenant_id.to_string())
                 .header("x-source-system", &normalised.source_system)
-                .json(&request)
-                .send()
-                .await
+                .json(&request);
+            if let Some(ref token) = self.mdm_core_api_token {
+                mdm_req = mdm_req.header("authorization", format!("Bearer {}", token));
+            }
+            match mdm_req.send().await
             {
                 Ok(resp) if resp.status().is_success() => {
                     if let Ok(body) = resp.json::<serde_json::Value>().await {
@@ -222,12 +226,14 @@ impl IngestProcessor {
         let url = format!("{}/entities/ingest-bulk", self.mdm_core_url.trim_end_matches('/'));
         let payload = serde_json::json!({ "entities": entities });
 
-        match self.http
+        let mut bulk_req = self.http
             .post(&url)
             .header("x-tenant-id", batch.tenant_id.to_string())
-            .json(&payload)
-            .send()
-            .await
+            .json(&payload);
+        if let Some(ref token) = self.mdm_core_api_token {
+            bulk_req = bulk_req.header("authorization", format!("Bearer {}", token));
+        }
+        match bulk_req.send().await
         {
             Ok(resp) if resp.status().is_success() => {
                 if let Ok(body) = resp.json::<serde_json::Value>().await {
