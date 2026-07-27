@@ -1399,7 +1399,13 @@ async fn main() {
     // update delivery status.
     tokio::spawn(workers::webhook_delivery::run(state.db.clone()));
 
-    info!("Background workers started (license_expiry, webhook_delivery)");
+    // Entity match: consumes ENTITY_MATCH tasks from Redis and runs the matching
+    // engine for each ingested entity; notifies Data Owners when review is needed.
+    if let Some(ref tq) = state.task_queue {
+        tokio::spawn(workers::entity_match::run(Arc::clone(tq), Arc::clone(&state)));
+    }
+
+    info!("Background workers started (license_expiry, webhook_delivery, entity_match)");
 
     //
     // ====================================
