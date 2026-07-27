@@ -679,6 +679,19 @@ class _MatchReviewPageState extends State<MatchReviewPage>
             ),
           ),
           const SizedBox(width: 16),
+          // Open in Merge Studio
+          OutlinedButton.icon(
+            onPressed: (!_fieldsLoading && _source.entityId != '—' && _candidate.entityId != '—')
+                ? () => context.go('/dashboard/merge/${_source.entityId}/${_candidate.entityId}')
+                : null,
+            icon: const Icon(Icons.call_merge_rounded, size: 16),
+            label: const Text('Merge Studio'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              textStyle: AppTextStyles.buttonMedium,
+            ),
+          ),
+          const SizedBox(width: 8),
           // Defer
           TextButton.icon(
             onPressed: _isSubmitting ? null : _handleDefer,

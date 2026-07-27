@@ -294,6 +294,14 @@ pub async fn create_entities_bulk(
         );
     }
 
+    // Kick off completeness-based trust score recalculation for every inserted entity.
+    for &eid in &entity_ids {
+        state.data_quality_service.compute_and_update_background(
+            tenant_ctx.tenant_id,
+            eid,
+        );
+    }
+
     // Enqueue async matching and embedding for each successfully inserted entity.
     if let Some(queue) = &state.task_queue {
         for &eid in &entity_ids {

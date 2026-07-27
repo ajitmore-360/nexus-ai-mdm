@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/auth/auth_manager.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -1206,13 +1207,9 @@ class _MatchQueuePageState extends State<MatchQueuePage>
   }
 
   void _showMatchDetail(ReviewItem item) {
-    showDialog(
-      context: context,
-      builder: (context) => _ReviewItemDetailDialog(
-        item: item,
-        onApprove: () => _approveItem(item),
-        onReject: () => _rejectItem(item),
-      ),
+    context.pushNamed(
+      'match-review',
+      pathParameters: {'id': item.requestId},
     );
   }
 
@@ -1228,183 +1225,6 @@ class _MatchQueuePageState extends State<MatchQueuePage>
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
   }
-}
-
-// ---------------------------------------------------------------------------
-// Detail dialog (adapted for ReviewItem)
-// ---------------------------------------------------------------------------
-
-class _ReviewItemDetailDialog extends StatelessWidget {
-  final ReviewItem item;
-  final VoidCallback onApprove;
-  final VoidCallback onReject;
-
-  const _ReviewItemDetailDialog({
-    required this.item,
-    required this.onApprove,
-    required this.onReject,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      child: ConstrainedBox(
-        constraints:
-            const BoxConstraints(maxWidth: 720, maxHeight: 600),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Text('Match Review', style: AppTextStyles.titleLarge),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '${item.sourceEntityName} ↔ ${item.targetEntityName}',
-                style: AppTextStyles.headlineSmall,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Overall score: ${(item.overallScore * 100).round()}%'
-                '${item.entityType.isNotEmpty ? " \xb7 ${item.entityType}" : ""}',
-                style: AppTextStyles.bodySmall,
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: item.fieldMatches.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No field-level breakdown available.',
-                          style: AppTextStyles.bodySmall,
-                        ),
-                      )
-                    : ListView(
-                        children:
-                            item.fieldMatches.map((fm) {
-                          return Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: 12),
-                            child: Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: AppColors.navyBackground,
-                                borderRadius:
-                                    BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: AppColors.divider),
-                              ),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: 100,
-                                    child: Text(
-                                      _cap(fm.field),
-                                      style:
-                                          AppTextStyles.labelMedium,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(fm.sourceValue,
-                                            style: AppTextStyles
-                                                .bodySmall
-                                                .copyWith(
-                                                    color: AppColors
-                                                        .primaryText)),
-                                        Text(fm.targetValue,
-                                            style: AppTextStyles
-                                                .bodySmall),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Container(
-                                    padding:
-                                        const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: fm.score >= 0.9
-                                          ? AppColors.primary
-                                              .withValues(alpha: 0.1)
-                                          : AppColors.warning
-                                              .withValues(alpha: 0.1),
-                                      borderRadius:
-                                          BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      '${(fm.score * 100).round()}%',
-                                      style: AppTextStyles.labelMedium
-                                          .copyWith(
-                                        color: fm.score >= 0.9
-                                            ? AppColors.primary
-                                            : AppColors.warning,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      onReject();
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.error,
-                      side:
-                          const BorderSide(color: AppColors.error),
-                    ),
-                    child: const Text('Not a Duplicate'),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      onApprove();
-                    },
-                    icon: const Icon(Icons.merge_type_rounded,
-                        size: 16),
-                    label: const Text('Confirm Merge'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _cap(String s) =>
-      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 }
 
 // ---------------------------------------------------------------------------

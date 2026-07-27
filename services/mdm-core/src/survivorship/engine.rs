@@ -1379,35 +1379,18 @@ fn calculate_record_completeness(
 // ========================================
 //
 
-fn calculate_trust_score(
-    entities: &[CanonicalEntity],
-) -> f32 {
-
-    let mut total = 0.0;
-
-    let mut count = 0;
-
+fn calculate_trust_score(entities: &[CanonicalEntity]) -> f32 {
+    let mut total = 0.0f32;
+    let mut count = 0usize;
     for entity in entities {
-
-        if let Some(value) =
-            entity
-                .metadata
-                .get("trust_score")
-        {
-            if let Some(score) =
-                value.as_f64()
-            {
-                total += score as f32;
-
-                count += 1;
-            }
+        if let Some(score) = entity.trust_score {
+            total += score;
+            count += 1;
         }
     }
-
     if count == 0 {
         return 0.5;
     }
-
     total / count as f32
 }
 

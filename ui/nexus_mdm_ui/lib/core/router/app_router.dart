@@ -267,7 +267,7 @@ class AppRouter {
             name: 'merge-studio',
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
-              child: const MatchQueuePage(),
+              child: const MatchQueuePage(mergeMode: true),
             ),
           ),
           GoRoute(
