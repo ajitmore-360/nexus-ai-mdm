@@ -186,29 +186,52 @@ class _GovernancePageState extends State<GovernancePage>
     _loadAll();
   }
 
+  // Fetch each endpoint independently so a single failure (e.g. a backend 500
+  // on survivorship-suggestions) does not blank the entire page.
+  Future<Map<String, dynamic>?> _safeGet(ApiClient api, String path) async {
+    try {
+      final r = await api.get<Map<String, dynamic>>(path);
+      return r.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _loadAll() async {
     final api = GetIt.instance<ApiClient>();
-    try {
-      final results = await Future.wait([
-        api.get<Map<String, dynamic>>(AppConstants.policyRulesPath),
-        api.get<Map<String, dynamic>>(AppConstants.survivorshipSuggestionsPath),
-        api.get<Map<String, dynamic>>(AppConstants.gdprRequestsPath),
-      ]);
 
-      if (!mounted) return;
+    final results = await Future.wait([
+      _safeGet(api, AppConstants.policyRulesPath),
+      _safeGet(api, AppConstants.survivorshipSuggestionsPath),
+      _safeGet(api, AppConstants.gdprRequestsPath),
+    ]);
 
-      final rulesRaw    = (results[0].data?['data'] as List<dynamic>?) ?? [];
-      final suggestRaw  = (results[1].data?['data'] as List<dynamic>?) ?? [];
-      final gdprRaw     = (results[2].data?['data'] as List<dynamic>?) ?? [];
+    if (!mounted) return;
 
-      setState(() {
-        _rules       = rulesRaw.map((e) => PolicyRule.fromJson(e as Map<String, dynamic>)).toList();
-        _suggestions = suggestRaw.map((e) => SurvivorsipSuggestion.fromJson(e as Map<String, dynamic>)).toList();
-        _gdprRequests = gdprRaw.map((e) => GdprRequest.fromJson(e as Map<String, dynamic>)).toList();
-        _isLoading   = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+    final rulesData   = results[0];
+    final suggestData = results[1];
+    final gdprData    = results[2];
+
+    setState(() {
+      _rules = (rulesData?['data'] as List<dynamic>? ?? [])
+          .map((e) => PolicyRule.fromJson(e as Map<String, dynamic>)).toList();
+      _suggestions = (suggestData?['data'] as List<dynamic>? ?? [])
+          .map((e) => SurvivorsipSuggestion.fromJson(e as Map<String, dynamic>)).toList();
+      _gdprRequests = (gdprData?['data'] as List<dynamic>? ?? [])
+          .map((e) => GdprRequest.fromJson(e as Map<String, dynamic>)).toList();
+      _isLoading = false;
+    });
+
+    if (rulesData == null && suggestData == null && gdprData == null) {
+      // All three failed — likely an expired session already handled by the
+      // auth interceptor (redirect to login). Don't show a redundant message.
+      return;
+    }
+    if (rulesData == null || suggestData == null || gdprData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Some governance data could not be loaded — try refreshing the page'),
+        duration: Duration(seconds: 4),
+      ));
     }
   }
 

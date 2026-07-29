@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../auth/auth_manager.dart';
@@ -145,6 +147,16 @@ class ApiClient {
 /// Injects auth token and tenant ID from encrypted secure storage on every request.
 /// Uses [SecureStorage] (Keychain/Keystore) — never plaintext SharedPreferences.
 class _AuthInterceptor extends Interceptor {
+  // Single-inflight token refresh lock.
+  // When multiple concurrent requests each hit a 401, the first one becomes
+  // the "leader" and performs the actual refresh. All subsequent 401s become
+  // "waiters" — they await the leader's Completer and then retry with the
+  // new token rather than each launching their own refresh attempt.
+  // This prevents race conditions where concurrent refreshes each try to
+  // consume the same (single-use) refresh token, causing all-but-one to fail
+  // and trigger spurious clearAuth / onUnauthorized redirects.
+  static Completer<void>? _refreshLock;
+
   @override
   void onRequest(
       RequestOptions options, RequestInterceptorHandler handler) async {
@@ -172,64 +184,94 @@ class _AuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    if (err.response?.statusCode == 401) {
-      // Token expired — attempt silent refresh using secure-stored refresh token.
-      // All failure paths (no token, refresh error, no new token) kick the user
-      // to the login screen rather than propagating a raw 401 to the UI.
-      try {
-        final refreshToken = await SecureStorage.read(AppConstants.storageRefreshToken);
-        if (refreshToken != null && refreshToken.isNotEmpty) {
-          // Use a dedicated Dio instance with explicit timeouts so the refresh
-          // request itself cannot hang indefinitely.
-          final refreshDio = Dio(BaseOptions(
-            baseUrl:        AppConstants.baseUrl,
-            connectTimeout: const Duration(milliseconds: AppConstants.connectTimeout),
-            receiveTimeout: const Duration(milliseconds: AppConstants.receiveTimeout),
-          ));
-          final response = await refreshDio.post(
-            AppConstants.refreshTokenPath,
-            data: {'refresh_token': refreshToken},
-          );
-          final data = response.data['data'] as Map<String, dynamic>?
-              ?? response.data as Map<String, dynamic>? ?? {};
-          final newToken   = data['access_token']  as String?;
-          final newRefresh = data['refresh_token'] as String?;
-          if (newToken != null && newToken.isNotEmpty) {
-            await SecureStorage.write(AppConstants.storageAccessToken, newToken);
-            if (newRefresh != null && newRefresh.isNotEmpty) {
-              await SecureStorage.write(AppConstants.storageRefreshToken, newRefresh);
-            }
-            err.requestOptions.headers[AppConstants.authHeaderKey] =
-                '${AppConstants.authHeaderPrefix}$newToken';
-            // Retry with new token — a non-401 4xx here is a normal error,
-            // not a session failure, so pass it through rather than logging out.
-            try {
-              final retryDio = Dio(BaseOptions(
-                baseUrl:        AppConstants.baseUrl,
-                connectTimeout: const Duration(milliseconds: AppConstants.connectTimeout),
-                receiveTimeout: const Duration(milliseconds: AppConstants.receiveTimeout),
-              ));
-              final clonedRequest = await retryDio.fetch(err.requestOptions);
-              return handler.resolve(clonedRequest);
-            } on DioException catch (retryErr) {
-              return handler.next(retryErr);
-            }
-          }
-          // Refresh succeeded but returned no access_token — session is broken.
-        }
-        // No refresh token in storage — session is gone.
-      } catch (_) {
-        // Refresh request threw (network error, 401 on refresh, etc.).
-      }
-      // All 401 failure paths land here: clear auth and redirect to login.
-      // IMPORTANT: handler.reject must be called — not calling it leaves the
-      // Dio Future pending forever (indefinite spinner in the UI).
-      await SecureStorage.clearAuth();
-      AuthManager.onUnauthorized?.call();
-      handler.reject(err);
+    if (err.response?.statusCode != 401) {
+      handler.next(err);
       return;
     }
-    handler.next(err);
+
+    // ── Waiter path ────────────────────────────────────────────────────────
+    // A refresh is already in flight — wait for the leader to finish, then
+    // retry this request with whatever token was stored (new on success, gone
+    // on failure). The lock's completeError signals failure so waiters reject.
+    if (_refreshLock != null) {
+      try {
+        await _refreshLock!.future;
+        // Leader refresh succeeded — pick up the freshly stored token.
+        final token = await SecureStorage.read(AppConstants.storageAccessToken);
+        if (token != null && token.isNotEmpty) {
+          err.requestOptions.headers[AppConstants.authHeaderKey] =
+              '${AppConstants.authHeaderPrefix}$token';
+        }
+        final tenantId = await AuthManager.getTenantId();
+        if (tenantId != null && tenantId.isNotEmpty) {
+          err.requestOptions.headers[AppConstants.tenantHeaderKey] = tenantId;
+        }
+        final retryDio = Dio(BaseOptions(
+          baseUrl:        AppConstants.baseUrl,
+          connectTimeout: const Duration(milliseconds: AppConstants.connectTimeout),
+          receiveTimeout: const Duration(milliseconds: AppConstants.receiveTimeout),
+        ));
+        handler.resolve(await retryDio.fetch(err.requestOptions));
+      } catch (_) {
+        // Leader refresh failed — leader already cleared auth and redirected.
+        handler.reject(err);
+      }
+      return;
+    }
+
+    // ── Leader path ────────────────────────────────────────────────────────
+    // Claim the lock before the first await so no concurrent 401 can also
+    // become a leader. The lock is non-null until the refresh resolves.
+    _refreshLock = Completer<void>();
+
+    try {
+      final refreshToken = await SecureStorage.read(AppConstants.storageRefreshToken);
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        final refreshDio = Dio(BaseOptions(
+          baseUrl:        AppConstants.baseUrl,
+          connectTimeout: const Duration(milliseconds: AppConstants.connectTimeout),
+          receiveTimeout: const Duration(milliseconds: AppConstants.receiveTimeout),
+        ));
+        final response = await refreshDio.post(
+          AppConstants.refreshTokenPath,
+          data: {'refresh_token': refreshToken},
+        );
+        final data = response.data['data'] as Map<String, dynamic>?
+            ?? response.data as Map<String, dynamic>? ?? {};
+        final newToken   = data['access_token']  as String?;
+        final newRefresh = data['refresh_token'] as String?;
+        if (newToken != null && newToken.isNotEmpty) {
+          await SecureStorage.write(AppConstants.storageAccessToken, newToken);
+          if (newRefresh != null && newRefresh.isNotEmpty) {
+            await SecureStorage.write(AppConstants.storageRefreshToken, newRefresh);
+          }
+          _refreshLock!.complete();   // signal waiters: refresh succeeded
+          _refreshLock = null;
+          err.requestOptions.headers[AppConstants.authHeaderKey] =
+              '${AppConstants.authHeaderPrefix}$newToken';
+          try {
+            final retryDio = Dio(BaseOptions(
+              baseUrl:        AppConstants.baseUrl,
+              connectTimeout: const Duration(milliseconds: AppConstants.connectTimeout),
+              receiveTimeout: const Duration(milliseconds: AppConstants.receiveTimeout),
+            ));
+            handler.resolve(await retryDio.fetch(err.requestOptions));
+          } on DioException catch (retryErr) {
+            handler.next(retryErr);
+          }
+          return;
+        }
+      }
+    } catch (_) {
+      // Refresh request threw (network error, 401 on /auth/refresh, etc.).
+    }
+
+    // All leader failure paths land here: notify waiters, clear auth, redirect.
+    _refreshLock!.completeError('auth_refresh_failed');
+    _refreshLock = null;
+    await SecureStorage.clearAuth();
+    AuthManager.onUnauthorized?.call();
+    handler.reject(err);
   }
 }
 

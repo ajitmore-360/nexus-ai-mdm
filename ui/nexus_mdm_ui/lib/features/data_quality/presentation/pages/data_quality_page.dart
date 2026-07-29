@@ -436,7 +436,7 @@ class _DataQualityPageState extends State<DataQualityPage>
           'logical_op':  rule.logicalOp,
           'action':      rule.action.name,
           'severity':    rule.severity.name,
-          'priority':    rule.violations, // reuse field as priority placeholder
+          'priority':    rule.violations,
         },
         options: opts,
       );
@@ -448,7 +448,24 @@ class _DataQualityPageState extends State<DataQualityPage>
           if (idx >= 0) _rules[idx] = serverRule;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is DioException
+          ? ApiException.fromDioException(e).message
+          : e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(children: [
+          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 18),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Failed to save rule: $msg', style: AppTextStyles.bodyMedium)),
+        ]),
+        backgroundColor: AppColors.cardSurface,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+      ));
+      // Roll back the optimistic insert so the UI stays in sync with the server.
+      if (mounted) setState(() => _rules.removeWhere((r) => r.id == rule.id));
+    }
   }
 
   Future<void> _updateRuleApi(_QualityRule rule) async {
@@ -469,7 +486,22 @@ class _DataQualityPageState extends State<DataQualityPage>
         },
         options: opts,
       );
-    } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is DioException
+          ? ApiException.fromDioException(e).message
+          : e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(children: [
+          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 18),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Failed to update rule: $msg', style: AppTextStyles.bodyMedium)),
+        ]),
+        backgroundColor: AppColors.cardSurface,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+      ));
+    }
   }
 
   Future<void> _toggleRuleActive(_QualityRule rule, bool active) async {
@@ -1611,12 +1643,14 @@ class _DataQualityPageState extends State<DataQualityPage>
             const SizedBox(width: 8),
             ElevatedButton(
               onPressed: () {
+                final rule = _aiPreview!;
                 setState(() {
-                  _rules.insert(0, _aiPreview!);
+                  _rules.insert(0, rule);
                   _aiPreview = null;
                   _aiCtrl.clear();
                   _builderTab = 1; // show Manual Builder with new rule
                 });
+                _createRuleApi(rule);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
@@ -1952,19 +1986,39 @@ class _DataQualityPageState extends State<DataQualityPage>
     );
   }
 
+  Future<void> _reloadViolations() async {
+    final client = GetIt.instance<ApiClient>();
+    final opts = await _authOpts();
+    try {
+      final vResp = await client.get<Map<String, dynamic>>(
+        AppConstants.qualityViolationsPath,
+        options: opts,
+      );
+      final vitems = (vResp.data?['data'] as List<dynamic>?) ?? [];
+      if (mounted) {
+        setState(() {
+          _violations = vitems
+              .map((j) => _violationFromJson(j as Map<String, dynamic>))
+              .toList();
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> _runAllRules() async {
+    final activeCount = _rules.where((r) => r.isActive).length;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(children: [
           const Icon(Icons.play_arrow_rounded, color: AppColors.primary, size: 18),
           const SizedBox(width: 10),
           Text(
-              'Running ${_rules.where((r) => r.isActive).length} rules against all entitiesâ€¦',
+              'Running $activeCount rules against all entities…',
               style: AppTextStyles.bodyMedium),
         ]),
         backgroundColor: AppColors.cardSurface,
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 4),
       ),
     );
     try {
@@ -1974,7 +2028,41 @@ class _DataQualityPageState extends State<DataQualityPage>
         '${AppConstants.qualityRulesPath}/run',
         options: opts,
       );
-    } catch (_) {}
+      // The backend runs rules asynchronously; wait a few seconds then reload.
+      await Future.delayed(const Duration(seconds: 5));
+      await _reloadViolations();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(children: [
+            const Icon(Icons.check_circle_outline_rounded,
+                color: AppColors.primary, size: 18),
+            const SizedBox(width: 10),
+            Text(
+                'Rule run complete — ${_violations.where((v) => !v.resolved).length} open violations',
+                style: AppTextStyles.bodyMedium),
+          ]),
+          backgroundColor: AppColors.cardSurface,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is DioException
+          ? ApiException.fromDioException(e).message
+          : e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(children: [
+          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 18),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Failed to run rules: $msg', style: AppTextStyles.bodyMedium)),
+        ]),
+        backgroundColor: AppColors.cardSurface,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+      ));
+    }
   }
 }
 

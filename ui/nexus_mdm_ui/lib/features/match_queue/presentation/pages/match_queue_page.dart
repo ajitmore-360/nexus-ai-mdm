@@ -1,7 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/auth/auth_manager.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -30,9 +32,10 @@ class MatchQueuePage extends StatefulWidget {
 class _MatchQueuePageState extends State<MatchQueuePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late final ApiClient _api;
   late final MatchQueueRepository _repo;
-
   late final EntityTypeRepository _entityTypeRepo;
+  bool _triggeringMatch = false;
   bool _isLoading = true;
   List<ReviewItem> _allItems = [];
   QueueMetrics? _metrics;
@@ -46,9 +49,9 @@ class _MatchQueuePageState extends State<MatchQueuePage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    final api = ApiClient();
-    _repo = MatchQueueRepository(client: api);
-    _entityTypeRepo = EntityTypeRepository(api);
+    _api = ApiClient();
+    _repo = MatchQueueRepository(client: _api);
+    _entityTypeRepo = EntityTypeRepository(_api);
     _initStewardScopeAndLoad();
   }
 
@@ -90,6 +93,59 @@ class _MatchQueuePageState extends State<MatchQueuePage>
             .toList();
       }
       setState(() => _domainOptions = options);
+    }
+  }
+
+  Future<void> _triggerMatching() async {
+    if (_triggeringMatch) return;
+    setState(() => _triggeringMatch = true);
+    try {
+      final tenantId = await AuthManager.getTenantId() ?? '';
+      final opts = tenantId.isNotEmpty
+          ? Options(headers: {AppConstants.tenantHeaderKey: tenantId})
+          : null;
+      final resp = await _api.post<Map<String, dynamic>>(
+        '${AppConstants.matchPath}/trigger-matching',
+        options: opts,
+      );
+      final msg = (resp.data?['message'] as String?) ??
+          'Matching queued. Refresh in a few seconds.';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(children: [
+          const Icon(Icons.hub_rounded, color: AppColors.primary, size: 18),
+          const SizedBox(width: 10),
+          Expanded(child: Text(msg, style: AppTextStyles.bodyMedium)),
+        ]),
+        backgroundColor: AppColors.cardSurface,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Refresh',
+          textColor: AppColors.primary,
+          onPressed: _loadData,
+        ),
+      ));
+      // Auto-refresh after worker has had time to process.
+      await Future.delayed(const Duration(seconds: 5));
+      if (mounted) _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is DioException
+          ? (e.response?.data?['error'] as String? ?? e.message ?? e.toString())
+          : e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Row(children: [
+          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 18),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Failed to trigger matching: $msg', style: AppTextStyles.bodyMedium)),
+        ]),
+        backgroundColor: AppColors.cardSurface,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+      ));
+    } finally {
+      if (mounted) setState(() => _triggeringMatch = false);
     }
   }
 
@@ -245,6 +301,17 @@ class _MatchQueuePageState extends State<MatchQueuePage>
             icon: const Icon(Icons.filter_list_rounded, size: 16),
             label: const Text('Refresh'),
           ).animate(delay: 200.ms).fadeIn(),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: _triggeringMatch ? null : _triggerMatching,
+            icon: _triggeringMatch
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.hub_rounded, size: 16),
+            label: Text(_triggeringMatch ? 'Running…' : 'Run Matching'),
+          ).animate(delay: 220.ms).fadeIn(),
           const SizedBox(width: 8),
           ElevatedButton.icon(
             onPressed: _selectedIds.isNotEmpty ? _bulkApprove : null,

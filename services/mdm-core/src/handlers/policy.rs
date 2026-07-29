@@ -117,10 +117,12 @@ pub async fn get_survivorship_suggestions(State(state): State<Arc<AppState>>) ->
     .await
     {
         Ok(r) => r,
-        Err(e) => return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "success": false, "error": e.to_string() })),
-        ).into_response(),
+        // Table may not exist yet on a fresh install — return empty list rather
+        // than a 500 that breaks the whole governance page.
+        Err(e) => {
+            tracing::warn!("survivorship_field_decisions unavailable: {e}");
+            vec![]
+        }
     };
 
     let mut seen: std::collections::HashSet<String> = Default::default();

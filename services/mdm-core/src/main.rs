@@ -109,7 +109,7 @@ use handlers::{
         get_golden_record, list_golden_records, patch_golden_record_attributes,
     },
     lineage::{get_entity_lineage, lineage_graph, lineage_stats, list_lineage, record_lineage},
-    matching::execute_match,
+    matching::{execute_match, trigger_bulk_matching},
     merge::execute_merge,
     policy::{get_weights, update_weights, get_survivorship_suggestions, list_gdpr_requests},
     quality_analytics::{
@@ -642,6 +642,7 @@ fn build_router(
         .route("/lineage/graph",          axum::routing::get(lineage_graph))
         .route("/lineage/stats",          axum::routing::get(lineage_stats))
         .route("/match",                  post(execute_match))
+        .route("/match/trigger-matching", post(trigger_bulk_matching))
         .route("/match/review-queue",     get(get_review_queue))
         .route("/match/:request_id/candidates/:candidate_id/approve", axum::routing::post(approve_match))
         .route("/match/:request_id/candidates/:candidate_id/reject",  axum::routing::post(reject_match))
