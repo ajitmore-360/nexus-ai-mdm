@@ -40,6 +40,7 @@ impl BlockingStrategy for VectorBlocker {
         &self,
         tenant_id: Uuid,
         entity:    &CanonicalEntity,
+        _fields:   Option<&[String]>,
     ) -> anyhow::Result<HashSet<Uuid>> {
         // Query ANN neighbours using the source entity's stored embedding.
         // The <=> operator is cosine distance (pgvector). IVFFlat index makes

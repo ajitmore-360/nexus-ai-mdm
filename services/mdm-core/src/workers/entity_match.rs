@@ -39,6 +39,55 @@ pub async fn run(task_queue: Arc<TaskQueue>, state: Arc<AppState>) {
     }
 }
 
+/// Return the appropriate blocking rules for a given entity type.
+///
+/// Rules are "strategy:field" or bare "strategy" tokens consumed by
+/// `CandidateGenerator::generate_candidates`.  An empty vec falls back to all
+/// strategies with their built-in default field lists (safe for unknown types).
+fn blocking_rules_for(entity_type: &str) -> Vec<String> {
+    match entity_type {
+        "customer" | "person" | "individual" | "contact" => vec![
+            "exact:email".into(),
+            "exact:phone".into(),
+            "phonetic:legal_name".into(),
+            "phonetic:full_name".into(),
+            "canopy:legal_name".into(),
+            "canopy:full_name".into(),
+            "canopy:first_name".into(),
+            "canopy:last_name".into(),
+            "vector".into(),
+        ],
+        "vendor" | "supplier" | "partner" => vec![
+            "exact:tax_id".into(),
+            "exact:email".into(),
+            "exact:vendor_id".into(),
+            "phonetic:legal_name".into(),
+            "phonetic:company_name".into(),
+            "canopy:legal_name".into(),
+            "canopy:company_name".into(),
+            "vector".into(),
+        ],
+        "employee" | "staff" => vec![
+            "exact:email".into(),
+            "phonetic:full_name".into(),
+            "canopy:first_name".into(),
+            "canopy:last_name".into(),
+            "vector".into(),
+        ],
+        "company" | "organization" | "account" => vec![
+            "exact:tax_id".into(),
+            "exact:customer_id".into(),
+            "phonetic:legal_name".into(),
+            "phonetic:company_name".into(),
+            "canopy:legal_name".into(),
+            "canopy:company_name".into(),
+            "vector".into(),
+        ],
+        // Unknown entity type: empty → all strategies run with default fields.
+        _ => vec![],
+    }
+}
+
 async fn process(state: &Arc<AppState>, task: &azile_redis::queue::Task) -> anyhow::Result<()> {
     let entity_id = task.payload
         .get("entity_id")
@@ -71,7 +120,7 @@ async fn process(state: &Arc<AppState>, task: &azile_redis::queue::Task) -> anyh
         entity_type:            entity_type.clone(),
         entity,
         threshold:              None,
-        blocking_rules:         vec![],
+        blocking_rules:         blocking_rules_for(&entity_type),
         strategy:               MatchStrategy::Hybrid,
         ai_assisted:            true,
         explainability_enabled: false,

@@ -15,9 +15,12 @@ use contracts::mdm::entity::CanonicalEntity;
 pub trait BlockingStrategy: Send + Sync {
     fn name(&self) -> &'static str;
 
+    /// `fields` — when `Some`, restricts blocking to those attribute keys only.
+    /// `None` means use the strategy's built-in default field list.
     async fn find_candidates(
         &self,
         tenant_id: Uuid,
         entity: &CanonicalEntity,
+        fields: Option<&[String]>,
     ) -> anyhow::Result<HashSet<Uuid>>;
 }

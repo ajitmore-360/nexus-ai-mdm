@@ -23,15 +23,24 @@ impl CanopyBlocker {
         Self { repository }
     }
 
+    const DEFAULT_FIELDS: &'static [&'static str] =
+        &["name", "company_name", "legal_name", "first_name", "last_name"];
+
     fn token_keys(entity: &CanonicalEntity) -> Vec<String> {
+        Self::keys_for_fields(entity, Self::DEFAULT_FIELDS)
+    }
+
+    fn token_keys_for_fields(entity: &CanonicalEntity, fields: &[String]) -> Vec<String> {
+        let owned: Vec<&str> = fields.iter().map(|s| s.as_str()).collect();
+        Self::keys_for_fields(entity, &owned)
+    }
+
+    fn keys_for_fields(entity: &CanonicalEntity, allowed: &[&str]) -> Vec<String> {
         let mut keys = Vec::new();
 
         for attr in &entity.attributes {
             let field = attr.key.to_lowercase();
-            if !matches!(
-                field.as_str(),
-                "name" | "company_name" | "legal_name" | "first_name" | "last_name"
-            ) {
+            if !allowed.contains(&field.as_str()) {
                 continue;
             }
 
@@ -40,8 +49,6 @@ impl CanopyBlocker {
                 continue;
             }
 
-            // Each significant token (≥3 chars) becomes an independent key so
-            // partial-name overlaps still produce candidates.
             for token in value.split_whitespace() {
                 let t = token.trim_matches(|c: char| !c.is_alphanumeric());
                 if t.len() >= 3 {
@@ -64,8 +71,12 @@ impl BlockingStrategy for CanopyBlocker {
         &self,
         tenant_id: Uuid,
         entity: &CanonicalEntity,
+        fields: Option<&[String]>,
     ) -> anyhow::Result<HashSet<Uuid>> {
-        let keys = Self::token_keys(entity);
+        let keys = match fields {
+            Some(f) => Self::token_keys_for_fields(entity, f),
+            None    => Self::token_keys(entity),
+        };
 
         if keys.is_empty() {
             return Ok(HashSet::new());

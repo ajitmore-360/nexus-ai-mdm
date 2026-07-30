@@ -78,15 +78,28 @@ impl PhoneticBlocker {
         Self { repository }
     }
 
+    const DEFAULT_FIELDS: &'static [&'static str] =
+        &["name", "company_name", "legal_name", "full_name"];
+
     /// Generate Soundex-based phonetic blocking keys from a slice of entity attributes.
     /// Each significant name word produces one key: `PHONETIC:<SOUNDEX_CODE>`.
     /// `pub(crate)` so entity_repository can populate the blocking_keys table on create/update.
     pub(crate) fn generate_keys_from_attrs(attrs: &[EntityAttribute]) -> Vec<String> {
+        Self::keys_for_fields(attrs, Self::DEFAULT_FIELDS)
+    }
+
+    /// Soundex keys restricted to the caller-supplied field list.
+    pub(crate) fn generate_keys_for_fields(attrs: &[EntityAttribute], fields: &[String]) -> Vec<String> {
+        let owned: Vec<&str> = fields.iter().map(|s| s.as_str()).collect();
+        Self::keys_for_fields(attrs, &owned)
+    }
+
+    fn keys_for_fields(attrs: &[EntityAttribute], allowed: &[&str]) -> Vec<String> {
         let mut keys = HashSet::new();
 
         for attr in attrs {
             let field = attr.key.to_lowercase();
-            if !matches!(field.as_str(), "name" | "company_name" | "legal_name" | "full_name") {
+            if !allowed.contains(&field.as_str()) {
                 continue;
             }
 
@@ -125,8 +138,12 @@ impl BlockingStrategy for PhoneticBlocker {
         &self,
         tenant_id: Uuid,
         entity: &CanonicalEntity,
+        fields: Option<&[String]>,
     ) -> anyhow::Result<HashSet<Uuid>> {
-        let keys = Self::generate_keys(entity);
+        let keys = match fields {
+            Some(f) => Self::generate_keys_for_fields(&entity.attributes, f),
+            None    => Self::generate_keys(entity),
+        };
 
         if keys.is_empty() {
             return Ok(HashSet::new());

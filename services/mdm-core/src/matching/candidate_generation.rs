@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -60,17 +60,31 @@ impl CandidateGenerator {
         let mut generated_keys = Vec::<String>::new();
         let mut applied_rules  = Vec::<String>::new();
 
-        // ---- exact-key blocking (email, phone, tax_id, customer_id, vendor_id) ----
-        let exact_keys = generate_exact_keys(&request.entity);
-        if !exact_keys.is_empty() {
-            generated_keys.extend(exact_keys.clone());
-            applied_rules.push("deterministic".to_string());
+        // Parse blocking_rules into strategy → fields map.
+        // None means "run all strategies with their built-in default fields".
+        let rules_map: Option<HashMap<String, Vec<String>>> = if request.blocking_rules.is_empty() {
+            None
+        } else {
+            Some(parse_blocking_rules(&request.blocking_rules))
+        };
 
-            let exact_matches = self
-                .repository
-                .find_by_blocking_keys(request.tenant_id, &exact_keys, request.max_candidates)
-                .await?;
-            candidate_ids.extend(exact_matches);
+        // ---- exact-key blocking (email, phone, tax_id, customer_id, vendor_id) ----
+        let run_exact = rules_map.as_ref().map_or(true, |m| m.contains_key("exact"));
+        if run_exact {
+            let exact_fields = rules_map.as_ref()
+                .and_then(|m| m.get("exact"))
+                .filter(|v| !v.is_empty())
+                .map(|v| v.as_slice());
+            let exact_keys = generate_exact_keys(&request.entity, exact_fields);
+            if !exact_keys.is_empty() {
+                generated_keys.extend(exact_keys.clone());
+                applied_rules.push("deterministic".to_string());
+                let exact_matches = self
+                    .repository
+                    .find_by_blocking_keys(request.tenant_id, &exact_keys, request.max_candidates)
+                    .await?;
+                candidate_ids.extend(exact_matches);
+            }
         }
 
         // ---- pluggable strategies ----
@@ -80,7 +94,18 @@ impl CandidateGenerator {
                 continue;
             }
 
-            match strategy.find_candidates(request.tenant_id, &request.entity).await {
+            // When rules are configured, skip strategies not listed.
+            let fields_opt: Option<&[String]> = if let Some(ref rules) = rules_map {
+                match rules.get(strategy.name()) {
+                    None => continue,
+                    Some(f) if f.is_empty() => None,  // listed but no field filter → defaults
+                    Some(f) => Some(f.as_slice()),
+                }
+            } else {
+                None
+            };
+
+            match strategy.find_candidates(request.tenant_id, &request.entity, fields_opt).await {
                 Ok(ids) => {
                     applied_rules.push(strategy.name().to_string());
                     candidate_ids.extend(ids);
@@ -147,15 +172,37 @@ impl CandidateGenerator {
     }
 }
 
+/// Parse "strategy:field" or bare "strategy" tokens into a map of strategy → fields.
+/// An empty Vec for a key means "run this strategy with its default field list".
+fn parse_blocking_rules(rules: &[String]) -> HashMap<String, Vec<String>> {
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    for rule in rules {
+        let rule = rule.trim().to_lowercase();
+        if let Some((strat, field)) = rule.split_once(':') {
+            map.entry(strat.to_string()).or_default().push(field.to_string());
+        } else {
+            map.entry(rule).or_default();
+        }
+    }
+    map
+}
+
 /// Generates exact-match blocking keys for high-precision deterministic fields.
-/// Extracted as a free function so it can be reused without an instance.
-fn generate_exact_keys(entity: &CanonicalEntity) -> Vec<String> {
+/// `fields` — when `Some`, only emit keys for those attribute names; `None` uses
+/// the built-in defaults (email, phone, tax_id, customer_id, vendor_id).
+fn generate_exact_keys(entity: &CanonicalEntity, fields: Option<&[String]>) -> Vec<String> {
+    let allowed: Option<HashSet<&str>> = fields.map(|f| f.iter().map(|s| s.as_str()).collect());
     let mut keys = Vec::new();
 
     for attr in &entity.attributes {
         let field = attr.key.to_lowercase();
-        let value = attr.value.as_str().unwrap_or("").trim().to_lowercase();
+        if let Some(ref a) = allowed {
+            if !a.contains(field.as_str()) {
+                continue;
+            }
+        }
 
+        let value = attr.value.as_str().unwrap_or("").trim().to_lowercase();
         if value.is_empty() {
             continue;
         }
