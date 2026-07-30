@@ -105,6 +105,7 @@ use handlers::{
         list_attributes, list_entity_types, next_sequence, reorder_attributes,
         update_entity_type,
     },
+    blocking_rules::{get_blocking_rules, put_blocking_rules},
     golden_records::{
         get_golden_record, list_golden_records, patch_golden_record_attributes,
     },
@@ -724,7 +725,10 @@ fn build_router(
             delete(delete_attribute))
         .route("/entity-types/:code/next-sequence",
             get(next_sequence))
-        // â"€â"€ Domain-level policy overrides â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+        // ── Blocking rules config ────────────────────────────────────────────────
+        .route("/entity-types/:code/blocking-rules",
+            get(get_blocking_rules).put(put_blocking_rules))
+        // ── Domain-level policy overrides â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         .route("/domain-policies",
             get(list_domain_policies))
         .route("/domain-policies/:entity_type_code",

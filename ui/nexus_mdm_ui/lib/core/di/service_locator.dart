@@ -11,6 +11,7 @@ import '../../features/distribution/data/distribution_repository.dart';
 import '../../features/dashboard/data/dashboard_repository.dart';
 import '../../features/admin/data/admin_repository.dart';
 import '../../features/admin/data/entity_type_repository.dart';
+import '../../features/admin/data/blocking_rules_repository.dart';
 import '../../features/admin/data/source_systems_repository.dart';
 import '../../features/analytics/data/analytics_repository.dart';
 
@@ -64,6 +65,10 @@ Future<void> setupServiceLocator() async {
   if (!sl.isRegistered<EntityTypeRepository>()) {
     sl.registerLazySingleton<EntityTypeRepository>(
         () => EntityTypeRepository(sl<ApiClient>()));
+  }
+  if (!sl.isRegistered<BlockingRulesRepository>()) {
+    sl.registerLazySingleton<BlockingRulesRepository>(
+        () => BlockingRulesRepository(sl<ApiClient>()));
   }
   if (!sl.isRegistered<SourceSystemsRepository>()) {
     sl.registerLazySingleton<SourceSystemsRepository>(

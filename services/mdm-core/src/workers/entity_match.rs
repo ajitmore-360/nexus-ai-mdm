@@ -39,6 +39,39 @@ pub async fn run(task_queue: Arc<TaskQueue>, state: Arc<AppState>) {
     }
 }
 
+/// Look up per-tenant blocking rules from the DB; fall back to the
+/// hardcoded defaults when no row has been configured yet.
+async fn resolve_blocking_rules(
+    state: &Arc<AppState>,
+    tenant_id: Uuid,
+    entity_type: &str,
+) -> Vec<String> {
+    let result = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT rules FROM core_mdm.entity_type_blocking_rules \
+         WHERE tenant_id = $1 AND entity_type_code = $2",
+    )
+    .bind(tenant_id)
+    .bind(entity_type)
+    .fetch_optional(&state.db)
+    .await;
+
+    match result {
+        Ok(Some(v)) => {
+            if let Ok(rules) = serde_json::from_value::<Vec<String>>(v) {
+                if !rules.is_empty() {
+                    return rules;
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!(error=%e, "failed to load blocking rules from DB; using defaults");
+        }
+        _ => {}
+    }
+
+    blocking_rules_for(entity_type)
+}
+
 /// Return the appropriate blocking rules for a given entity type.
 ///
 /// Rules are "strategy:field" or bare "strategy" tokens consumed by
@@ -120,7 +153,7 @@ async fn process(state: &Arc<AppState>, task: &azile_redis::queue::Task) -> anyh
         entity_type:            entity_type.clone(),
         entity,
         threshold:              None,
-        blocking_rules:         blocking_rules_for(&entity_type),
+        blocking_rules:         resolve_blocking_rules(&state, tenant_id, &entity_type).await,
         strategy:               MatchStrategy::Hybrid,
         ai_assisted:            true,
         explainability_enabled: false,

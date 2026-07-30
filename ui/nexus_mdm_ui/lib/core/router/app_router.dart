@@ -55,6 +55,7 @@ import '../../features/admin/presentation/pages/scim_tokens_page.dart';
 import '../../features/admin/presentation/pages/workflow_builder_page.dart';
 import '../../features/admin/presentation/pages/connector_marketplace_page.dart';
 import '../../features/admin/presentation/pages/enrichment_config_page.dart';
+import '../../features/admin/presentation/pages/blocking_rules_page.dart';
 
 class AppRouter {
   AppRouter._();
@@ -414,6 +415,14 @@ class AppRouter {
             pageBuilder: (context, state) => _buildFadePage(
               state: state,
               child: const EntityTypesPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard/org/blocking-rules',
+            name: 'org-blocking-rules',
+            pageBuilder: (context, state) => _buildFadePage(
+              state: state,
+              child: const BlockingRulesPage(),
             ),
           ),
           GoRoute(

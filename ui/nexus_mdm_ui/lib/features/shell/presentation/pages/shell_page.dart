@@ -132,6 +132,8 @@ class _ShellPageState extends State<ShellPage> {
         _NavItem(icon: Icons.people_outlined,               label: 'Users & Roles',   route: '/dashboard/org/users'),
         _NavItem(icon: Icons.category_outlined,             label: 'Entity Types',    route: '/dashboard/org/entity-types',
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
+        _NavItem(icon: Icons.filter_alt_outlined, label: 'Blocking Rules', route: '/dashboard/org/blocking-rules',
+            visibleTo: [UserRole.admin, UserRole.businessAdmin]),
         _NavItem(icon: Icons.tune_outlined,                 label: 'Attributes',      route: '/dashboard/org/attributes',
             visibleTo: [UserRole.admin, UserRole.businessAdmin]),
         _NavItem(icon: Icons.electrical_services_outlined,  label: 'Source Systems',  route: '/dashboard/org/sources',
@@ -1018,6 +1020,7 @@ class _ShellPageState extends State<ShellPage> {
     if (location.startsWith('/dashboard/admin/tenants')) return 'Tenants';
     if (location.startsWith('/dashboard/org/users')) return 'Users & Roles';
     if (location.startsWith('/dashboard/org/entity-types')) return 'Entity Types';
+    if (location.startsWith('/dashboard/org/blocking-rules')) return 'Blocking Rules';
     if (location.startsWith('/dashboard/org/attributes')) return 'Attribute Schema';
     if (location.startsWith('/dashboard/org/sources')) return 'Source Systems';
     if (location.startsWith('/dashboard/org/domain-policies')) return 'Domain Policies';
