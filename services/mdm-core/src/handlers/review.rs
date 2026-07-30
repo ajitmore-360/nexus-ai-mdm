@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::{
@@ -7,6 +8,7 @@ use axum::{
     Extension, Json,
 };
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 use uuid::Uuid;
 
 use crate::handlers::{entities::extract_request_context, ApiResponse};
@@ -26,36 +28,185 @@ pub struct ReviewDecisionBody {
 }
 
 /// GET /match/review-queue?limit=&offset=
-/// Returns all match candidates that require human review, newest first.
+/// Returns all match candidates that require human review with enriched entity names.
 pub async fn get_review_queue(
     State(state):          State<Arc<AppState>>,
     Extension(tenant_ctx): Extension<TenantContext>,
     Query(params):         Query<ReviewQueueParams>,
 ) -> impl IntoResponse {
-    let limit  = params.limit.unwrap_or(20).clamp(1, 100);
-    let offset = params.offset.unwrap_or(0).max(0);
+    let limit     = params.limit.unwrap_or(20).clamp(1, 100);
+    let offset    = params.offset.unwrap_or(0).max(0);
+    let tenant_id = tenant_ctx.tenant_id;
 
-    match state.review_service.get_queue(tenant_ctx.tenant_id, limit, offset).await {
-        Ok(queue) => (
-            StatusCode::OK,
-            Json(ApiResponse {
-                success: true,
-                data:    Some(serde_json::json!({ "items": queue, "limit": limit, "offset": offset })),
-                error:   None,
-            }),
-        ),
-        Err(err) => {
-            tracing::error!(error=?err, "review queue fetch failed");
-            (
+    let rows = match sqlx::query(
+        r#"
+        SELECT
+            mc.match_candidate_id                               AS review_id,
+            mc.request_id,
+            mc.match_candidate_id                               AS candidate_id,
+            mc.source_entity_id,
+            mc.matched_entity_id                                AS candidate_entity_id,
+            COALESCE(
+                src_e.current_attributes->>'name',
+                src_e.current_attributes->>'company_name',
+                src_e.current_attributes->>'full_name',
+                mc.source_entity_id::text
+            )                                                   AS source_entity_name,
+            COALESCE(
+                tgt_e.current_attributes->>'name',
+                tgt_e.current_attributes->>'company_name',
+                tgt_e.current_attributes->>'full_name',
+                mc.matched_entity_id::text
+            )                                                   AS target_entity_name,
+            mc.match_score,
+            mc.confidence_score,
+            mc.match_status,
+            mc.recommended_for_merge,
+            mc.requires_human_review,
+            mc.explanations,
+            COALESCE(src_e.entity_type, '')                     AS entity_type,
+            mc.created_at,
+            fm.field_name,
+            fm.source_value    #>> '{}'                         AS source_value,
+            fm.candidate_value #>> '{}'                         AS target_value,
+            fm.score                                            AS fm_score
+        FROM (
+            SELECT
+                match_candidate_id,
+                request_id,
+                source_entity_id,
+                matched_entity_id,
+                match_score,
+                confidence_score,
+                match_status,
+                recommended_for_merge,
+                requires_human_review,
+                explanations,
+                created_at
+            FROM core_mdm.match_candidates
+            WHERE tenant_id = $1
+              AND requires_human_review = TRUE
+            ORDER BY match_score DESC
+            LIMIT $2 OFFSET $3
+        ) mc
+        LEFT JOIN core_mdm.entities src_e
+            ON  src_e.entity_id = mc.source_entity_id
+            AND src_e.tenant_id = $1
+            AND src_e.valid_to  = 'infinity'
+        LEFT JOIN core_mdm.entities tgt_e
+            ON  tgt_e.entity_id = mc.matched_entity_id
+            AND tgt_e.tenant_id = $1
+            AND tgt_e.valid_to  = 'infinity'
+        LEFT JOIN core_mdm.field_match_results fm
+            ON  fm.tenant_id         = $1
+            AND fm.request_id        = mc.request_id
+            AND fm.matched_entity_id = mc.matched_entity_id
+        ORDER BY mc.match_score DESC, fm.created_at ASC NULLS LAST
+        "#,
+    )
+    .bind(tenant_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(error=?e, "review queue fetch failed");
+            return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ApiResponse::<serde_json::Value> {
                     success: false,
                     data:    None,
-                    error:   Some(err.to_string()),
+                    error:   Some(e.to_string()),
                 }),
-            )
+            ).into_response();
+        }
+    };
+
+    // Group rows by review_id (match_candidate_id), collecting field matches per candidate.
+    let mut order:      Vec<Uuid>                    = Vec::new();
+    let mut header_idx: HashMap<Uuid, usize>         = HashMap::new();
+    let mut field_map:  HashMap<Uuid, Vec<serde_json::Value>> = HashMap::new();
+
+    for (i, row) in rows.iter().enumerate() {
+        let review_id: Uuid = row.try_get("review_id").unwrap_or_default();
+        if let std::collections::hash_map::Entry::Vacant(e) = header_idx.entry(review_id) {
+            order.push(review_id);
+            e.insert(i);
+        }
+        let field_name: Option<String> = row.try_get("field_name").ok().flatten();
+        if let Some(fname) = field_name {
+            let src_val:  String = row.try_get::<Option<String>, _>("source_value").ok().flatten().unwrap_or_default();
+            let tgt_val:  String = row.try_get::<Option<String>, _>("target_value").ok().flatten().unwrap_or_default();
+            let fm_score: f32    = row.try_get::<Option<f32>, _>("fm_score").ok().flatten().unwrap_or(0.0);
+            field_map.entry(review_id).or_default().push(serde_json::json!({
+                "field":        fname,
+                "field_name":   fname,
+                "source_value": src_val,
+                "target_value": tgt_val,
+                "score":        fm_score,
+            }));
         }
     }
+
+    let mut items: Vec<serde_json::Value> = Vec::with_capacity(order.len());
+    for review_id in &order {
+        let row               = &rows[header_idx[review_id]];
+        let request_id: Uuid       = row.try_get("request_id").unwrap_or_default();
+        let candidate_id: Uuid     = row.try_get("candidate_id").unwrap_or_default();
+        let source_entity_id: Uuid = row.try_get("source_entity_id").unwrap_or_default();
+        let cand_entity_id: Uuid   = row.try_get("candidate_entity_id").unwrap_or_default();
+        let src_name:  String      = row.try_get("source_entity_name").unwrap_or_default();
+        let tgt_name:  String      = row.try_get("target_entity_name").unwrap_or_default();
+        let score: f32             = row.try_get::<f32, _>("match_score").unwrap_or(0.0);
+        let entity_type: String    = row.try_get("entity_type").unwrap_or_default();
+        let created_at: chrono::DateTime<chrono::Utc> =
+            row.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now());
+        let status: String = row.try_get("match_status").unwrap_or_default();
+        let explanations: sqlx::types::Json<Vec<String>> =
+            row.try_get("explanations").unwrap_or_else(|_| sqlx::types::Json(vec![]));
+        let ai_explanation    = explanations.0.first().cloned();
+        let field_matches     = field_map.get(review_id).cloned().unwrap_or_default();
+
+        let priority = if score >= 0.95_f32 { "critical" }
+            else if score >= 0.85_f32 { "high" }
+            else { "normal" };
+
+        items.push(serde_json::json!({
+            // Fields for ReviewItem (match_queue_repository.dart)
+            "review_id":           review_id,
+            "request_id":          request_id,
+            "candidate_id":        candidate_id,
+            "source_entity_name":  src_name,
+            "target_entity_name":  tgt_name,
+            "overall_score":       score,
+            "priority":            priority,
+            "entity_type":         entity_type,
+            "created_at":          created_at.to_rfc3339(),
+            "ai_explanation":      ai_explanation,
+            "field_matches":       field_matches,
+            // Fields for ReviewQueueItem (match_repository.dart)
+            "source_entity_id":    source_entity_id,
+            "candidate_entity_id": cand_entity_id,
+            "score":               score,
+            "status":              status,
+            "ai_confidence":       score,
+        }));
+    }
+
+    (
+        StatusCode::OK,
+        Json(ApiResponse {
+            success: true,
+            data:    Some(serde_json::json!({
+                "items":  items,
+                "limit":  limit,
+                "offset": offset,
+            })),
+            error:   None,
+        }),
+    ).into_response()
 }
 
 /// POST /match/:request_id/candidates/:candidate_id/approve
