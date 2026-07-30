@@ -18,8 +18,12 @@ use crate::AppState;
 
 #[derive(Deserialize)]
 pub struct ReviewQueueParams {
-    pub limit:  Option<i64>,
-    pub offset: Option<i64>,
+    pub limit:     Option<i64>,
+    pub offset:    Option<i64>,
+    // Flutter sends page/page_size — support both conventions
+    pub page:      Option<i64>,
+    pub page_size: Option<i64>,
+    pub entity_type: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -34,9 +38,17 @@ pub async fn get_review_queue(
     Extension(tenant_ctx): Extension<TenantContext>,
     Query(params):         Query<ReviewQueueParams>,
 ) -> impl IntoResponse {
-    let limit     = params.limit.unwrap_or(20).clamp(1, 100);
-    let offset    = params.offset.unwrap_or(0).max(0);
+    let page_size = params.page_size.or(params.limit).unwrap_or(20).clamp(1, 100);
+    let page      = params.page.unwrap_or(1).max(1);
+    let limit     = page_size;
+    let offset    = params.offset.unwrap_or_else(|| (page - 1) * page_size).max(0);
     let tenant_id = tenant_ctx.tenant_id;
+
+    // Optional entity_type scope (steward clients pass this)
+    let entity_type_filter = params.entity_type
+        .as_deref()
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty());
 
     let rows = match sqlx::query(
         r#"
@@ -101,12 +113,14 @@ pub async fn get_review_queue(
             ON  fm.tenant_id         = $1
             AND fm.request_id        = mc.request_id
             AND fm.matched_entity_id = mc.matched_entity_id
+        WHERE ($4::text IS NULL OR LOWER(COALESCE(src_e.entity_type, '')) = $4)
         ORDER BY mc.match_score DESC, fm.created_at ASC NULLS LAST
         "#,
     )
     .bind(tenant_id)
     .bind(limit)
     .bind(offset)
+    .bind(entity_type_filter)
     .fetch_all(&state.db)
     .await
     {
