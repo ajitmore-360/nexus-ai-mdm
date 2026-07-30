@@ -59,15 +59,19 @@ pub async fn get_review_queue(
             mc.source_entity_id,
             mc.matched_entity_id                                AS candidate_entity_id,
             COALESCE(
-                src_e.current_attributes->>'name',
-                src_e.current_attributes->>'company_name',
-                src_e.current_attributes->>'full_name',
+                NULLIF(src_e.current_attributes->>'legal_name', ''),
+                NULLIF(src_e.current_attributes->>'name', ''),
+                NULLIF(src_e.current_attributes->>'company_name', ''),
+                NULLIF(src_e.current_attributes->>'full_name', ''),
+                NULLIF(src_e.current_attributes->>'display_name', ''),
                 mc.source_entity_id::text
             )                                                   AS source_entity_name,
             COALESCE(
-                tgt_e.current_attributes->>'name',
-                tgt_e.current_attributes->>'company_name',
-                tgt_e.current_attributes->>'full_name',
+                NULLIF(tgt_e.current_attributes->>'legal_name', ''),
+                NULLIF(tgt_e.current_attributes->>'name', ''),
+                NULLIF(tgt_e.current_attributes->>'company_name', ''),
+                NULLIF(tgt_e.current_attributes->>'full_name', ''),
+                NULLIF(tgt_e.current_attributes->>'display_name', ''),
                 mc.matched_entity_id::text
             )                                                   AS target_entity_name,
             mc.match_score,
