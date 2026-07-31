@@ -39,6 +39,7 @@ pub mod scim;
 pub mod workflows;
 pub mod connectors;
 pub mod enrichment;
+pub mod blocking_rules;
 
 /// Standard API response wrapper used by all handlers.
 #[derive(Debug, Serialize)]
