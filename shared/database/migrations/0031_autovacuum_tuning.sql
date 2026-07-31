@@ -59,10 +59,15 @@ ALTER TABLE core_mdm.entities SET (
 );
 
 -- golden_record_attributes: lower write rate but large (113M rows at scale)
-ALTER TABLE core_mdm.golden_record_attributes SET (
-    autovacuum_vacuum_scale_factor   = 0.02,
-    autovacuum_analyze_scale_factor  = 0.01
-);
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'core_mdm' AND tablename = 'golden_record_attributes') THEN
+        ALTER TABLE core_mdm.golden_record_attributes SET (
+            autovacuum_vacuum_scale_factor   = 0.02,
+            autovacuum_analyze_scale_factor  = 0.01
+        );
+    END IF;
+END $$;
 
 -- outbox_events: insert + publish on every entity write (very high churn)
 ALTER TABLE event_store.outbox_events SET (

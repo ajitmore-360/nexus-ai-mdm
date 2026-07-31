@@ -35,14 +35,22 @@ BEGIN
 END;
 $$;
 
-CREATE INDEX IF NOT EXISTS idx_match_requests_cleanup
-    ON core_mdm.match_requests (status, created_at)
-    WHERE status IN (
-        'completed', 'reviewed', 'merged', 'rejected', 'auto_merged',
-        'AutoMerged', 'Merged', 'Reviewed', 'Rejected'
-    );
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'core_mdm' AND tablename = 'match_requests') THEN
+        CREATE INDEX IF NOT EXISTS idx_match_requests_cleanup
+            ON core_mdm.match_requests (status, created_at)
+            WHERE status IN (
+                'completed', 'reviewed', 'merged', 'rejected', 'auto_merged',
+                'AutoMerged', 'Merged', 'Reviewed', 'Rejected'
+            );
+    END IF;
+END $$;
 
 -- ── 2. Delivery log retention ─────────────────────────────────────────────────
+-- Ensure the notifications schema exists before creating the function in it.
+CREATE SCHEMA IF NOT EXISTS notifications;
+
 CREATE OR REPLACE FUNCTION notifications.purge_old_delivery_log(retention_days INT DEFAULT 30)
 RETURNS BIGINT
 LANGUAGE plpgsql
@@ -59,9 +67,14 @@ BEGIN
 END;
 $$;
 
-CREATE INDEX IF NOT EXISTS idx_delivery_log_cleanup
-    ON notifications.delivery_log (status, created_at)
-    WHERE status IN ('delivered', 'failed');
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'notifications' AND tablename = 'delivery_log') THEN
+        CREATE INDEX IF NOT EXISTS idx_delivery_log_cleanup
+            ON notifications.delivery_log (status, created_at)
+            WHERE status IN ('delivered', 'failed');
+    END IF;
+END $$;
 
 -- ── 3. Resolved anomaly cleanup ───────────────────────────────────────────────
 DO $$
