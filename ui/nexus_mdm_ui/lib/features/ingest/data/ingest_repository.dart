@@ -65,6 +65,9 @@ class IngestUploadResult {
   final int chunksQueued;
   final String? error;
   final String? message;
+  final bool configurationRequired;
+  final List<String> missingConfiguration;
+  final String? affectedEntityType;
 
   const IngestUploadResult({
     required this.success,
@@ -73,6 +76,9 @@ class IngestUploadResult {
     this.chunksQueued = 0,
     this.error,
     this.message,
+    this.configurationRequired = false,
+    this.missingConfiguration = const [],
+    this.affectedEntityType,
   });
 }
 
@@ -141,6 +147,16 @@ class IngestRepository {
       );
     } on DioException catch (e) {
       final body = e.response?.data;
+      if (body is Map && body['configuration_required'] == true) {
+        return IngestUploadResult(
+          success: false,
+          configurationRequired: true,
+          missingConfiguration:
+              (body['missing'] as List<dynamic>? ?? []).cast<String>(),
+          affectedEntityType: body['entity_type'] as String?,
+          error: 'System not configured for ingest',
+        );
+      }
       final errorMsg = (body is Map ? body['error']?.toString() : null)
           ?? e.message
           ?? 'Upload failed';

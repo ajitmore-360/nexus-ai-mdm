@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dio/dio.dart' show DioException;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -158,11 +159,34 @@ class _IngestDataPageState extends State<IngestDataPage>
         _handleResponse(response.data);
       }
     } catch (e) {
+      if (e is DioException) {
+        final body = e.response?.data;
+        if (body is Map && body['configuration_required'] == true) {
+          final missing =
+              (body['missing'] as List<dynamic>? ?? []).cast<String>();
+          final entityType =
+              body['entity_type'] as String? ?? _selectedEntityType;
+          if (mounted) setState(() => _isLoading = false);
+          _showConfigurationRequiredDialog(entityType, missing);
+          return;
+        }
+      }
       _setResult('Error: $e', isError: true);
     }
   }
 
   void _handleResponse(Map<String, dynamic>? data) {
+    // Preflight rejection from backend — show structured dialog
+    if (data?['configuration_required'] == true) {
+      final missing =
+          (data?['missing'] as List<dynamic>? ?? []).cast<String>();
+      final entityType =
+          data?['entity_type'] as String? ?? _selectedEntityType;
+      if (mounted) setState(() => _isLoading = false);
+      _showConfigurationRequiredDialog(entityType, missing);
+      return;
+    }
+
     final ok     = data?['success'] as bool? ?? false;
     final result = data?['result']  as Map<String, dynamic>? ?? {};
     final jobId  = data?['job_id']  as String?;
@@ -193,6 +217,64 @@ class _IngestDataPageState extends State<IngestDataPage>
       _resultMessage = msg;
       _resultIsError = isError;
     });
+  }
+
+  void _showConfigurationRequiredDialog(
+      String entityType, List<String> missing) {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            const Icon(Icons.settings_outlined, color: AppColors.warning),
+            const SizedBox(width: 8),
+            Text('Configure System First',
+                style: AppTextStyles.titleMedium),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "The system is not ready to ingest '$entityType' records. "
+                'Resolve the following before importing:',
+                style: AppTextStyles.bodyMedium,
+              ),
+              const SizedBox(height: 14),
+              ...missing.map(
+                (m) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.arrow_right_rounded,
+                          size: 18, color: AppColors.warning),
+                      const SizedBox(width: 4),
+                      Expanded(
+                          child: Text(m, style: AppTextStyles.bodySmall)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Close',
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.mutedText)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -605,10 +687,17 @@ class _IngestDataPageState extends State<IngestDataPage>
     setState(() => _uploadSendProgress = null);
 
     if (!result.success || result.jobId == null) {
-      setState(() {
-        _resultIsError  = true;
-        _resultMessage  = result.error ?? 'Upload failed';
-      });
+      if (result.configurationRequired) {
+        _showConfigurationRequiredDialog(
+          result.affectedEntityType ?? _selectedEntityType,
+          result.missingConfiguration,
+        );
+      } else {
+        setState(() {
+          _resultIsError = true;
+          _resultMessage = result.error ?? 'Upload failed';
+        });
+      }
       return;
     }
 

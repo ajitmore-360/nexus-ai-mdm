@@ -3,6 +3,7 @@ mod crypto;
 mod jobs;
 mod models;
 mod pipeline;
+mod preflight;
 mod processor;
 mod scheduler;
 mod source_systems;

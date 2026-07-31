@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::jobs::{create_job_pending, persist_job};
 use crate::models::{IngestBatch, IngestRecord};
+use crate::preflight;
 use crate::state::AppState;
 
 // ============================================================
@@ -41,6 +42,33 @@ pub async fn ingest_batch(
                 "error": format!("batch exceeds max size of {}", state.settings.max_batch_size)
             })),
         );
+    }
+
+    // Preflight: verify each unique entity type is configured before processing
+    {
+        let mut seen = std::collections::HashSet::new();
+        let mut all_issues = Vec::new();
+        for record in &batch.records {
+            if seen.insert(record.entity_type.to_lowercase()) {
+                match preflight::check_ingest_readiness(&state.pool, batch.tenant_id, &record.entity_type).await {
+                    Ok(issues) => all_issues.extend(issues),
+                    Err(e) => {
+                        tracing::warn!(error=%e, entity_type=%record.entity_type, "preflight check failed — allowing ingest");
+                    }
+                }
+            }
+        }
+        if !all_issues.is_empty() {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(json!({
+                    "success": false,
+                    "configuration_required": true,
+                    "error": "System not configured — resolve the listed issues before ingesting",
+                    "missing": all_issues.iter().map(|i| i.message.as_str()).collect::<Vec<_>>()
+                })),
+            );
+        }
     }
 
     match state.processor.process_batch(&batch, &[]).await {
@@ -81,6 +109,27 @@ pub async fn ingest_entities(
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({ "success": false, "error": "no records provided" })),
+        );
+    }
+
+    // Preflight: verify entity type is configured before processing
+    let preflight_issues = match preflight::check_ingest_readiness(&state.pool, claims.nxs_tenant_id, &req.entity_type).await {
+        Ok(issues) => issues,
+        Err(e) => {
+            tracing::warn!(error=%e, entity_type=%req.entity_type, "preflight check failed — allowing ingest");
+            vec![]
+        }
+    };
+    if !preflight_issues.is_empty() {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({
+                "success": false,
+                "configuration_required": true,
+                "entity_type": req.entity_type,
+                "error": format!("System not configured for '{}' ingest — configure the system first", req.entity_type),
+                "missing": preflight_issues.iter().map(|i| i.message.as_str()).collect::<Vec<_>>()
+            })),
         );
     }
 
@@ -186,6 +235,27 @@ pub async fn ingest_csv(
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({ "success": false, "error": "CSV contained no valid rows" })),
+        );
+    }
+
+    // Preflight: verify entity type is configured before processing
+    let preflight_issues = match preflight::check_ingest_readiness(&state.pool, claims.nxs_tenant_id, &req.entity_type).await {
+        Ok(issues) => issues,
+        Err(e) => {
+            tracing::warn!(error=%e, entity_type=%req.entity_type, "preflight check failed — allowing ingest");
+            vec![]
+        }
+    };
+    if !preflight_issues.is_empty() {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({
+                "success": false,
+                "configuration_required": true,
+                "entity_type": req.entity_type,
+                "error": format!("System not configured for '{}' ingest — configure the system first", req.entity_type),
+                "missing": preflight_issues.iter().map(|i| i.message.as_str()).collect::<Vec<_>>()
+            })),
         );
     }
 
@@ -300,6 +370,27 @@ pub async fn ingest_csv_upload(
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({ "success": false, "error": "CSV contained no valid rows" })),
+        );
+    }
+
+    // Preflight: verify entity type is configured before creating the async job
+    let preflight_issues = match preflight::check_ingest_readiness(&state.pool, claims.nxs_tenant_id, &entity_type).await {
+        Ok(issues) => issues,
+        Err(e) => {
+            tracing::warn!(error=%e, entity_type=%entity_type, "preflight check failed — allowing upload");
+            vec![]
+        }
+    };
+    if !preflight_issues.is_empty() {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(json!({
+                "success": false,
+                "configuration_required": true,
+                "entity_type": entity_type,
+                "error": format!("System not configured for '{}' ingest — configure the system first", entity_type),
+                "missing": preflight_issues.iter().map(|i| i.message.as_str()).collect::<Vec<_>>()
+            })),
         );
     }
 
