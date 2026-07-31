@@ -19,15 +19,13 @@ class GoldenRecordsRepository {
   }) async {
     try {
       final params = <String, dynamic>{
-        'status': 'golden',
         'page': page,
         'page_size': pageSize,
-        if (search != null && search.isNotEmpty) 'search': search,
-        if (entityType != null) 'type': entityType,
+        if (entityType != null) 'entity_type': entityType,
       };
 
       final response = await _apiClient.get<Map<String, dynamic>>(
-        AppConstants.entitiesPath,
+        '/admin/golden-records',
         queryParameters: params,
       );
 

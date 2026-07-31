@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/auth/auth_manager.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
@@ -10,6 +11,7 @@ import '../../../../shared/models/entity.dart';
 import '../../../../shared/models/api_responses.dart';
 import '../../../../shared/widgets/loading_shimmer.dart';
 import '../../../../shared/widgets/empty_state.dart';
+import '../../../admin/data/entity_type_repository.dart';
 import '../../data/golden_records_repository.dart';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -26,14 +28,18 @@ class GoldenRecordsPage extends StatefulWidget {
 class _GoldenRecordsPageState extends State<GoldenRecordsPage> {
   bool _isLoading = true;
   List<GoldenRecord> _records = [];
+  List<EntityTypeModel> _entityTypes = [];
   String _searchQuery = '';
   String _activeFilter = 'all';
   final _searchController = TextEditingController();
+
+  static const _statusFilters = {'all', 'verified', 'unverified'};
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadEntityTypes();
   }
 
   @override
@@ -43,16 +49,34 @@ class _GoldenRecordsPageState extends State<GoldenRecordsPage> {
   }
 
   Future<void> _load() async {
+    setState(() => _isLoading = true);
+    final isTypeFilter = !_statusFilters.contains(_activeFilter);
     final repo = GetIt.instance<GoldenRecordsRepository>();
-    final result = await repo.getGoldenRecords();
+    final result = await repo.getGoldenRecords(
+      entityType: isTypeFilter ? _activeFilter : null,
+    );
     if (!mounted) return;
     setState(() {
       _isLoading = false;
-      if (result case Success(:final data)) {
-        _records = data;
-      }
+      if (result case Success(:final data)) _records = data;
       // On failure _records stays empty — EmptyState widget is shown
     });
+  }
+
+  Future<void> _loadEntityTypes() async {
+    final tenantId = await AuthManager.getTenantId() ?? '';
+    if (tenantId.isEmpty || !mounted) return;
+    final result = await GetIt.instance<EntityTypeRepository>().listEntityTypes(tenantId);
+    if (!mounted) return;
+    if (result case Success(:final data)) {
+      setState(() => _entityTypes = data.where((t) => t.isActive).toList());
+    }
+  }
+
+  void _onChipTap(String code) {
+    if (code == _activeFilter) return;
+    setState(() => _activeFilter = code);
+    _load();
   }
 
   List<GoldenRecord> get _filtered {
@@ -62,12 +86,9 @@ class _GoldenRecordsPageState extends State<GoldenRecordsPage> {
           r.id.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           r.tags.any((t) => t.toLowerCase().contains(_searchQuery.toLowerCase()));
       final matchesFilter = switch (_activeFilter) {
-        'verified'     => r.isVerified,
-        'unverified'   => !r.isVerified,
-        'person'       => r.entityType == EntityType.person,
-        'organization' => r.entityType == EntityType.organization,
-        'product'      => r.entityType == EntityType.product,
-        _              => true,
+        'verified'   => r.isVerified,
+        'unverified' => !r.isVerified,
+        _            => true,
       };
       return matchesSearch && matchesFilter;
     }).toList();
@@ -154,9 +175,7 @@ class _GoldenRecordsPageState extends State<GoldenRecordsPage> {
       ('All', 'all'),
       ('Verified', 'verified'),
       ('Unverified', 'unverified'),
-      ('Person', 'person'),
-      ('Organization', 'organization'),
-      ('Product', 'product'),
+      ..._entityTypes.map((t) => (t.name, t.code)),
     ];
 
     return Padding(
@@ -205,7 +224,7 @@ class _GoldenRecordsPageState extends State<GoldenRecordsPage> {
                   return Padding(
                     padding: const EdgeInsets.only(right: 6),
                     child: InkWell(
-                      onTap: () => setState(() => _activeFilter = f.$2),
+                      onTap: () => _onChipTap(f.$2),
                       borderRadius: BorderRadius.circular(20),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
@@ -453,11 +472,13 @@ class _GoldenRecordsPageState extends State<GoldenRecordsPage> {
             icon: const Icon(Icons.more_vert, size: 18, color: AppColors.secondaryText),
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'view', child: Row(children: [Icon(Icons.open_in_new, size: 16), SizedBox(width: 8), Text('View Entity')])),
+              const PopupMenuItem(value: 'lineage', child: Row(children: [Icon(Icons.account_tree_outlined, size: 16), SizedBox(width: 8), Text('View Lineage')])),
               const PopupMenuItem(value: 'unmerge', child: Row(children: [Icon(Icons.call_split, size: 16), SizedBox(width: 8), Text('Unmerge')])),
               const PopupMenuItem(value: 'export', child: Row(children: [Icon(Icons.download_outlined, size: 16), SizedBox(width: 8), Text('Export')])),
             ],
             onSelected: (v) async {
               if (v == 'view') context.go('/dashboard/entities/${record.entityId}');
+              if (v == 'lineage') context.go('/dashboard/lineage?entity_id=${record.entityId}');
               if (v == 'unmerge') context.go('/dashboard/entities/${record.entityId}/unmerge');
               if (v == 'export') {
                 try {
